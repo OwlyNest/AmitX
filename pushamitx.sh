@@ -1,19 +1,11 @@
 #!/bin/bash
 echo "[x] Pushing AmitX"
 # pushamitx.sh – Pushes AmitX to GitHub
-REPO_URL="https://github.com/Shagedoorn1/AmitX.git"
-FILE=amitx_info.h
-
-#Check that key file exists
-if [[ ! -f $FILE ]]; then
-    echo "[x] Error: $FILE not found!"
-    exit 1
-fi
+REPO_URL="https://github.com/OwlyNest/AmitX.git"
 
 #Extract version info
-VERSION=$(grep AMITX_VERSION "$FILE" | sed -E 's/.*"([^"]+)".*/\1/')
-OVERSION=$(grep OWLY_VERSION "$FILE" | sed -E 's/.*"([^"]+)".*/\1/')
-COMMIT_MSG=${*:-"Update on: AmitX version $VERSION; Owly version $OVERSION"}
+VERSION="v0.2.0"
+COMMIT_MSG=${*:-"Update on: AmitX version $VERSION"}
 
 #Clear stuck rebase state if it exists
 if [ -d ".git/rebase-merge" ]; then

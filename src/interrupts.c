@@ -11,7 +11,6 @@ void register_interrupt_handler(int n, void (*handler)()) {
     interrupt_handlers[n] = handler;
 }
 
-// ISR entry point called from ASM stub
 void isr_handler(int interrupt_number, uint32_t error_code) {
 
     if (interrupt_handlers[interrupt_number]) {
@@ -34,7 +33,6 @@ void isr_handler(int interrupt_number, uint32_t error_code) {
     }
 }
 
-// Special handler for divide-by-zero
 void isr0_handler() {
     setcolor(0, 15);
     puts("[ERRNO-0]: Divide by zero\n");

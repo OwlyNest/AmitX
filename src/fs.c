@@ -3,7 +3,9 @@
 #include "screen.h"
 #include "string.h"
 
-//#define NULL ((void*)0)
+/*
+    * Absolute dogshit, but that's expected, will be ext2 someday
+*/
 
 #define MAX_FILES 8
 

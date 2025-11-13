@@ -125,7 +125,7 @@ char* strchrnul(const char* s, int c) {
         }
         s++;
     }
-    return (char*)s;  // Return pointer to null terminator
+    return (char*)s;
 }
 
 char* strrchr(const char* s, int c) {

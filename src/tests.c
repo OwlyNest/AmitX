@@ -66,8 +66,7 @@ void test_heap() {
         puts("[heap] Allocation failed!\n");
     }
 
-    // Allocate more to push boundaries
-    void* c = malloc(0xFF00); // almost full heap
+    void* c = malloc(0xFF00);
     if (c) {
         puts("[heap] Large allocation succeeded\n");
     } else {
@@ -75,7 +74,7 @@ void test_heap() {
     }
 
     // Check exhaustion
-    void* d = malloc(1024); // should fail now
+    void* d = malloc(1024);
     if (d) {
         puts("[heap] Unexpectedly succeeded after exhaustion\n");
     } else {
@@ -100,7 +99,6 @@ void test_strdup() {
     puts(copy);
     puts("\n");
 
-    // Modify copy to verify it's independent
     copy[0] = 'X';
 
     puts("[strdup] Modified Copy: ");
@@ -127,7 +125,6 @@ void test_malloc_free() {
     puts(b);
     newline();
 
-    // Ideally, b == a (reuse check)
     if (a == b) {
         puts("[heap] Reused freed block\n");
     } else {
@@ -144,7 +141,6 @@ void test_calloc() {
         return;
     }
 
-    // Check if all bytes are 0
     int success = 1;
     for (int i = 0; i < 10; i++) {
         if (data[i] != 0) {
@@ -159,7 +155,7 @@ void test_calloc() {
         puts("[heap] calloc memory not zeroed\n");
     }
 
-    free(data); // Optional, to test free reuse too
+    free(data);
 }
 
 void string_and_heap_test() {
@@ -189,11 +185,9 @@ void string_and_heap_test() {
     strcat(catbuf, "there");
     puts("[strcat] "); puts(catbuf); putc('\n');
 
-    // === strnlen ===
     puts("[strnlen] ");
     putint(strnlen("lengthy string", 7)); putc('\n');
 
-    // === strchr / strchrnul / strrchr ===
     const char* test = "abcabcabcz";
     puts("[strchr] "); putc(*strchr(test, 'b')); putc('\n');
     puts("[strchrnul] ");
@@ -202,7 +196,6 @@ void string_and_heap_test() {
     putc('\n');
     puts("[strrchr] "); putc(*strrchr(test, 'b')); putc('\n');
 
-    // === memset / memcpy / memmove / memcmp ===
     char buf1[10], buf2[10];
     memset(buf1, 'X', 5);
     buf1[5] = '\0';
@@ -211,14 +204,13 @@ void string_and_heap_test() {
     memcpy(buf2, "abcde", 6);
     puts("[memcpy] "); puts(buf2); putc('\n');
 
-    memmove(buf2 + 2, buf2, 4);  // Overlap test
+    memmove(buf2 + 2, buf2, 4);
     buf2[6] = '\0';
     puts("[memmove] "); puts(buf2); putc('\n');
 
     puts("[memcmp] ");
     putint(memcmp("aaa", "aab", 3)); putc('\n');
 
-    // === malloc / calloc / free ===
     char* m = malloc(10);
     char* c = calloc(5, 2);
     strcpy(m, "malloc");

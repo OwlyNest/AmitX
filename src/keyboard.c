@@ -31,7 +31,6 @@ static const char scancode_map[] = {
     0,    // Alt
     ' ',  // Spacebar
     0,    // Caps lock
-    // And so on...
 };
 
 static const char scancode_map_shift[] = {
@@ -47,7 +46,6 @@ static const char scancode_map_shift[] = {
     0,    // Alt
     ' ',  // Spacebar
     0,    // Caps lock
-    // And so on...
 };
 
 void decide() {

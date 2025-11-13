@@ -1,6 +1,6 @@
 
 #include "heap.h"
-#include "screen.h"  // for test/debug prints
+#include "screen.h"
 #include <stdint.h>
 #include <stddef.h>
 #include "string.h"
@@ -38,9 +38,9 @@ void* malloc(size_t size) {
     Block* current = head;
     while (current) {
         if (current->free && current->size >= size) {
-            // Check if we can split the block
+    
             size_t leftover = current->size - size;
-            if (leftover > BLOCK_SIZE + 8) { // 8 = minimal leftover size to make a new block useful
+            if (leftover > BLOCK_SIZE + 8) {
                 // Split block
                 Block* new_block = (Block*)((uint8_t*)(current + 1) + size);
                 new_block->size = leftover - BLOCK_SIZE;
@@ -63,7 +63,7 @@ void* malloc(size_t size) {
         current = current->next;
     }
 
-    // No suitable free block found, append new block at the end (same as before)
+    // No suitable free block found, append new block at the end
     uint8_t* next_addr = (uint8_t*)current + BLOCK_SIZE + current->size;
     uint8_t* alloc = sbrk(BLOCK_SIZE + size);
     if (alloc == (void*)-1 || alloc != next_addr) {
@@ -190,13 +190,11 @@ void print_heap_state() {
 void test_malloc_splitting(void) {
     puts("[Test] malloc + splitting\n");
 
-    // Allocate a big block
     void* p1 = malloc(100);
     puts("Allocated p1 = ");
     puthex((uint32_t)p1);
     puts("\n");
 
-    // Allocate another smaller block, should create new block
     void* p2 = malloc(50);
     puts("Allocated p2 = ");
     puthex((uint32_t)p2);
@@ -204,13 +202,11 @@ void test_malloc_splitting(void) {
 
     print_heap_state();
 
-    // Free p2 so the block is free now
     free(p2);
     puts("Freed p2\n");
 
     print_heap_state();
 
-    // Allocate smaller block than p2's size (should split)
     void* p3 = malloc(20);
     puts("Allocated p3 (should split free block) = ");
     puthex((uint32_t)p3);
@@ -282,7 +278,7 @@ void test_heap_final() {
     free(b);
     print_heap_state();
 
-    char* d = malloc(24); // should reuse b's slot and split
+    char* d = malloc(24);
     print_heap_state();
 
     free(a);

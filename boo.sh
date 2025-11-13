@@ -14,7 +14,7 @@ for arg in "$@"; do
 done
 run() {
     if [[ $VERBOSE -eq 1 ]]; then
-        eval "$@"
+        eval "$@"e
     else
         eval "$@" > /dev/null 2>&1
     fi

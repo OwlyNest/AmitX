@@ -1,8 +1,8 @@
 // task.c
 
 #include "task.h"
-#include "screen.h" // for putf, etc.
-#include "time.h"  // if you want to sleep
+#include "screen.h"
+#include "time.h"
 
 #define MAX_TASKS 8
 

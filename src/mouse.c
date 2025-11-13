@@ -3,6 +3,12 @@
 #include "screen.h"
 #include "interrupts.h"
 
+/*
+    * Get ready for the buggyest mouse you'll ever use
+    * if you run in a VM, try to ignore your native mouse
+    * I'm really trying my best here
+*/
+
 #define MOUSE_DATA 0x60
 #define MOUSE_STATUS 0x64
 #define MOUSE_CMD 0x64
@@ -10,7 +16,7 @@
 static int mouse_cycle = 0;
 static int8_t mouse_bytes[3];
 static int mouse_px_x, mouse_px_y;
-int mouse_x = 40, mouse_y = 12; // Start near center of 80x25
+int mouse_x = 40, mouse_y = 12;
 uint8_t mouse_buttons = 0;
 
 static void mouse_wait(uint8_t type) {
@@ -72,7 +78,7 @@ void mouse_handler() {
 
             draw_mouse_cursor();
 
-            mouse_buttons = mouse_bytes[0] & 0x07; // L, R, Middle
+            mouse_buttons = mouse_bytes[0] & 0x07;
 
             mouse_cycle = 0;
             break;
@@ -82,11 +88,9 @@ void mouse_handler() {
 void init_mouse() {
     uint8_t status;
 
-    // Enable the auxiliary mouse device
     mouse_wait(1);
     outb(MOUSE_CMD, 0xA8);
 
-    // Enable interrupts
     mouse_wait(1);
     outb(MOUSE_CMD, 0x20);
     mouse_wait(0);
@@ -96,13 +100,10 @@ void init_mouse() {
     mouse_wait(1);
     outb(MOUSE_DATA, status);
 
-    // Tell mouse to use default settings
     mouse_write(0xF6); mouse_read();
 
-    // Enable mouse
     mouse_write(0xF4); mouse_read();
 
-    // Register handler
     register_interrupt_handler(44, mouse_handler);
     puts("Mouse initialized.\n");
 }

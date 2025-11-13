@@ -14,16 +14,14 @@ extern int tick_count;
 static uint16_t* const video_memory = (uint16_t*) VIDEO_ADDRESS;
 static uint8_t cursor_row = 0;
 static uint8_t cursor_col = 0;
-static uint8_t color = 0x0F;  // default: white on black
+static uint8_t color = 0x0F; 
 
 void set_cursor(int x, int y) {
     uint16_t pos = y * VGA_WIDTH + x;
 
-    // Send the high byte of the cursor location
     outb(0x3D4, 14);
     outb(0x3D5, (pos >> 8) & 0xFF);
 
-    // Send the low byte of the cursor location
     outb(0x3D4, 15);
     outb(0x3D5, pos & 0xFF);
 }
@@ -49,7 +47,7 @@ static void scroll_if_needed() {
 }
 
 void next_white() {
-    video_memory[cursor_row * VGA_WIDTH + cursor_col] = (0x0F << 8) | 179; // white on black
+    video_memory[cursor_row * VGA_WIDTH + cursor_col] = (0x0F << 8) | 179;
 }
 
 void reset_mouse_cursor_state();
@@ -136,12 +134,10 @@ void draw_statusbar() {
     const uint8_t status_fg = 15;   // White foreground
     uint8_t status_color = (status_bg << 4) | (status_fg & 0x0F);
 
-    // Clear last line
     for (int col = 0; col < VGA_WIDTH; col++) {
         video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + col] = (status_color << 8) | ' ';
     }
 
-    // Write status text to last line
     for (int i = 0; i < pos && i < VGA_WIDTH; i++) {
         video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + i] = (status_color << 8) | status_text[i];
     }
@@ -200,7 +196,7 @@ void blink() {
 void move_cursor(uint8_t x, uint8_t y) {
     cursor_col = x;
     cursor_row = y;
-    set_cursor(x, y); // updates hardware too
+    set_cursor(x, y);
 }
 
 void get_cursor(uint8_t* x, uint8_t* y) {
@@ -209,7 +205,7 @@ void get_cursor(uint8_t* x, uint8_t* y) {
 }
 
 void draw_box(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint8_t fg, uint8_t bg) {
-    if (width < 2 || height < 2) return; // Too small
+    if (width < 2 || height < 2) return;
 
     uint8_t color_local = (bg << 4) | (fg & 0x0F);
 
@@ -363,7 +359,6 @@ void draw_mouse_cursor() {
         video_memory[mouse_prev_y * VGA_WIDTH + mouse_prev_x] = mouse_prev_char;
     }
 
-    // Save the character currently under the mouse
     mouse_prev_char = video_memory[mouse_y * VGA_WIDTH + mouse_x];
 
     uint8_t fg = 15;  

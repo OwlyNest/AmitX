@@ -4,6 +4,10 @@
 #include "string.h"
 #include "screen.h"
 
+/*
+    * This shit doesn't fucking work, just ignore it, it's unused anyway
+*/
+
 #define MAX_SETTINGS 16
 
 typedef struct {
@@ -60,7 +64,6 @@ void settings_load() {
         raw++;
     }
 
-    // Handle final line if it doesn't end in \n
     if (j > 0 && setting_count < MAX_SETTINGS) {
         line[j] = '\0';
         puts("[settings] Line parsed (EOF): ");

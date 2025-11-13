@@ -144,7 +144,6 @@ isr128:
     popa
     iret
 
-# Load IDT helper
 load_idt:
     mov eax, [esp + 4]
     lidt [eax]

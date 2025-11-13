@@ -3,6 +3,7 @@
 #include "interrupts.h"
 #include <stdint.h>
 
+// Ignore intellisense, these exist in the Assembly code
 extern void isr0();
 extern void isr32();
 extern void isr33();

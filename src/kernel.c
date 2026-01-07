@@ -46,7 +46,7 @@ void kernel_setup() {
     gdt_install();
     pic_remap();
     idt_install();
-    register_interrupt_handler(0, isr0_handler);
+    register_interrupt_handler(0, divide_by_zero_handler);
     init_keyboard();
     init_timer(100);
     fs_init();
@@ -64,8 +64,9 @@ void draw_start() {
     draw_statusbar();
     puts("\n");
     draw_list(0, 2, 20, 7, main_menu, main_menu_count, POINTER);
-    
-
+    move_cursor(40, 12);  // Move hardware cursor away from menu box
+    reset_mouse_cursor_state();
+    draw_mouse_cursor();
 
     menu = 1;
 
@@ -88,6 +89,7 @@ static inline void test_syscall() {
 
 void kernel_main(void) {
     kernel_setup();
+    //test_syscall();
     draw_start();
     
     while (1) {

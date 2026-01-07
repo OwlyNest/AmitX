@@ -40,7 +40,7 @@ static const char scancode_map_shift[] = {
     0,    // Control
     'A','S','D','F','G','H','J','K','L',':','\"','~',
     '0',    // Left shift
-    '\\','Z','X','C','V','B','N','M','<','>','?',
+    '|','Z','X','C','V','B','N','M','<','>','?',
     0,    // Right shift
     '*',
     0,    // Alt

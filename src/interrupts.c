@@ -6,37 +6,38 @@
 #define MAX_INTERRUPTS 256
 
 void (*interrupt_handlers[MAX_INTERRUPTS])();
-
+void panic(const char* msg, uint32_t interrupt_number, uint32_t err);
 void register_interrupt_handler(int n, void (*handler)()) {
     interrupt_handlers[n] = handler;
 }
 
-void isr_handler(int interrupt_number, uint32_t error_code) {
+void pic_eoi(uint8_t irq) {
+    if (irq >= 40) {
+        outb(0xA0, 0x20);  // Slave PIC
+    }
+    outb(0x20, 0x20);      // Master PIC
+}
 
-    if (interrupt_handlers[interrupt_number]) {
-        interrupt_handlers[interrupt_number]();
+void isr_handler(int int_no, uint32_t err) {
+    if (int_no < 32) {
+        if (interrupt_handlers[int_no])
+            interrupt_handlers[int_no](int_no, err);
+        else
+            panic("Unhandled CPU exception", int_no, err);
+    } else if (int_no < 48) {
+        if (interrupt_handlers[int_no])
+            interrupt_handlers[int_no]();
+        pic_eoi(int_no);
+    } else if (int_no == 128) {
+        // syscall handled elsewhere
     } else {
-        puts("[unhandled interrupt] ");
-        puthex(interrupt_number);
-        puts(" (err=");
-        puthex(error_code);
-        puts(")");
-        newline();
-    }
-
-    // Acknowledge PIC
-    if (interrupt_number >= 40) {
-        outb(0xA0, 0x20);  // Slave
-    }
-    if (interrupt_number >= 32) {
-        outb(0x20, 0x20);  // Master
+        panic("Unhandled software interrupt", int_no, err);
     }
 }
 
-void isr0_handler() {
-    setcolor(0, 15);
-    puts("[ERRNO-0]: Divide by zero\n");
-    while (1) {}
+
+void divide_by_zero_handler(uint32_t interrupt_number, uint32_t err) {
+    panic("Divide by zero", interrupt_number, err);
 }
 
 // PIC remapping stays unchanged
@@ -57,4 +58,18 @@ void pic_remap() {
     outb(0xA1, 0x00);
 
     puts("Remap complete\n");
+}
+
+__attribute__((noreturn))
+void panic(const char* msg, uint32_t interrupt_number, uint32_t err) {
+    setcolor(15, 4);
+    puts("KERNEL PANIC\n");
+    puts(msg);
+    puts("\nINT: ");
+    puthex(interrupt_number);
+    puts(" ERR: ");
+    puthex(err);
+    newline();
+    asm("cli");
+    for (;;) asm("hlt");
 }

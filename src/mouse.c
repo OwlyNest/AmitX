@@ -7,6 +7,9 @@
     * Get ready for the buggyest mouse you'll ever use
     * if you run in a VM, try to ignore your native mouse
     * I'm really trying my best here
+    * 
+    * It finally works
+    * yay!
 */
 
 #define MOUSE_DATA 0x60
@@ -111,4 +114,12 @@ void init_mouse() {
 void get_mouse_position(int* x, int* y) {
     *x = mouse_x;
     *y = mouse_y;
+}
+
+void reset_mouse_position() {
+    mouse_px_x = 320;
+    mouse_px_y = 200;
+    mouse_x = 40;
+    mouse_y = 12;
+    mouse_cycle = 0;
 }

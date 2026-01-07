@@ -39,11 +39,10 @@ static void scroll_if_needed() {
             video_memory[(row - 1) * VGA_WIDTH + col] = video_memory[row * VGA_WIDTH + col];
         }
     }
-    // Clear last line
     for (int col = 0; col < VGA_WIDTH; col++) {
-        video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + col] = (color << 8) | ' ';
+        video_memory[(VGA_HEIGHT - 2) * VGA_WIDTH + col] = (color << 8) | ' ';
     }
-    cursor_row = VGA_HEIGHT - 1;
+    cursor_row = VGA_HEIGHT - 2;
 }
 
 void next_white() {
@@ -59,7 +58,7 @@ void clear() {
     cursor_row = 0;
     cursor_col = 0;
     update_hardware_cursor();
-    reset_mouse_cursor_state();
+    reset_mouse_position();
 }
 
 void putc(char c) {
@@ -176,7 +175,7 @@ void draw_uptime() {
     move_cursor(0, 24);
     puts("Uptime: ");
     putint(seconds);
-    puts("s   ");
+    puts("s");
 
     move_cursor(saved_x, saved_y);
 }

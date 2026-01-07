@@ -28,6 +28,8 @@ void* malloc(size_t size) {
     size = ALIGN16(size);
 
     if (!head) {
+        void* allocated = sbrk(BLOCK_SIZE + size);
+        if (allocated == (void*)-1) return NULL;
         head = (Block*)heap_base;
         head->size = size;
         head->next = NULL;
@@ -89,6 +91,15 @@ void free(void* ptr) {
     if (next && next->free) {
         block->size += BLOCK_SIZE + next->size;
         block->next = next->next;
+    }
+
+    Block* prev = head;
+    while (prev && prev->next != block) {
+        prev = prev->next;
+    }
+    if (prev && prev->free) {
+        prev->size += BLOCK_SIZE + block->size;
+        prev->next = block->next;
     }
 }
 

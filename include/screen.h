@@ -39,4 +39,5 @@ void draw_list(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const char* 
 
 // Mouse
 void draw_mouse_cursor();
+void reset_mouse_cursor_state();
 #endif

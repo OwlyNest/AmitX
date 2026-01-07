@@ -43,7 +43,6 @@
 .global isr128
 
 .extern isr_handler
-.extern isr0_handler
 .extern syscall_handler
 
 # ISR with no error code
@@ -65,11 +64,17 @@ isr\num:
 isr\num:
     cli
     pusha
-    push \num           # Interrupt number (error code is already on stack)
+
+    mov eax, [esp + 32]   # error code is ABOVE pusha frame
+    push eax              # push error_code
+    push \num             # push interrupt number
+
     call isr_handler
     add esp, 8
+
     popa
     sti
+    add esp, 4            # discard original CPU error code
     iret
 .endm
 
@@ -139,9 +144,14 @@ isr44:
 
 # Syscall (int 0x80)
 isr128:
-    pusha
+    cli
+    push eax
+    push ebx
+    push ecx
+    push edx
     call syscall_handler
-    popa
+    add esp, 16
+    sti
     iret
 
 load_idt:

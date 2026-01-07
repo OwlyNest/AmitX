@@ -271,6 +271,7 @@ void test(int testnum) {
             load_cyclone = 0;
             clear();
             draw_start();
+            break;
         }
     }
 }

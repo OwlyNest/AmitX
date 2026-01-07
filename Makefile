@@ -4,7 +4,7 @@ CC = i686-elf-gcc
 LD = i686-elf-ld
 
 # Flags
-CFLAGS  = -m32 -ffreestanding -O2 -Wall -Wextra -Iinclude -IAmitC -Icyclone -I..
+CFLAGS  = -m32 -ffreestanding -O2 -Wall -Wextra -Iinclude -Icyclone -I..
 LDFLAGS = -T boot/linker.ld -nostdlib
 
 # Directories

@@ -2,6 +2,7 @@
 #include "timer.h"
 #include "kernel.h"
 #include "screen.h"
+#include "task.h"
 #include <stdint.h>
 
 volatile uint32_t tick_count = 0;

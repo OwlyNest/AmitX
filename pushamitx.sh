@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "[x] Pushing AmitX"
 # pushamitx.sh – Pushes AmitX to GitHub
-REPO_URL="https://github.com/OwlyNest/AmitX.git"
+REPO_URL="git@github.com:OwlyNest/AmitX.git"
 
 #Extract version info
 VERSION="v0.2.0"

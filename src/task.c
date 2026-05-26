@@ -1,8 +1,6 @@
 // task.c
 
 #include "task.h"
-#include "screen.h"
-#include "time.h"
 
 #define MAX_TASKS 8
 

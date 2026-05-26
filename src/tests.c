@@ -3,8 +3,6 @@
 #include "heap.h"
 #include "keyboard.h"
 #include "kernel.h"
-#include "fs.h"
-#include "time.h"
 
 extern int load_cyclone;
 
@@ -16,32 +14,7 @@ void test_0div() {
 }
 
 void test_fs() {
-    fs_init();
-    fs_debug_list();
-
-    const char* content = fs_read("/Saved/hello.txt");
-    if (content) {
-        puts("\nContent of hello.txt:\n");
-        puts(content);
-    } else {
-        puts("File not found.\n");
-    }
-    newline();
-    const char* content2 = fs_read("/Saved/log.txt");
-    if (content2) {
-        puts("\nContent of log.txt:\n");
-        puts(content2);
-    } else {
-        puts("File not found.\n");
-    }
-    newline();
-    const char* content3 = fs_read("/Saved/me.txt");
-    if (content3) {
-        puts("\nContent of me.txt:\n");
-        puts(content3);
-    } else {
-        puts("File not found.\n");
-    }
+    puts("Under construction");
 }
 
 void test_heap() {

@@ -16,6 +16,8 @@
 #include "app.h"
 #include "cyclone.h"
 #include <stdint.h>
+#include "vfs.h"
+#include "ramfs.h"
 
 int menu = 0;
 
@@ -89,10 +91,7 @@ static inline void test_syscall() {
 
 void kernel_main(void) {
     kernel_setup();
-    //test_syscall();
     draw_start();
     
-    while (1) {
-        
-    }
+
 }

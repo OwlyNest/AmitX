@@ -20,7 +20,7 @@ static int setting_count = 0;
 
 void settings_load() {
     putint(setting_count);
-    const char* raw = fs_read("/Saved/settings.cfg");
+    const char* raw = "/Saved/settings.cfg";
     if (!raw) {
         puts("[settings] Failed to load file.\n");
         return;

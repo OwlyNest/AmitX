@@ -1,6 +1,6 @@
 #include "timer.h"
-#include "screen.h"
 #include "io.h"
+#include "screen.h"
 #include <stdint.h>
 
 extern void register_interrupt_handler(int n, void (*handler)());

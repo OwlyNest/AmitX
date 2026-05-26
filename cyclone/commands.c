@@ -23,30 +23,12 @@ void execute_command(const char* input) {
         const char* num = input + 4;
         uint32_t number = atoi(num);
         puthex(number);
-    } else if (starts_with(input, "touch ")) {
-        const char* file = input + 6;
-        fs_add(file, "");
     } else if (starts_with(input, "test ")) {
         const char* num = input + 5;
         int n = atoi(num);
         load_cyclone = 0;
         test(n);
 
-    } else if (starts_with(input, "read ")) {
-        const char* file = input + 5;
-        puts(file);
-        newline();
-
-
-        char path[64];
-        strcpy(path, "/Saved/");  // Copy folder path into buffer
-        strcat(path, file);       // Safely append the filename
-        
-        puts(path);
-        newline();
-
-        const char* content = fs_read(path);
-        puts(content);
     } else if (strcmp(input, "coffee") == 0) {
         uint32_t number = 12648430;
         puthex(number);
@@ -77,9 +59,6 @@ void execute_command(const char* input) {
         puts("  coffee             - Print 0xC0FFEE\n");
         puts("  ls                 - Print files\n");
         puts("  switch logo        - Switch Owly ASCII art");
-    } else if (strcmp(input, "ls") == 0) {
-        puts("\b\b\b");
-        fs_debug_list();
     } else if (strcmp(input, "quit") == 0) {
         sleep(1);
         qemu_exit(0);

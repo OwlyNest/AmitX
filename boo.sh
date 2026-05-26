@@ -21,10 +21,10 @@ run() {
 }
 
 echo -e "\e[33m[x] Cleaning previous build...\e[0m"
-run "make clean"
+run "bear -- make clean"
 
 echo -e "\e[33m[x] Building kernel...\e[0m"
-run "make"
+run "bear -- make"
 
 echo -e "\e[33m[x] Preparing ISO directory...\e[0m"
 run "mkdir -p isodir/boot/grub"
@@ -48,7 +48,7 @@ echo -e "\e[33m[x] Launching QEMU...\e[0m"
 set +e
 qemu-system-i386 -cdrom amitx.iso -m 256 -no-reboot -serial stdio -monitor none -device isa-debug-exit,iobase=0xf4,iosize=0x04 -full-screen
 QEMU_EXIT=$?
-run "make clean"
+run "bear -- make clean"
 
 
 echo "$QEMU_EXIT"

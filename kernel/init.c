@@ -24,6 +24,7 @@
 /* --- Includes ---*/
 #include "screen.h"
 #include "io.h"
+#include "amfs.h"
 #include "serial.h"
 #include "timer.h"
 #include "keyboard.h"
@@ -68,21 +69,31 @@ void kernel_setup(void) {
 
 	pci_device_t* ide = pci_get_device(0x8086, 0x7010);
 	if (ide) {
-		ide_init(0x1F0, 0x3F6);  /* Legacy primary channel */
-		uint16_t identify[256];
-		if (ide_identify(0, identify) == 0) {
-			char model[41];
-			for (int i = 0; i < 20; i++) {
-				model[i*2]   = ((char*)&identify[27])[i*2+1];   /* Big-endian swap */
-				model[i*2+1] = ((char*)&identify[27])[i*2];
-			}
-			model[40] = '\0';
-			printk("[ide] Drive 0: %s\n", model);
-			uint16_t mbr[256];
-			ide_read_sectors(0, 0, 1, mbr);
-			printk("[ide] MBR signature: 0x%04x\n", mbr[255]);
-		}
-	}
+        ide_init(0x1F0, 0x3F6);
+        uint16_t identify[256];
+        if (ide_identify(0, identify) == 0) {
+            // Try mount first
+            if (amfs_mount() != 0) {
+                // No filesystem — format it
+                amfs_mkfs(10 * 2048);  // 10MB = 20480 sectors
+                amfs_mount();
+                
+                // Create initial files
+                amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19);
+                amfs_write_file("README", "AmitX Filesystem v0.1\n", 22);
+            }
+            
+            // List and read back
+            amfs_ls();
+            
+            char buf[256];
+            int len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
+            if (len > 0) {
+                buf[len] = '\0';
+                printk("[amitfs] Read back: %s", buf);
+            }
+        }
+    }
 
     setcolor(15, 0);
     clear();

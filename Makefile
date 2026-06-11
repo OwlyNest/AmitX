@@ -1,41 +1,106 @@
-
-# Tools
-CC = i686-elf-gcc
-LD = i686-elf-ld
-
-# Flags
-CFLAGS  = -m32 -ffreestanding -O2 -Wall -Wextra -Iinclude -Icyclone -I.. -Ifs
-LDFLAGS = -T boot/linker.ld -nostdlib
+# Toolchain
+CC := i686-elf-gcc
+LD := i686-elf-ld
 
 # Directories
-SRC_DIR = src
-CYCLONE_DIR = cyclone
-FS_DIR = fs
-BOOT_DIR = boot
+SRC_DIRS := src \
+	shell \
+	fs \
+	boot \
+	arch/x86 \
+	drivers \
+	lib \
+	mm \
+	kernel \
+	screen \
+	apps \
+	tests \
+	logo \
+	ui \
+	hw
 
-# Sources and objects
-SRC_C = $(wildcard $(SRC_DIR)/*.c)
-SRC_CYCLONE = $(wildcard $(CYCLONE_DIR)/*.c)
-SRC_FS = $(wildcard $(FS_DIR)/*.c)
-SRC_S = $(wildcard $(BOOT_DIR)/*.S) $(wildcard $(SRC_DIR)/*.S)
-OBJS  = $(SRC_C:.c=.o) $(SRC_S:.S=.o) $(SRC_CYCLONE:.c=.o) $(SRC_FS:.c=.o)
+BUILD_DIR := build
 
-# Default target
-all: kernel.bin
+# Output
+TARGET := kernel.bin
 
-# Compile C files
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# Flags
+CFLAGS := \
+	-m32 \
+	-ffreestanding \
+	-O2 \
+	-Wall \
+	-Wextra \
+	-Werror \
+	-MMD \
+	-MP \
+	-Iinclude \
+	-Ishell \
+	-Ifs \
+	-Iarch/x86 \
+	-Idrivers \
+	-Ilib \
+	-Imm \
+	-Ikernel \
+	-Iscreen \
+	-Iapps \
+	-Itests \
+	-Ilogo \
+	-Iui \
+	-Ihw
 
-# Compile assembly files
-%.o: %.S
-	$(CC) $(CFLAGS) -c $< -o $@
+LDFLAGS := \
+	-T boot/linker.ld \
+	-nostdlib
 
+# --------------------------------------------------------------------
+# Source discovery
+# --------------------------------------------------------------------
 
-# Link kernel
-kernel.bin: $(OBJS)
+C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+S_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.S))
+
+OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
+OBJS += $(patsubst %.S,$(BUILD_DIR)/%.o,$(S_SRCS))
+
+DEPS := $(OBJS:.o=.d)
+
+# --------------------------------------------------------------------
+# Targets
+# --------------------------------------------------------------------
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^
 
-# Clean
+# --------------------------------------------------------------------
+# C compilation
+# --------------------------------------------------------------------
+
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# --------------------------------------------------------------------
+# Assembly compilation
+# --------------------------------------------------------------------
+
+$(BUILD_DIR)/%.o: %.S
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# --------------------------------------------------------------------
+# Cleanup
+# --------------------------------------------------------------------
+
 clean:
-	rm -f $(OBJS) kernel.bin
+	rm -rf $(BUILD_DIR) $(TARGET)
+
+# --------------------------------------------------------------------
+# Auto-generated dependencies
+# --------------------------------------------------------------------
+
+-include $(DEPS)

@@ -1,6 +1,5 @@
 #include "vfs.h"
 #include <stddef.h>
-#include "string.h"
 
 static fs_node_t *vfs_root = NULL;
 

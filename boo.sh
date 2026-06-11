@@ -46,9 +46,22 @@ run "grub-mkrescue -o amitx.iso isodir"
 
 echo -e "\e[33m[x] Launching QEMU...\e[0m"
 set +e
-qemu-system-i386 -cdrom amitx.iso -m 256 -no-reboot -serial stdio -monitor none -device isa-debug-exit,iobase=0xf4,iosize=0x04 -full-screen
+
+qemu-system-i386 \
+    -cdrom amitx.iso \
+    -hda disk.img \
+    -boot d \
+    -m 256 \
+    -no-reboot \
+    -serial stdio \
+    -monitor none \
+    -machine pc \
+    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+    -display gtk \
+    -full-screen
+
 QEMU_EXIT=$?
-run "bear -- make clean"
+run "make clean"
 
 
 echo "$QEMU_EXIT"
@@ -72,3 +85,5 @@ case $QEMU_EXIT in
         echo -e "\e[33m[x] You did the ctrl+C didn't you?\e[0m"
         ;;
 esac
+
+stty sane

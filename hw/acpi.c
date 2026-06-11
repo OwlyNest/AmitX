@@ -1,0 +1,344 @@
+/*
+	* hw/acpi.c - [Enter description]
+	* Author:   amity
+	* Date:     Thu Jun 11 13:12:53 2026
+	* Copyright © 2026 OwlyNest
+*/
+
+/* --- Styling Instructions ---
+	* Encoding:                      UTF-8, Unix line endings
+	* Text font:                     Monospace
+	* Line width:                    Max 80 characters
+	* Indentation:                   Use 4 spaces
+	* Brace style:                   Same line as control statement
+	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
+	* Section headers:               Use 3 '-' characters before and after
+	* Pointer notation:              Next to variable name, not type
+	* Binary operations:             Space around operator
+	* Empty parameter list:          Use (void) instead of ()
+	* Statements and declarations:   Max one per line
+*/
+
+/* --- Macros ---*/
+
+/* --- Includes ---*/
+#include "acpi.h"
+#include "io.h"
+#include "screen.h"
+#include "heap.h"
+#include "printk.h"
+#include "amitx_consts.h"
+#include <stdint.h>
+/* --- Typedefs - Structs - Enums ---*/
+
+/* --- Globals ---*/
+static acpi_state_t acpi_state = { 0 };
+/* --- Prototypes ---*/
+
+/* --- Functions ---*/
+static int acpi_checksum_valid(const uint8_t *data, size_t len) {
+	uint8_t sum = 0;
+	for (size_t i = 0; i < len; i++) {
+		sum += data[i];
+	}
+	return sum == 0;
+}
+
+/* ==========================================================================
+ * RSDP search — Method 2: BIOS ROM region (0xE0000 - 0xFFFFF)
+ * ======================================================================= */
+static acpi_rsdp_t* acpi_find_rsdp_method2(void) {
+    /* Search every 16-byte boundary in the BIOS ROM area */
+    for (uint32_t addr = 0xE0000; addr < 0xFFFFF; addr += 16) {
+        acpi_rsdp_t* candidate = (acpi_rsdp_t*)addr;
+        if (memcmp(candidate->signature, ACPI_RSDP_SIG, ACPI_RSDP_SIG_LEN) == 0) {
+            /* Validate checksum (first 20 bytes for ACPI 1.0) */
+            if (acpi_checksum_valid((uint8_t*)candidate, 20)) {
+                return candidate;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* ==========================================================================
+ * RSDP search — Method 1: EBDA (Extended BIOS Data Area)
+ * ======================================================================= */
+static acpi_rsdp_t* acpi_find_rsdp_method1(void) {
+    /* EBDA segment is at 0x40E, real-mode segment:offset */
+    uint16_t ebda_segment;
+    __asm__ __volatile__ ("movw 0x40E, %0" : "=r"(ebda_segment));
+    uint32_t ebda_addr = (uint32_t)ebda_segment << 4;
+
+    if (ebda_addr == 0 || ebda_addr > 0xA0000) {
+        return NULL;
+    }
+
+    /* Search first 1KB of EBDA */
+    for (uint32_t addr = ebda_addr; addr < ebda_addr + 1024; addr += 16) {
+        acpi_rsdp_t* candidate = (acpi_rsdp_t*)addr;
+        if (memcmp(candidate->signature, ACPI_RSDP_SIG, ACPI_RSDP_SIG_LEN) == 0) {
+            if (acpi_checksum_valid((uint8_t*)candidate, 20)) {
+                return candidate;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* ==========================================================================
+ * Find RSDP — tries method 1 first, then method 2
+ * ======================================================================= */
+ static acpi_rsdp_t* acpi_find_rsdp(void) {
+    acpi_rsdp_t* rsdp = acpi_find_rsdp_method1();
+    if (rsdp) {
+        printk("[acpi] RSDP found via EBDA at 0x%p\n", rsdp);
+        return rsdp;
+    }
+
+    rsdp = acpi_find_rsdp_method2();
+    if (rsdp) {
+        printk("[acpi] RSDP found via BIOS ROM search at 0x%p\n", rsdp);
+        return rsdp;
+    }
+
+    return NULL;
+}
+
+/* ==========================================================================
+ * Walk RSDT/XSDT to find a table by signature
+ * ======================================================================= */
+static void* acpi_find_table_in_rsdt(acpi_rsdt_t* rsdt, const char* signature) {
+    if (!rsdt) return NULL;
+
+    uint32_t num_entries = (rsdt->header.length - sizeof(acpi_sdt_header_t)) / 4;
+
+    for (uint32_t i = 0; i < num_entries; i++) {
+        acpi_sdt_header_t* header = (acpi_sdt_header_t*)(uintptr_t)rsdt->entries[i];
+        if (!header) continue;
+
+        if (memcmp(header->signature, signature, 4) == 0) {
+            if (acpi_checksum_valid((uint8_t*)header, header->length)) {
+                return header;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void* acpi_find_table_in_xsdt(acpi_xsdt_t* xsdt, const char* signature) {
+    if (!xsdt) return NULL;
+
+    uint32_t num_entries = (xsdt->header.length - sizeof(acpi_sdt_header_t)) / 8;
+
+    for (uint32_t i = 0; i < num_entries; i++) {
+        acpi_sdt_header_t* header = (acpi_sdt_header_t*)(uintptr_t)xsdt->entries[i];
+        if (!header) continue;
+
+        if (memcmp(header->signature, signature, 4) == 0) {
+            if (acpi_checksum_valid((uint8_t*)header, header->length)) {
+                return header;
+            }
+        }
+    }
+    return NULL;
+}
+
+void* acpi_find_table(const char* signature) {
+    if (!acpi_state.rsdp) return NULL;
+
+    if (acpi_state.acpi_version >= 2 && acpi_state.rsdp->xsdt_addr != 0) {
+        acpi_xsdt_t* xsdt = (acpi_xsdt_t*)(uintptr_t)acpi_state.rsdp->xsdt_addr;
+        return acpi_find_table_in_xsdt(xsdt, signature);
+    } else {
+        acpi_rsdt_t* rsdt = (acpi_rsdt_t*)(uintptr_t)acpi_state.rsdp->rsdt_addr;
+        return acpi_find_table_in_rsdt(rsdt, signature);
+    }
+}
+
+/* ==========================================================================
+ * ACPI initialization
+ * ======================================================================= */
+int acpi_init(void) {
+    printk("[acpi] Initializing ACPI subsystem...\n");
+
+    acpi_state.rsdp = acpi_find_rsdp();
+    if (!acpi_state.rsdp) {
+        printk("[acpi] ERROR: RSDP not found\n");
+        return -1;
+    }
+
+    /* Determine ACPI version */
+    acpi_state.acpi_version = (acpi_state.rsdp->revision >= 2) ? 2 : 1;
+    printk("[acpi] ACPI version %d.0 detected\n", acpi_state.acpi_version);
+
+    /* Find FADT */
+    acpi_state.fadt = (acpi_fadt_t*)acpi_find_table(ACPI_FADT_SIG);
+    if (!acpi_state.fadt) {
+        printk("[acpi] ERROR: FADT not found\n");
+        return -1;
+    }
+    printk("[acpi] FADT found at 0x%p\n", acpi_state.fadt);
+
+    /* Find MADT (optional, for future SMP) */
+    acpi_state.madt = (acpi_madt_t*)acpi_find_table(ACPI_MADT_SIG);
+    if (acpi_state.madt) {
+        printk("[acpi] MADT found at 0x%p\n", acpi_state.madt);
+    }
+
+    acpi_state.initialized = 1;
+    printk("[acpi] Initialization complete\n");
+    return 0;
+}
+
+/* ==========================================================================
+ * Power management
+ * ======================================================================= */
+
+static uint16_t acpi_read_pm1a_cnt(void) {
+    if (!acpi_state.fadt) return 0;
+    return inw(acpi_state.fadt->pm1a_cnt_blk);
+}
+
+static void acpi_write_pm1a_cnt(uint16_t val) {
+    if (!acpi_state.fadt) return;
+    outw(acpi_state.fadt->pm1a_cnt_blk, val);
+}
+
+static void acpi_enable(void) {
+    if (!acpi_state.fadt) return;
+
+    /* Check if already enabled */
+    if (acpi_read_pm1a_cnt() & ACPI_PM1_SCI_EN) {
+        printk("[acpi] ACPI already enabled\n");
+        return;
+    }
+
+    if (acpi_state.fadt->smi_cmd == 0) {
+        printk("[acpi] WARNING: No SMI_CMD port, cannot enable ACPI\n");
+        return;
+    }
+
+    printk("[acpi] Enabling ACPI...\n");
+    outb(acpi_state.fadt->smi_cmd, acpi_state.fadt->acpi_enable);
+
+    /* Wait up to 3 seconds for SCI_EN bit */
+    for (int i = 0; i < 3000; i++) {
+        if (acpi_read_pm1a_cnt() & ACPI_PM1_SCI_EN) {
+            printk("[acpi] ACPI enabled successfully\n");
+            return;
+        }
+        /* Simple delay — could use timer if available */
+        for (volatile int j = 0; j < 1000; j++);
+    }
+
+    printk("[acpi] WARNING: ACPI enable timed out\n");
+}
+
+void acpi_shutdown(void) {
+    if (!acpi_state.initialized || !acpi_state.fadt) {
+        printk("[acpi] ACPI not initialized, falling back to QEMU exit\n");
+        outb(PORT_QEMU_EXIT, 0);
+        return;
+    }
+
+    acpi_enable();
+
+    uint16_t pm1a_cnt = acpi_read_pm1a_cnt();
+    uint16_t slp_typa = QEMU_SLP_TYPA;
+
+    /* Build shutdown value: SLP_TYP | SLP_EN */
+    uint16_t shutdown_val = (pm1a_cnt & ~ACPI_PM1_SLP_TYP_MASK) |
+                            (slp_typa << ACPI_PM1_SLP_TYP_SHIFT) |
+                            ACPI_PM1_SLP_EN;
+
+    printk("[acpi] Sending shutdown command to PM1a_CNT (0x%x)\n",
+           acpi_state.fadt->pm1a_cnt_blk);
+
+    acpi_write_pm1a_cnt(shutdown_val);
+
+    /* If we get here, shutdown failed */
+    printk("[acpi] Shutdown command returned — system did not power off\n");
+    for (;;) {
+        __asm__ __volatile__("cli; hlt");
+    }
+}
+
+void acpi_reboot(void) {
+    /* Try ACPI reset register if available */
+    if (acpi_state.initialized && acpi_state.fadt &&
+        acpi_state.fadt->header.length > 116 &&  /* Has reset_reg field */
+        acpi_state.fadt->reset_reg.address != 0) {
+
+        printk("[acpi] Using ACPI reset register\n");
+        /* Write reset_value to reset_reg */
+        if (acpi_state.fadt->reset_reg.address_space_id == 0) {
+            /* System I/O */
+            outb((uint16_t)acpi_state.fadt->reset_reg.address,
+                 acpi_state.fadt->reset_value);
+        } else if (acpi_state.fadt->reset_reg.address_space_id == 1) {
+            /* System Memory */
+            volatile uint8_t* reg = (volatile uint8_t*)(uintptr_t)
+                acpi_state.fadt->reset_reg.address;
+            *reg = acpi_state.fadt->reset_value;
+        }
+    }
+
+    /* Fallback: PS/2 keyboard controller reset */
+    printk("[acpi] Falling back to keyboard controller reset\n");
+    uint8_t good = 0x02;
+    while (good & 0x02) {
+        good = inb(0x64);
+    }
+    outb(0x64, 0xFE);
+
+    /* If that didn't work, triple fault */
+    printk("[acpi] Reset failed, triple faulting...\n");
+    __asm__ __volatile__("int $0xFF");
+}
+
+/* ==========================================================================
+ * Accessors
+ * ======================================================================= */
+acpi_fadt_t *acpi_get_fadt(void) {
+	return acpi_state.fadt;
+}
+
+acpi_madt_t *acpi_get_madt(void){
+	return acpi_state.madt;
+}
+
+int acpi_is_initialized(void) {
+    return acpi_state.initialized;
+}
+
+/* ==========================================================================
+ * Debug output
+ * ======================================================================= */
+void acpi_print_info(void) {
+    if (!acpi_state.initialized) {
+        printk("[acpi] Not initialized\n");
+        return;
+    }
+
+    printk("\n=== ACPI Information ===\n");
+    printk("RSDP at:     0x%p\n", acpi_state.rsdp);
+    printk("ACPI ver:    %d.0\n", acpi_state.acpi_version);
+    printk("FADT at:     0x%p\n", acpi_state.fadt);
+
+    if (acpi_state.fadt) {
+        printk("  DSDT:      0x%x\n", acpi_state.fadt->dsdt);
+        printk("  SMI_CMD:   0x%x\n", acpi_state.fadt->smi_cmd);
+        printk("  PM1a_CNT:  0x%x\n", acpi_state.fadt->pm1a_cnt_blk);
+        printk("  PM1b_CNT:  0x%x\n", acpi_state.fadt->pm1b_cnt_blk);
+        printk("  ACPI_EN:   0x%02x\n", acpi_state.fadt->acpi_enable);
+        printk("  ACPI_DIS:  0x%02x\n", acpi_state.fadt->acpi_disable);
+    }
+
+    if (acpi_state.madt) {
+        printk("MADT at:     0x%p\n", acpi_state.madt);
+        printk("  LAPIC:     0x%x\n", acpi_state.madt->local_apic_addr);
+    }
+
+    printk("========================\n\n");
+}

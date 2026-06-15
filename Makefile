@@ -35,19 +35,8 @@ CFLAGS := \
 	-MMD \
 	-MP \
 	-Iinclude \
-	-Ishell \
-	-Ifs \
-	-Iarch/x86 \
-	-Idrivers \
-	-Ilib \
-	-Imm \
-	-Ikernel \
-	-Iscreen \
-	-Iapps \
-	-Itests \
-	-Ilogo \
-	-Iui \
-	-Ihw
+
+CFLAGS += -DAMITX_BUILD_DATE="\"$(shell date +%Y-%m-%d)\""
 
 LDFLAGS := \
 	-T boot/linker.ld \

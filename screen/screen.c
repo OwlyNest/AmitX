@@ -1,21 +1,61 @@
+/*
+    * screen.c - VGA text mode screen driver
+    * Author:   amity
+    * Date:     Wed Jun 10 10:32:00 2026
+    * Copyright © 2026 OwlyNest
+*/
 
-#include "screen.h"
-#include "string.h"
-#include "amitx_info.h"
-#include "io.h"
-#include "mouse.h"
-#include "serial.h"
-#include "amitx_consts.h"
+/* --- Styling Instructions ---
+    * Encoding:                      UTF-8, Unix line endings
+    * Text font:                     Monospace
+    * Line width:                    Max 80 characters
+    * Indentation:                   Use 4 spaces
+    * Brace style:                   Same line as control statement
+    * Inline comments:               Column 40, wherever possible, else, whole multiple of 20
+    * Section headers:               Use 3 '-' characters before and after
+    * Pointer notation:              Next to variable name, not type
+    * Binary operations:             Space around operator
+    * Empty parameter list:          Use (void) instead of ()
+    * Statements and declarations:   Max one per line
+*/
+
+/* --- Macros ---*/
+
+/* --- Includes ---*/
+#include "screen/screen.h"
+#include "lib/string.h"
+#include "internal/amitx_info.h"
+#include "screen/printk.h"
+#include "arch/x86/io.h"
+#include "drivers/mouse.h"
+#include "hw/pci.h"
+#include "drivers/serial.h"
+#include "internal/amitx_consts.h"
+#include "internal/virtmem.h"
+#include "drivers/keyboard.h"
 #include <stdarg.h>
-#include <stdarg.h>
 
+/* --- Typedefs - Structs - Enums ---*/
 
+/* --- Globals ---*/
 extern int tick_count;
 
-static uint16_t* const video_memory = (uint16_t*) VGA_MEM_PHYS;
+/* Use vga_memory() for auto-detect of physical vs virtual address */
+static uint16_t* video_memory = NULL;
 static uint8_t cursor_row = 0;
 static uint8_t cursor_col = 0;
-static uint8_t color = 0x0F; 
+static uint8_t color = 0x0F;
+
+/* --- Prototypes ---*/
+
+/* --- Functions ---*/
+
+/* ==========================================================================
+ * Initialize video memory pointer (call before any screen operations)
+ * ======================================================================= */
+void screen_init(void) {
+    video_memory = vga_memory();
+}
 
 void set_cursor(int x, int y) {
     uint16_t pos = y * VGA_WIDTH + x;
@@ -34,20 +74,23 @@ void update_hardware_cursor() {
 static void scroll_if_needed() {
     if (cursor_row < VGA_HEIGHT - 1) return;
 
-    // Scroll everything up one line
+    /* Scroll everything up one line */
     for (int row = 1; row < VGA_HEIGHT - 1; row++) {
         for (int col = 0; col < VGA_WIDTH; col++) {
-            video_memory[(row - 1) * VGA_WIDTH + col] = video_memory[row * VGA_WIDTH + col];
+            video_memory[(row - 1) * VGA_WIDTH + col] =
+                video_memory[row * VGA_WIDTH + col];
         }
     }
     for (int col = 0; col < VGA_WIDTH; col++) {
-        video_memory[(VGA_HEIGHT - 2) * VGA_WIDTH + col] = (color << 8) | ' ';
+        video_memory[(VGA_HEIGHT - 2) * VGA_WIDTH + col] =
+            (color << 8) | ' ';
     }
     cursor_row = VGA_HEIGHT - 2;
 }
 
 void next_white() {
-    video_memory[cursor_row * VGA_WIDTH + cursor_col] = (0x0F << 8) | CH_CURSOR;
+    video_memory[cursor_row * VGA_WIDTH + cursor_col] =
+        (0x0F << 8) | CH_CURSOR;
 }
 
 void reset_mouse_cursor_state();
@@ -73,8 +116,10 @@ void putc(char c) {
     if (c == '\b') {
         if (cursor_col > 0) {
             cursor_col--;
-            video_memory[cursor_row * VGA_WIDTH + cursor_col] = (color << 8) | CH_VERT;
-            video_memory[cursor_row * VGA_WIDTH + cursor_col + 1] = (color << 8) | ' ';
+            video_memory[cursor_row * VGA_WIDTH + cursor_col] =
+                (color << 8) | CH_VERT;
+            video_memory[cursor_row * VGA_WIDTH + cursor_col + 1] =
+                (color << 8) | ' ';
             update_hardware_cursor();
         }
         return;
@@ -120,7 +165,6 @@ void draw_statusbar() {
     char status_text[80];
     int pos = 0;
 
-    // Manually copy strings with spaces and parentheses, ensure no buffer overflow
     while (*name && pos < 79) status_text[pos++] = *name++;
     if (pos < 79) status_text[pos++] = ' ';
     while (*version && pos < 79) status_text[pos++] = *version++;
@@ -130,16 +174,18 @@ void draw_statusbar() {
     if (pos < 79) status_text[pos++] = ')';
     status_text[pos] = '\0';
 
-    const uint8_t status_bg = 1;    // Blue background
-    const uint8_t status_fg = 15;   // White foreground
+    const uint8_t status_bg = 1;    /* Blue background */
+    const uint8_t status_fg = 15;   /* White foreground */
     uint8_t status_color = (status_bg << 4) | (status_fg & 0x0F);
 
     for (int col = 0; col < VGA_WIDTH; col++) {
-        video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + col] = (status_color << 8) | ' ';
+        video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + col] =
+            (status_color << 8) | ' ';
     }
 
     for (int i = 0; i < pos && i < VGA_WIDTH; i++) {
-        video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + i] = (status_color << 8) | status_text[i];
+        video_memory[(VGA_HEIGHT - 1) * VGA_WIDTH + i] =
+            (status_color << 8) | status_text[i];
     }
 }
 
@@ -190,7 +236,6 @@ void blink() {
     } else {
         setcolor(0, 15);
     }
-    
 }
 
 void move_cursor(uint8_t x, uint8_t y) {
@@ -204,87 +249,91 @@ void get_cursor(uint8_t* x, uint8_t* y) {
     *y = cursor_row;
 }
 
-void draw_box(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint8_t fg, uint8_t bg) {
+void draw_box(uint8_t x, uint8_t y, uint8_t width, uint8_t height,
+              uint8_t fg, uint8_t bg) {
     if (width < 2 || height < 2) return;
 
     uint8_t color_local = (bg << 4) | (fg & 0x0F);
 
-    video_memory[y * VGA_WIDTH + x] = (color_local << 8) | CH_UL; // ┌
-    video_memory[y * VGA_WIDTH + x + width - 1] = (color_local << 8) | CH_UR; // ┐
-    video_memory[(y + height - 1) * VGA_WIDTH + x] = (color_local << 8) | CH_LL; // └
-    video_memory[(y + height - 1) * VGA_WIDTH + x + width - 1] = (color_local << 8) | CH_LR; // ┘
+    video_memory[y * VGA_WIDTH + x] = (color_local << 8) | CH_UL;
+    video_memory[y * VGA_WIDTH + x + width - 1] =
+        (color_local << 8) | CH_UR;
+    video_memory[(y + height - 1) * VGA_WIDTH + x] =
+        (color_local << 8) | CH_LL;
+    video_memory[(y + height - 1) * VGA_WIDTH + x + width - 1] =
+        (color_local << 8) | CH_LR;
 
-    // Horizontal edges
     for (int i = 1; i < width - 1; i++) {
-        video_memory[y * VGA_WIDTH + x + i] = (color_local << 8) | CH_HORIZ;
-        video_memory[(y + height - 1) * VGA_WIDTH + x + i] = (color_local << 8) | CH_HORIZ;
+        video_memory[y * VGA_WIDTH + x + i] =
+            (color_local << 8) | CH_HORIZ;
+        video_memory[(y + height - 1) * VGA_WIDTH + x + i] =
+            (color_local << 8) | CH_HORIZ;
     }
 
-    // Vertical edges
     for (int i = 1; i < height - 1; i++) {
-        video_memory[(y + i) * VGA_WIDTH + x] = (color_local << 8) | CH_VERT;
-        video_memory[(y + i) * VGA_WIDTH + x + width - 1] = (color_local << 8) | CH_VERT;
+        video_memory[(y + i) * VGA_WIDTH + x] =
+            (color_local << 8) | CH_VERT;
+        video_memory[(y + i) * VGA_WIDTH + x + width - 1] =
+            (color_local << 8) | CH_VERT;
     }
 }
 
-void draw_title_box(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const char* title, uint8_t fg, uint8_t bg) {
+void draw_title_box(uint8_t x, uint8_t y, uint8_t width, uint8_t height,
+                    const char* title, uint8_t fg, uint8_t bg) {
     draw_box(x, y, width, height, fg, bg);
     if (title) {
         uint8_t title_len = strlen(title);
-
-        if (title_len > width - 4) {
+        if (title_len > width - 4)
             title_len = width - 4;
-        }
-
         uint8_t title_x = x + (width - title_len) / 2;
-
         for (uint8_t i = 0; i < title_len; i++) {
-            video_memory[y * VGA_WIDTH + title_x + i] = (color << 8) | title[i];
+            video_memory[y * VGA_WIDTH + title_x + i] =
+                (color << 8) | title[i];
         }
     }
 }
 
-void draw_progress_bar(uint8_t x, uint8_t y, uint8_t width, uint8_t percent, uint8_t fg, uint8_t bg) {
+void draw_progress_bar(uint8_t x, uint8_t y, uint8_t width, uint8_t percent,
+                       uint8_t fg, uint8_t bg) {
     if (width < 2 || percent > 100) return;
 
     uint8_t fill = (percent * width) / 100;
     uint16_t fill_char = 219;
     uint16_t empty_char = 176;
-
-    uint8_t color = (bg << 4) | (fg & 0x0F);
+    uint8_t bar_color = (bg << 4) | (fg & 0x0F);
 
     for (int i = 0; i < width; i++) {
         uint16_t c = (i < fill) ? fill_char : empty_char;
-        video_memory[y * VGA_WIDTH + x + i] = (color << 8) | c;
+        video_memory[y * VGA_WIDTH + x + i] = (bar_color << 8) | c;
     }
 }
 
-void draw_list(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const char* items[], uint8_t count, uint8_t selected) {
+void draw_list(uint8_t x, uint8_t y, uint8_t width, uint8_t height,
+               const char* items[], uint8_t count, uint8_t selected) {
     uint8_t fg = 15, bg = 0;
     uint8_t highlight_fg = 0, highlight_bg = 15;
 
-    // Draw border box
     draw_box(x, y, width, height, fg, bg);
 
-    // Visible area
     uint8_t visible = height - 2;
     uint8_t start = 0;
-
-    if (selected >= visible) {
+    if (selected >= visible)
         start = selected - visible + 1;
-    }
 
     for (uint8_t i = 0; i < visible; i++) {
         uint8_t index = start + i;
         if (index >= count) break;
 
-        uint8_t color = (i + start == selected) ? ((highlight_bg << 4) | (highlight_fg & 0x0F)) : ((bg << 4) | (fg & 0x0F));
+        uint8_t row_color = (i + start == selected)
+            ? ((highlight_bg << 4) | (highlight_fg & 0x0F))
+            : ((bg << 4) | (fg & 0x0F));
 
         const char* label = items[index];
         for (uint8_t j = 0; j < width - 2; j++) {
             char c = label[j];
             if (c == '\0') break;
-            video_memory[(y + 1 + i) * VGA_WIDTH + x + 1 + j] = (color << 8) | c;
+            video_memory[(y + 1 + i) * VGA_WIDTH + x + 1 + j] =
+                (row_color << 8) | c;
         }
     }
 }
@@ -302,15 +351,11 @@ void itoa_pad(int value, char* buffer, int width) {
         }
     }
 
-    // Add padding
-    while (i < width) {
+    while (i < width)
         temp[i++] = '0';
-    }
 
-    // Reverse
-    for (int j = 0; j < i; j++) {
+    for (int j = 0; j < i; j++)
         buffer[j] = temp[i - j - 1];
-    }
     buffer[i] = '\0';
 }
 
@@ -328,14 +373,12 @@ int sputf(char* out, const char* format, ...) {
                 width = *p - '0';
                 p++;
             }
-
             if (*p == 'd') {
                 int val = va_arg(args, int);
                 char temp[16];
                 itoa_pad(val, temp, width ? width : 1);
-                for (char* t = temp; *t; t++) {
+                for (char* t = temp; *t; t++)
                     *str++ = *t;
-                }
             }
         } else {
             *str++ = *p;
@@ -354,21 +397,19 @@ extern uint8_t mouse_buttons;
 static int mouse_prev_y = -1;
 
 void draw_mouse_cursor() {
-   
     if (mouse_prev_x >= 0 && mouse_prev_y >= 0) {
         video_memory[mouse_prev_y * VGA_WIDTH + mouse_prev_x] = mouse_prev_char;
     }
 
     mouse_prev_char = video_memory[mouse_y * VGA_WIDTH + mouse_x];
 
-    uint8_t fg = 15;  
-    uint8_t bg = 0; 
+    uint8_t fg = 15;
+    uint8_t bg = 0;
     uint16_t c = CH_VERT;
     if (mouse_buttons & 1) c = 248;
     if (mouse_buttons & 2) c = CH_HORIZ;
     video_memory[mouse_y * VGA_WIDTH + mouse_x] = (bg << 4 | fg) << 8 | c;
 
-    // Save new position
     mouse_prev_x = mouse_x;
     mouse_prev_y = mouse_y;
 }
@@ -380,4 +421,184 @@ void reset_mouse_cursor_state() {
     mouse_prev_x = -1;
     mouse_prev_y = -1;
     mouse_prev_char = (color << 8) | ' ';
+}
+
+static pci_device_t *dm_devices[DM_MAX_DEVICES];
+static int dm_device_count = 0;
+static int dm_selected = 0;
+
+static void dm_refresh_devices(void) {
+    dm_device_count = 0;
+    pci_device_t *dev = pci_get_first_device();
+    while (dev && dm_device_count < DM_MAX_DEVICES) {
+        dm_devices[dm_device_count++] = dev;
+        dev = dev->next;
+    }
+}
+
+static void dm_draw_list(void) {
+    uint8_t fg = 15, bg = 0;
+    uint8_t hi_fg = 0, hi_bg = 15;
+
+    draw_box(DM_LIST_X, DM_LIST_Y, DM_LIST_W, DM_LIST_H, fg, bg);
+
+    const char *title = " PCI Device Manager ";
+    uint8_t tlen = strlen(title);
+    uint8_t tx = DM_LIST_X + (DM_LIST_W - tlen) / 2;
+    for (uint8_t i = 0; i < tlen; i++) {
+        video_memory[DM_LIST_Y * VGA_WIDTH + tx + i] =
+            (color << 8) | title[i];
+    }
+
+    uint8_t visible = DM_LIST_H - 2;
+    uint8_t start = 0;
+    if (dm_selected >= visible)
+        start = dm_selected - visible + 1;
+
+    for (uint8_t i = 0; i < visible; i++) {
+        uint8_t idx = start + i;
+        if (idx >= dm_device_count) break;
+
+        uint8_t row = DM_LIST_Y + 1 + i;
+        uint8_t is_sel = (idx == dm_selected);
+        uint8_t row_color = is_sel
+            ? ((hi_bg << 4) | (hi_fg & 0x0F))
+            : ((bg << 4) | (fg & 0x0F));
+
+        pci_device_t *dev = dm_devices[idx];
+        char line[76];
+        ksnprintf(line, sizeof(line),
+            " %02x:%02x.%x %04x:%04x %-16s %s ",
+            dev->bus, dev->device, dev->function,
+            dev->vendor_id, dev->device_id,
+            pci_subclass_name(dev->class_code, dev->subclass),
+            pci_class_name(dev->class_code));
+
+        uint8_t linelen = strlen(line);
+        for (uint8_t j = 0; j < DM_LIST_W - 2 && j < linelen; j++) {
+            video_memory[row * VGA_WIDTH + DM_LIST_X + 1 + j] =
+                (row_color << 8) | line[j];
+        }
+        for (uint8_t j = linelen; j < DM_LIST_W - 2; j++) {
+            video_memory[row * VGA_WIDTH + DM_LIST_X + 1 + j] =
+                (row_color << 8) | ' ';
+        }
+    }
+
+    const char *hint = " [\x18\x19] Select  [Enter] Details  [q] Back ";
+    uint8_t hlen = strlen(hint);
+    uint8_t hx = DM_LIST_X + (DM_LIST_W - hlen) / 2;
+    for (uint8_t i = 0; i < hlen && hx + i < VGA_WIDTH - 1; i++) {
+        video_memory[(DM_LIST_Y + DM_LIST_H - 1) * VGA_WIDTH + hx + i] =
+            (0x01 << 8) | hint[i];
+    }
+}
+
+static void dm_draw_detail(pci_device_t *dev) {
+    clear();
+
+    char title[64];
+    ksnprintf(title, sizeof(title), " %02x:%02x.%x %04x:%04x ",
+              dev->bus, dev->device, dev->function,
+              dev->vendor_id, dev->device_id);
+
+    draw_title_box(2, 1, 76, 23, title, 15, 0);
+
+    uint8_t row = 3;
+    char buf[72];
+
+    ksnprintf(buf, sizeof(buf), "  Class:     %s (%s)",
+              pci_class_name(dev->class_code),
+              pci_subclass_name(dev->class_code, dev->subclass));
+    move_cursor(4, row++); puts(buf);
+
+    ksnprintf(buf, sizeof(buf), "  Revision:  0x%02x", dev->revision);
+    move_cursor(4, row++); puts(buf);
+
+    ksnprintf(buf, sizeof(buf), "  IRQ:       %u", dev->interrupt_line);
+    move_cursor(4, row++); puts(buf);
+
+    ksnprintf(buf, sizeof(buf), "  Command:   0x%04x  Status: 0x%04x",
+              dev->command, dev->status);
+    move_cursor(4, row++); puts(buf);
+
+    row += 1;
+    move_cursor(4, row++); puts("  Base Address Registers:");
+
+    for (uint8_t i = 0; i < dev->bar_count; i++) {
+        if (dev->bars[i].base == 0 && dev->bars[i].size == 0)
+            continue;
+
+        if (dev->bars[i].is_io) {
+            ksnprintf(buf, sizeof(buf),
+                "    BAR%d  I/O  0x%08x  size 0x%x",
+                i, dev->bars[i].base, dev->bars[i].size);
+        } else {
+            ksnprintf(buf, sizeof(buf),
+                "    BAR%d  MEM  0x%08x  size 0x%x  %s",
+                i, dev->bars[i].base, dev->bars[i].size,
+                dev->bars[i].is_prefetch ? "prefetchable" : "");
+        }
+        move_cursor(4, row++); puts(buf);
+    }
+
+    if (dev->capabilities) {
+        row += 1;
+        move_cursor(4, row++); puts("  Capabilities:");
+        pci_capability_t *cap = dev->capabilities;
+        while (cap && row < 22) {
+            ksnprintf(buf, sizeof(buf), "    ID 0x%02x  offset 0x%02x",
+                      cap->id, cap->offset);
+            move_cursor(4, row++); puts(buf);
+            cap = cap->next_cap;
+        }
+    }
+
+    move_cursor(4, 23);
+    puts("[q] Back to list  [Esc] Back to menu");
+}
+
+void device_manager_run(void) {
+    dm_refresh_devices();
+    dm_selected = 0;
+    int redraw = 1;
+
+    while (1) {
+        if (redraw) {
+            clear();
+            dm_draw_list();
+            update_hardware_cursor();
+            redraw = 0;
+        }
+
+        unsigned char c = keyboard_getchar();
+
+        if (c == 's' || c == KEY_DOWN) {
+            if (dm_selected < dm_device_count - 1) {
+                dm_selected++;
+                redraw = 1;
+            }
+        } else if (c == 'w' || c == KEY_UP) {
+            if (dm_selected > 0) {
+                dm_selected--;
+                redraw = 1;
+            }
+        } else if (c == '\n') {
+            if (dm_device_count > 0) {
+                dm_draw_detail(dm_devices[dm_selected]);
+                update_hardware_cursor();
+                while (1) {
+                    unsigned char d = keyboard_getchar();
+                    if (d == 'q' || d == KEY_ESC) {
+                        redraw = 1;
+                        break;
+                    }
+                }
+            }
+        } else if (c == 'q' || c == KEY_ESC) {
+            break;
+        } else {
+            redraw = 1;
+        }
+    }
 }

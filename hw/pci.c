@@ -5,12 +5,12 @@
  * Copyright © 2026 OwlyNest
  */
 
-#include "pci.h"
-#include "io.h"
-#include "screen.h"
-#include "printk.h"
-#include "heap.h"
-#include "string.h"
+#include "hw/pci.h"
+#include "arch/x86/io.h"
+#include "screen/screen.h"
+#include "screen/printk.h"
+#include "mm/heap.h"
+#include "lib/string.h"
 
 /* ==========================================================================
  * Globals
@@ -23,11 +23,7 @@ static int pci_device_count = 0;
  * ======================================================================= */
 
 static inline void pci_config_addr(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg) {
-    uint32_t addr = (1u << 31)
-                  | ((uint32_t)bus  << 16)
-                  | ((uint32_t)dev  << 11)
-                  | ((uint32_t)func <<  8)
-                  | (reg & 0xFC);
+    uint32_t addr = (1u << 31) | ((uint32_t)bus  << 16) | ((uint32_t)dev  << 11) | ((uint32_t)func <<  8) | (reg & 0xFC);
     outl(PCI_CONFIG_ADDR, addr);
 }
 

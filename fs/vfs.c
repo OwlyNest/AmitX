@@ -1,4 +1,4 @@
-#include "vfs.h"
+#include "fs/vfs.h"
 #include <stddef.h>
 
 static fs_node_t *vfs_root = NULL;

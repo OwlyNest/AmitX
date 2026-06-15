@@ -1,10 +1,10 @@
 
-#include "heap.h"
-#include "screen.h"
+#include "mm/heap.h"
+#include "screen/screen.h"
 #include <stdint.h>
 #include <stddef.h>
-#include "amitx_consts.h"
-#include "string.h"
+#include "internal/amitx_consts.h"
+#include "lib/string.h"
 
 #define ALIGN16(x) (((x) + 15) & ~15)
 

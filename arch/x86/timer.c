@@ -1,8 +1,9 @@
-#include "timer.h"
-#include "amitx_consts.h"
-#include "io.h"
-#include "screen.h"
-#include "amitx_consts.h"
+#include "arch/x86/timer.h"
+#include "arch/x86/io.h"
+#include "screen/screen.h"
+#include "arch/x86/interrupts.h"
+#include "screen/printk.h"
+#include "internal/amitx_consts.h"
 #include <stdint.h>
 
 extern void register_interrupt_handler(int n, void (*handler)());
@@ -27,7 +28,7 @@ void init_timer(uint32_t frequency) {
     timer_handler = timer_callback;
     register_interrupt_handler(VECTOR_IRQ0, timer_callback_wrapper);
     
-    puts("[init_timer] Timer initialized\n");
-
+    printk("[timer] Timer initialized\n");
     __asm__ __volatile__ ("sti");
+    pic_unmask_irq(0);
 }

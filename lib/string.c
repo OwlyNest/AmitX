@@ -1,7 +1,7 @@
 
-#include "string.h"
+#include "lib/string.h"
 #include <stdint.h>
-#include "heap.h"
+#include "mm/heap.h"
 
 void int_to_ascii(int n, char str[]) {
     int i = 0, sign = n;

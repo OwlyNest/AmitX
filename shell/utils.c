@@ -1,4 +1,4 @@
-#include "utils.h"
+#include "shell/utils.h"
 
 int starts_with(const char* str, const char* prefix) {
     while (*prefix) {

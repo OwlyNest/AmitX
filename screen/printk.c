@@ -22,10 +22,10 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "printk.h"
-#include "screen.h"
-#include "serial.h"
-#include "string.h"
+#include "screen/printk.h"
+#include "screen/screen.h"
+#include "drivers/serial.h"
+#include "lib/string.h"
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 

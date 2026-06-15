@@ -1,0 +1,74 @@
+/*
+	* include/virtmem.h - [Enter description]
+	* Author:   amity
+	* Date:     Mon Jun 15 12:58:16 2026
+	* Copyright © 2026 OwlyNest
+*/
+
+/* --- Styling Instructions ---
+	* Encoding:                      UTF-8, Unix line endings
+	* Text font:                     Monospace
+	* Line width:                    Max 80 characters
+	* Indentation:                   Use 4 spaces
+	* Brace style:                   Same line as control statement
+	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
+	* Section headers:               Use 3 '-' characters before and after
+	* Pointer notation:              Next to variable name, not type
+	* Binary operations:             Space around operator
+	* Empty parameter list:          Use (void) instead of ()
+	* Statements and declarations:   Max one per line
+*/
+
+#ifndef VIRTMEM_H
+#define VIRTMEM_H
+
+/* --- Includes ---*/
+#include <stdint.h>
+
+/* --- Macros ---*/
+/* ==========================================================================
+ * Higher-half kernel base address
+ * ======================================================================= */
+#define KERNEL_VIRT_BASE        0xC0000000
+
+/* ==========================================================================
+ * Physical-to-virtual and virtual-to-physical translation
+ * These are identity-mapped when paging is off, and offset by KERNEL_VIRT_BASE
+ * when paging is on (in higher-half mode).
+ * ======================================================================= */
+#define PHYS_TO_VIRT(addr)      ((void *)((uint32_t)(addr) + KERNEL_VIRT_BASE))
+#define VIRT_TO_PHYS(addr)      ((uint32_t)(addr) - KERNEL_VIRT_BASE)
+
+/* ==========================================================================
+ * Common virtual addresses (physical + KERNEL_VIRT_BASE)
+ * ======================================================================= */
+#define VGA_VIRT_ADDR           (KERNEL_VIRT_BASE + VGA_MEM_PHYS)
+
+/* --- Prototypes ---*/
+
+/* ==========================================================================
+ * Check if paging is currently enabled (reads CR0.PG bit)
+ * ======================================================================= */
+static inline int paging_enabled(void) {
+    uint32_t cr0;
+    __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
+    return (cr0 & 0x80000000) != 0;
+}
+
+/* ==========================================================================
+ * Auto-detect: return virtual address if paging is on, physical otherwise.
+ * Use this during the transition period or for addresses that may be accessed
+ * both before and after paging is enabled.
+ * ======================================================================= */
+static inline void *auto_virt(uint32_t phys_addr) {
+    return paging_enabled() ? PHYS_TO_VIRT(phys_addr) : (void *)phys_addr;
+}
+
+/* ==========================================================================
+ * Get VGA memory address (auto-detects paging state)
+ * ======================================================================= */
+static inline uint16_t *vga_memory(void) {
+    return (uint16_t *)auto_virt(VGA_MEM_PHYS);
+}
+
+#endif

@@ -1,7 +1,8 @@
-#include "vfs.h"
-#include "ramfs.h"
-#include "screen.h"
-#include "string.h"
+#include "fs/vfs.h"
+#include "fs/ramfs.h"
+#include "fs/fs.h"
+#include "screen/screen.h"
+#include "lib/string.h"
 
 int fs_add(const char* path, const char* content);
 

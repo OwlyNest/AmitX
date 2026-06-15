@@ -151,7 +151,6 @@ isr128:
     push edx
     call syscall_handler
     add esp, 16
-    sti
     iret
 
 load_idt:

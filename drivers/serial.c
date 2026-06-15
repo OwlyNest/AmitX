@@ -22,9 +22,9 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "serial.h"
-#include "io.h"
-#include "amitx_consts.h"
+#include "drivers/serial.h"
+#include "arch/x86/io.h"
+#include "internal/amitx_consts.h"
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/

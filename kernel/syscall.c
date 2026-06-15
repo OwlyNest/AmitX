@@ -1,8 +1,8 @@
-#include "syscall.h"
-#include "screen.h"
-#include "time.h"
-#include "keyboard.h"
-#include "logo.h"
+#include "kernel/syscall.h"
+#include "screen/screen.h"
+#include "arch/x86/time.h"
+#include "drivers/keyboard.h"
+#include "logo/logo.h"
 
 static syscall_func_t syscall_table[MAX_SYSCALLS] = { 0 };
 

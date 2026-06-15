@@ -1,10 +1,10 @@
-#include "cyclone.h"
-#include "screen.h"
-#include "keyboard.h"
-#include "time.h"
-#include "logo.h"
-#include "commands.h"
-#include "string.h"
+#include "shell/cyclone.h"
+#include "screen/screen.h"
+#include "drivers/keyboard.h"
+#include "arch/x86/time.h"
+#include "logo/logo.h"
+#include "shell/commands.h"
+#include "lib/string.h"
 
 extern int menu;
 extern int load_cyclone;

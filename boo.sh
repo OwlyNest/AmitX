@@ -20,6 +20,8 @@ run() {
     fi
 }
 
+run ./generate_build_mks.sh
+
 echo -e "\e[33m[x] Cleaning previous build...\e[0m"
 run "bear -- make clean"
 
@@ -49,14 +51,14 @@ set +e
 
 qemu-system-i386 \
     -cdrom amitx.iso \
-    -hda disk.img \
+    -drive file=disk.img,format=raw,if=ide \
     -boot d \
-    -m 256 \
+    -m 512 \
     -no-reboot \
     -serial stdio \
     -monitor none \
     -machine pc \
-    -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+    -device vmware-svga \
     -display gtk \
     -full-screen
 

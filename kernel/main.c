@@ -22,15 +22,19 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "screen.h"
-#include "keyboard.h"
-#include "mouse.h"
-#include "kernel.h"
-#include "io.h"
-#include "acpi.h"
-#include "cyclone.h"
-#include "amitx_consts.h"
-#include "menu.h"
+#include "screen/screen.h"
+#include "drivers/keyboard.h"
+#include "drivers/mouse.h"
+#include "kernel/kernel.h"
+#include "mm/heap.h"
+#include "screen/printk.h"
+#include "arch/x86/io.h"
+#include "arch/x86/gdt.h"
+#include "hw/acpi.h"
+#include "kernel/syscall.h"
+#include "shell/cyclone.h"
+#include "internal/amitx_consts.h"
+#include "ui/menu.h"
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 /* --- Globals ---*/
@@ -38,6 +42,18 @@ int owly;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
+
+void ring3_hello(void) {
+    syscall(SYSCALL_WRITE, (uint32_t)"Hello from ring 3!\n", 0, 0);
+    while (1);
+}
+
+void test_ring3(void) {
+    printk("[test] Jumping to ring 3...\n");
+    uint32_t* user_stack = (uint32_t*)malloc(4096);
+    uint32_t user_esp = (uint32_t)(user_stack + 1024);
+    usermode_jump((uint32_t)ring3_hello, user_esp);
+}
 
 void system_shutdown(void) {
     acpi_shutdown();
@@ -57,7 +73,7 @@ void draw_start(void) {
     puts("Hello from the AmitX Kernel\n");
     draw_statusbar();
     puts("\n");
-    draw_list(0, 2, 20, 7, main_menu, main_menu_count, POINTER);
+    draw_list(0, 2, 20, 2 + main_menu_count, main_menu, main_menu_count, POINTER);
     move_cursor(40, 12);
     reset_mouse_cursor_state();
     draw_mouse_cursor();
@@ -65,5 +81,6 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
+    
     menu_run();
 }

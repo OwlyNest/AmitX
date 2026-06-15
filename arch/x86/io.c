@@ -1,6 +1,6 @@
 
 // io.c
-#include "io.h"
+#include "arch/x86/io.h"
 #include <stdint.h>
 
 uint8_t inb(uint16_t port) {

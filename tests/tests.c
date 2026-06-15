@@ -1,9 +1,11 @@
-#include "string.h"
-#include "screen.h"
-#include "heap.h"
-#include "keyboard.h"
-#include "kernel.h"
-#include "printk.h"
+#include "lib/string.h"
+#include "tests/pmm_test.h"
+#include "screen/screen.h"
+#include "mm/heap.h"
+#include "drivers/keyboard.h"
+#include "kernel/kernel.h"
+#include "screen/printk.h"
+#include "tests/tests.h"
 
 extern int load_cyclone;
 extern int menu;
@@ -242,6 +244,10 @@ void test(int testnum) {
         case 7:
             puts("[test]: printk test\n");
             test_printk();
+            break;
+        case 8:
+            puts("[test]: PMM test");
+            pmm_run_tests();
             break;
         default:
             setcolor(0,15);

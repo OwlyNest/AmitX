@@ -22,11 +22,11 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "amfs.h"
-#include "ide.h"
-#include "printk.h"
-#include "string.h"
-#include "heap.h"
+#include "fs/amfs.h"
+#include "hw/ide.h"
+#include "screen/printk.h"
+#include "lib/string.h"
+#include "mm/heap.h"
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 static amfs_superblock_t sb;
@@ -45,13 +45,13 @@ static int write_sector(uint32_t lba, const void *buf) {
 	return ide_write_sectors(0, lba, 1, (const uint16_t *)buf);
 }
 
-static int read_sectors(uint32_t lba, uint8_t count, void *buf) {
-	return ide_read_sectors(0, lba, count, (uint16_t *)buf);
-}
+// static int read_sectors(uint32_t lba, uint8_t count, void *buf) {
+// 	return ide_read_sectors(0, lba, count, (uint16_t *)buf);
+// }
 
-static int write_sectors(uint32_t lba, uint8_t count, const void *buf) {
-	return ide_write_sectors(0, lba, count, (const uint16_t *)buf);
-}
+// static int write_sectors(uint32_t lba, uint8_t count, const void *buf) {
+// 	return ide_write_sectors(0, lba, count, (const uint16_t *)buf);
+// }
 
 int amfs_mkfs(uint32_t total_sectors) {
     if (total_sectors < 3) return -1;  /* Need superblock + dir + at least 1 data */
@@ -84,23 +84,23 @@ int amfs_mkfs(uint32_t total_sectors) {
 
 int amfs_mount(void) {
 	if (read_sector(0, &sb) != 0) {
-		printk("[amitfs] Failed to read superblock\n");
+		printk("[amfs] Failed to read superblock\n");
         return -1;
 	}
 
 	if (memcmp(sb.magic, AMFS_MAGIC, 4) != 0) {
-        printk("[amitfs] No valid filesystem found (magic mismatch)\n");
+        printk("[amfs] No valid filesystem found (magic mismatch)\n");
         return -1;
     }
 
     if (sb.version != AMFS_VERSION) {
-        printk("[amitfs] Version mismatch: expected %d, got %d\n",
+        printk("[amfs] Version mismatch: expected %d, got %d\n",
                AMFS_VERSION, sb.version);
         return -1;
     }
 
     mounted = 1;
-    printk("[amitfs] Mounted, %d/%d files used\n", sb.file_count, sb.max_files);
+    printk("[amfs] Mounted, %d/%d files used\n", sb.file_count, sb.max_files);
     return 0;
 }
 
@@ -128,6 +128,7 @@ static amfs_dirent_t* find_dirent(const char* name, int* index) {
 }
 
 static uint32_t alloc_data_sector(uint32_t size_in_sectors) {
+	(void)size_in_sectors;
     /* Simple allocator: find first gap after existing files */
     uint32_t next_sector = sb.data_sector;
 

@@ -22,81 +22,207 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "screen.h"
-#include "io.h"
-#include "amfs.h"
-#include "serial.h"
-#include "timer.h"
-#include "keyboard.h"
-#include "acpi.h"
-#include "interrupts.h"
-#include "pci.h"
-#include "ide.h"
-#include "heap.h"
-#include "idt.h"
-#include "syscall.h"
-#include "printk.h"
-#include "fs.h"
-#include "mouse.h"
-#include "kernel.h"
-#include "task.h"
-#include "amitx_consts.h"
+#include "screen/screen.h"
+#include "arch/x86/io.h"
+#include "fs/amfs.h"
+#include "drivers/serial.h"
+#include "arch/x86/timer.h"
+#include "drivers/keyboard.h"
+#include "hw/acpi.h"
+#include "mm/pmm.h"
+#include "internal/multiboot.h"
+#include "arch/x86/interrupts.h"
+#include "hw/pci.h"
+#include "hw/ide.h"
+#include "arch/x86/gdt.h"
+#include "hw/e1000.h"
+#include "mm/heap.h"
+#include "arch/x86/idt.h"
+#include "kernel/syscall.h"
+#include "screen/printk.h"
+#include "fs/fs.h"
+#include "drivers/mouse.h"
+#include "kernel/kernel.h"
+#include "kernel/task.h"
+#include "internal/amitx_consts.h"
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 extern void gdt_install();
+extern uint32_t multiboot_info_ptr;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
+void storage_init(void) {
+    pci_device_t *dev = pci_get_first_device();
+    int found_ide = 0;
+
+    while (dev) {
+        if (dev->class_code != PCI_CLASS_MASS_STORAGE) {
+            dev = dev->next;
+            continue;
+        }
+
+        printk("[storage] Found $%02x:%02x.%x  %s\n", dev->bus, dev->device, dev->function, pci_subclass_name(dev->class_code, dev->subclass));
+
+        switch (dev->subclass) {
+            case 0x00: { /* SCSI Bus */
+                printk("[storage] SCSI controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x01: {  /* IDE */
+                if (!found_ide) {
+                    found_ide = 1;
+                    /* IDE in compatibility mode uses fixed legacy ports.
+                     * BAR0-BAR3 are often 0; BAR4 is bus-master DMA.
+                     * We use the standard primary channel ports. */
+                    ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
+
+                    uint16_t identify[256];
+                    if (ide_identify(0, identify) == 0) {
+                        if (amfs_mount() != 0) {
+                            amfs_mkfs(10 * 2048);
+                            amfs_mount();
+                            amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19);
+                            amfs_write_file("README", "AmitX Filesystem v0.1\n", 22);
+                        }
+                        amfs_ls();
+
+                        char buf[256];
+                        int len = amfs_read_file("helloworld.txt",
+                                                  buf, sizeof(buf));
+                        if (len > 0) {
+                            buf[len] = '\0';
+                            printk("[amfs] Read back: %s", buf);
+                        }
+                        len = amfs_read_file("README", buf, sizeof(buf));
+                        if (len > 0) {
+                            buf[len] = '\0';
+                            printk("[amfs] Read back: %s", buf);
+                        }
+                    }
+                }
+                break;
+            }
+            case 0x02: { /* Floppy Disk */
+                printk("[storage] Floppy Disk controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x03: { /* IPI Bus */
+                printk("[storage] IPI Bus controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x04: { /* RAID */
+                printk("[storage] RAID controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x05: { /* ATA */
+                printk("[storage] ATA controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x06: { /* SATA */
+                printk("[storage] SATA controller detected —  AHCI driver not yet implemented\n");
+                break;
+            }
+            case 0x07: { /* SAS */
+                printk("[storage] SAS controller detected — driver not yet implemented\n");
+                break;
+            }
+            case 0x08: { /* NVMe */
+                printk("[storage] NVMe controller detected — driver not yet implemented\n");
+                break;
+            }
+            default: {
+                printk("[storage] Subclass 0x%02x not yet supported\n", dev->subclass);
+                break;
+            }
+        }
+        dev = dev->next;
+    }
+    if (!found_ide) {
+        printk("[storage] No supported mass-storage controller found\n");
+    }
+}
+
+void pci_log_to_fs(void) {
+    char *buf = (char *)malloc(4096);
+    if (!buf) {
+        printk("[pci_log] Failed to allocate buffer\n");
+        return;
+    }
+
+    int pos = 0;
+    pci_device_t *dev = pci_get_first_device();
+
+    pos += ksnprintf(buf + pos, 4096 - pos,
+        "=== PCI Device Inventory ===\n\n");
+
+    while (dev) {
+        pos += ksnprintf(buf + pos, 4096 - pos,
+            "%02x:%02x.%x  %04x:%04x  %s (%s)  Rev %02x  IRQ %u\n",
+            dev->bus, dev->device, dev->function,
+            dev->vendor_id, dev->device_id,
+            pci_class_name(dev->class_code),
+            pci_subclass_name(dev->class_code, dev->subclass),
+            dev->revision, dev->interrupt_line);
+
+        for (uint8_t i = 0; i < dev->bar_count; i++) {
+            if (dev->bars[i].base == 0 && dev->bars[i].size == 0)
+                continue;
+
+            if (dev->bars[i].is_io) {
+                pos += ksnprintf(buf + pos, 4096 - pos,
+                    "  BAR%d: I/O  0x%08x  size=0x%x\n",
+                    i, dev->bars[i].base, dev->bars[i].size);
+            } else {
+                pos += ksnprintf(buf + pos, 4096 - pos,
+                    "  BAR%d: MEM  0x%08x  size=0x%x  %s\n",
+                    i, dev->bars[i].base, dev->bars[i].size,
+                    dev->bars[i].is_prefetch ? "prefetchable" : "");
+            }
+        }
+        pos += ksnprintf(buf + pos, 4096 - pos, "\n");
+        dev = dev->next;
+    }
+
+    pos += ksnprintf(buf + pos, 4096 - pos,
+        "=== End of Inventory ===\n");
+
+    amfs_write_file("pci_devices.txt", buf, pos);
+    free(buf);
+    printk("[pci_log] Wrote pci_devices.txt to disk\n");
+}
+
 void kernel_setup(void) {
+    screen_init();
+    gdt_init_tss();
     gdt_install();
+    tss_set_esp0(0x90000);
     pic_remap();
     idt_install();
 	__asm__ __volatile__("sti");
-    register_interrupt_handler(0, divide_by_zero_handler);
     init_keyboard();
     init_timer(100);
     fs_init();
     init_tasks();
     syscall_init();
     init_mouse();
+    pic_unmask_irq(2);
 	serial_init();
 	heap_init();
+    pmm_init();
+    pmm_print_map();
 	pci_init();
 	pci_print_all_devices();
 	acpi_init();
     acpi_print_info();
 
-	pci_device_t* ide = pci_get_device(0x8086, 0x7010);
-	if (ide) {
-        ide_init(0x1F0, 0x3F6);
-        uint16_t identify[256];
-        if (ide_identify(0, identify) == 0) {
-            // Try mount first
-            if (amfs_mount() != 0) {
-                // No filesystem — format it
-                amfs_mkfs(10 * 2048);  // 10MB = 20480 sectors
-                amfs_mount();
-                
-                // Create initial files
-                amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19);
-                amfs_write_file("README", "AmitX Filesystem v0.1\n", 22);
-            }
-            
-            // List and read back
-            amfs_ls();
-            
-            char buf[256];
-            int len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
-            if (len > 0) {
-                buf[len] = '\0';
-                printk("[amitfs] Read back: %s", buf);
-            }
-        }
-    }
+    storage_init();
+    pci_log_to_fs();
 
-    setcolor(15, 0);
+    e1000_init();
+    puts("\nPress ENTER to continue...");
+    while (keyboard_getchar() != '\n');
+
     clear();
 }
-
-

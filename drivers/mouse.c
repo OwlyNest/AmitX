@@ -1,9 +1,9 @@
-#include "mouse.h"
-#include "io.h"
-#include "screen.h"
-#include "interrupts.h"
-#include "amitx_consts.h"
-
+#include "drivers/mouse.h"
+#include "arch/x86/io.h"
+#include "screen/screen.h"
+#include "arch/x86/interrupts.h"
+#include "internal/amitx_consts.h"
+#include "screen/printk.h"
 /*
     * Get ready for the buggyest mouse you'll ever use
     * if you run in a VM, try to ignore your native mouse
@@ -107,7 +107,8 @@ void init_mouse() {
     mouse_write(MOUSE_CMD_ENABLE_STREAM); mouse_read();
 
     register_interrupt_handler(VECTOR_IRQ12, mouse_handler);
-    puts("Mouse initialized.\n");
+    printk("Mouse initialized.\n");
+    pic_unmask_irq(12);
 }
 
 void get_mouse_position(int* x, int* y) {

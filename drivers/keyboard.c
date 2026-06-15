@@ -1,9 +1,9 @@
-#include "keyboard.h"
-#include "io.h"
-#include "screen.h"
-#include "time.h"
-#include "interrupts.h"
-#include "amitx_consts.h"
+#include "drivers/keyboard.h"
+#include "arch/x86/io.h"
+#include "screen/screen.h"
+#include "arch/x86/time.h"
+#include "arch/x86/interrupts.h"
+#include "internal/amitx_consts.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -24,7 +24,7 @@ static uint8_t expecting_e0 = 0;
 /* Scancode maps — these produce ASCII for the consumer               */
 /* ------------------------------------------------------------------ */
 static const char scancode_map[] = {
-    0,  0,    '1','2','3','4','5','6','7','8','9','0','-','=','\b',
+    KEY_ESC,  0,    '1','2','3','4','5','6','7','8','9','0','-','=','\b',
     '\t',
     'q','w','e','r','t','y','u','i','o','p','[',']','\n',
     0,  /* LCtrl */
@@ -39,7 +39,7 @@ static const char scancode_map[] = {
 };
 
 static const char scancode_map_shift[] = {
-    0,  0,    '!','@','#','$','%','^','&','*','(',')','_','+','\b',
+    KEY_ESC,  0,    '!','@','#','$','%','^','&','*','(',')','_','+','\b',
     '\t',
     'Q','W','E','R','T','Y','U','I','O','P','{','}','\n',
     0,  /* LCtrl */
@@ -160,6 +160,7 @@ void keyboard_callback() {
 void init_keyboard() {
     register_interrupt_handler(VECTOR_IRQ1, keyboard_callback);
     __asm__ __volatile__ ("sti");
+    pic_unmask_irq(1);
 }
 
 void reset_keyboard_state() {

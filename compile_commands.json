@@ -472,26 +472,6 @@
       "-DAMITX_BUILD_DATE=\"2026-06-16\"",
       "-c",
       "-o",
-      "build/kernel/task.o",
-      "kernel/task.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/kernel/task.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/kernel/task.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-16\"",
-      "-c",
-      "-o",
       "build/screen/printk.o",
       "screen/printk.c"
     ],

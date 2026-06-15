@@ -43,7 +43,6 @@
 #include "fs/fs.h"
 #include "drivers/mouse.h"
 #include "kernel/kernel.h"
-#include "kernel/task.h"
 #include "internal/amitx_consts.h"
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -204,7 +203,6 @@ void kernel_setup(void) {
     init_keyboard();
     init_timer(100);
     fs_init();
-    init_tasks();
     syscall_init();
     init_mouse();
     pic_unmask_irq(2);

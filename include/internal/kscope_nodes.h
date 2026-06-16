@@ -1,7 +1,7 @@
 /*
-	* drivers/serial.h - [Enter description]
+	* include/internal/kscope_nodes.h - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jun 10 15:48:03 2026
+	* Date:     Tue Jun 16 13:51:17 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,15 +20,27 @@
 */
 
 /* --- Macros ---*/
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef KSCOPE_NODES_H
+#define KSCOPE_NODES_H
 /* --- Includes ---*/
-
+#include <internal/kscope.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
+extern kscope_node_t x86_gdt_node;
+extern kscope_node_t x86_pic_node;
+extern kscope_node_t x86_idt_node;
+extern kscope_node_t pit_timer_node;
+extern kscope_node_t keyboard_node;
+extern kscope_node_t pmm_node;
+extern kscope_node_t heap_node;
+extern kscope_node_t screen_node;
+extern kscope_node_t pci_node;
+extern kscope_node_t acpi_node;
+extern kscope_node_t e1000_node;
+extern kscope_node_t serial_node;
+extern kscope_node_t mouse_node;
+extern kscope_node_t storage_node;
 
 /* --- Prototypes ---*/
-void serial_putc(char c);
-void serial_puts(const char *s);
 #endif

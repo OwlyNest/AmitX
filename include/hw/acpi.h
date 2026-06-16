@@ -205,7 +205,6 @@ typedef struct {
 
 /* --- Prototypes ---*/
 /* Initialization */
-int  acpi_init(void);
 void acpi_print_info(void);
 
 /* Power management */

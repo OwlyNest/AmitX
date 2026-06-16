@@ -1,7 +1,9 @@
 
-#include "arch/x86/idt.h"
+#include <arch/x86/idt.h>
 #include <stdint.h>
-#include "internal/amitx_consts.h"
+#include <internal/amitx_consts.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 
 // Ignore intellisense, these exist in the Assembly code
 extern void isr0();
@@ -66,7 +68,7 @@ void idt_set_gate(int num, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[num].always0 = 0;
     idt[num].flags   = flags;
 }
-void idt_install() {
+static int idt_install() {
     idt_ptr.limit = sizeof(struct IDTEntry) * IDT_ENTRIES - 1;
     idt_ptr.base  = (uint32_t)&idt;
 
@@ -80,5 +82,20 @@ void idt_install() {
     idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_USER  );
 
     load_idt((uint32_t)&idt_ptr);
-    
+    __asm__ __volatile__("sti");
+    return 0;
 }
+
+
+kscope_node_t x86_idt_node = {
+    .name = "x86-idt",
+    .id = 0x0003,
+    .class = KSCOPE_CLASS_CORE,
+    .subclass = KSCOPE_SUBCLASS_CORE_IDT,
+    .requires = (kscope_node_t*[]){ &x86_gdt_node, &x86_pic_node },
+    .require_count = 2,
+    .provides = (const char*[]){"cpu.interrupts", "cpu.irq"},
+	.provide_count = 2,
+    .init = idt_install,
+
+};

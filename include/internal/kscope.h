@@ -22,7 +22,7 @@
 /* --- Macros ---*/
 #ifndef KSCOPE_H
 #define KSCOPE_H
-
+#define KSCOPE_MAX_NODES 32
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>
@@ -42,6 +42,42 @@ typedef enum {
 	KSCOPE_CLASS_POWER     = 0x0A,
 } kscope_class_t;
 
+typedef enum {
+	/* Core (0x00xx)*/
+	KSCOPE_SUBCLASS_CORE_GDT = 0x0000,
+	KSCOPE_SUBCLASS_CORE_IDT = 0x0001,
+	KSCOPE_SUBCLASS_CORE_TSS = 0x0002,
+	KSCOPE_SUBCLASS_CORE_PIC = 0x0003,
+	KSCOPE_SUBCLASS_CORE_PCI = 0x0004,
+
+	/* Memory (0x01xx) */
+	KSCOPE_SUBCLASS_MEMORY_PMM = 0x0100,
+	KSCOPE_SUBCLASS_MEMORY_HEAP = 0x0101,
+	/* Interrupt (0x02xx) */
+	/* Time (0x03xx) */
+	KSCOPE_SUBCLASS_TIME_PIT = 0x0300,
+	/* Driver (0x04xx) */
+	KSCOPE_SUBCLASS_DRIVER_KEYBOARD = 0x0400,
+	KSCOPE_SUBCLASS_DRIVER_MOUSE = 0x0401,
+	KSCOPE_SUBCLASS_DRIVER_SERIAL = 0x0402,
+	/* Storage (0x05xx) */
+	KSCOPE_SUBCLASS_STORAGE_CONTROLLER = 0x0500,
+	KSCOPE_SUBCLASS_STORAGE_IDE = 0x0501,
+	/* FS (0x06xx) */
+	KSCOPE_SUBCLASS_FS_VFS = 0x0600,
+	KSCOPE_SUBCLASS_FS_AMFS = 0x0601,
+	KSCOPE_SUBCLASS_FS_RAMFS = 0x0602,
+	/* Network (0x07xx) */
+	KSCOPE_SUBCLASS_NETWORK_E1000 = 0x0700,
+	/* Process (0x08xx) */
+	/* UI (0x09xx) */
+	KSCOPE_SUBCLASS_UI_SCREEN = 0x0900,
+	/* Power (0x0Axx) */
+	KSCOPE_SUBCLASS_POWER_ACPI = 0x0A00,
+} kscope_subclass_t;
+
+#define KSCOPE_SUBCLASS_CLASS(sub) ((sub) >> 8)
+
 struct kscope_node {
 	const char *name;
 	uint32_t id;
@@ -57,15 +93,24 @@ struct kscope_node {
 	int (*init)(void);
 	void (*shutdown)(void);
 	void *private;
+	int state;
 };
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 void kscope_register(kscope_node_t* node);
+void kscope_register_all(void);
 void kscope_probe_all(void);
 
 kscope_node_t *kscope_find_by_name(const char *name);
 kscope_node_t *kscope_find_by_id(uint32_t id);
 
+const char *kscope_class_name(kscope_class_t class);
+const char *kscope_subclass_name(uint32_t subclass);
+
 void kscope_dump(void);
+void kscope_log_to_fs(void);
+
+size_t kscope_get_count(void);
+kscope_node_t *kscope_get_node(size_t idx);
 #endif

@@ -1,8 +1,8 @@
-#include "fs/vfs.h"
-#include "fs/ramfs.h"
-#include "fs/fs.h"
-#include "screen/screen.h"
-#include "lib/string.h"
+#include <fs/vfs.h>
+#include <fs/ramfs.h>
+#include <fs/fs.h>
+#include <screen/screen.h>
+#include <lib/string.h>
 
 int fs_add(const char* path, const char* content);
 
@@ -16,6 +16,8 @@ void fs_init() {
 
     vfs_mount(root);
 }
+
+
 
 const char* fs_read(const char* path) {
     fs_node_t *node = vfs_resolve(path);

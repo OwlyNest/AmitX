@@ -87,7 +87,6 @@ struct e1000_rx_desc {
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void e1000_init(void);
 int e1000_send(const void* data, uint16_t len);
 int e1000_receive(void* buf, uint16_t buf_len);
 #endif

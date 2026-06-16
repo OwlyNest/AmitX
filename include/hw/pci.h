@@ -235,7 +235,6 @@ uint16_t pci_read_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t re
 uint8_t  pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 
 /* Device management */
-void        pci_init(void);
 void        pci_scan_bus(uint8_t bus);
 pci_device_t* pci_get_device(uint16_t vendor, uint16_t device);
 pci_device_t* pci_get_device_by_class(uint8_t class_code, uint8_t subclass);

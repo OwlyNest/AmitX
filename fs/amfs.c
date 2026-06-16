@@ -22,11 +22,11 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "fs/amfs.h"
-#include "hw/ide.h"
-#include "screen/printk.h"
-#include "lib/string.h"
-#include "mm/heap.h"
+#include <fs/amfs.h>
+#include <hw/ide.h>
+#include <screen/printk.h>
+#include <lib/string.h>
+#include <mm/heap.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 static amfs_superblock_t sb;
@@ -128,20 +128,65 @@ static amfs_dirent_t* find_dirent(const char* name, int* index) {
 }
 
 static uint32_t alloc_data_sector(uint32_t size_in_sectors) {
-	(void)size_in_sectors;
-    /* Simple allocator: find first gap after existing files */
-    uint32_t next_sector = sb.data_sector;
+    if (size_in_sectors == 0) return 0;
 
+    /* Track used regions: start -> end */
+    uint32_t data_end = sb.data_sector;
+    uint32_t best_fit_start = 0;
+    uint32_t best_fit_size = (uint32_t)-1;
+
+    /* First pass: find all used regions and the total data end */
     for (uint32_t i = 0; i < sb.max_files; i++) {
         static amfs_dirent_t e;
         if (read_sector(sb.dir_sector + i, &e) != 0) continue;
         if (e.used) {
             uint32_t end = e.start_sector + ((e.size + 511) / 512);
-            if (end > next_sector) next_sector = end;
+            if (end > data_end) data_end = end;
         }
     }
 
-    return next_sector;
+    /* If no files, start at data_sector */
+    if (data_end == sb.data_sector) {
+        if (sb.data_sector + size_in_sectors <= sb.total_sectors)
+            return sb.data_sector;
+        return 0; /* No space */
+    }
+
+    /* Second pass: find gaps between files that fit */
+    for (uint32_t i = 0; i < sb.max_files; i++) {
+        static amfs_dirent_t e;
+        if (read_sector(sb.dir_sector + i, &e) != 0) continue;
+        if (!e.used) continue;
+
+        uint32_t this_end = e.start_sector + ((e.size + 511) / 512);
+
+        /* Look for next file after this one */
+        uint32_t next_start = data_end; /* default: end of all data */
+        for (uint32_t j = 0; j < sb.max_files; j++) {
+            static amfs_dirent_t e2;
+            if (read_sector(sb.dir_sector + j, &e2) != 0) continue;
+            if (!e2.used || e2.start_sector <= this_end) continue;
+            if (e2.start_sector < next_start) next_start = e2.start_sector;
+        }
+
+        uint32_t gap_size = next_start - this_end;
+        if (gap_size >= size_in_sectors && gap_size < best_fit_size) {
+            best_fit_size = gap_size;
+            best_fit_start = this_end;
+        }
+    }
+
+    /* Found a gap? */
+    if (best_fit_start != 0) {
+        return best_fit_start;
+    }
+
+    /* Append at end */
+    if (data_end + size_in_sectors <= sb.total_sectors) {
+        return data_end;
+    }
+
+    return 0; /* No space */
 }
 
 int amfs_write_file(const char* name, const char* data, uint32_t size) {

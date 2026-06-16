@@ -1,7 +1,7 @@
 /*
-	* drivers/serial.h - [Enter description]
+	* include/ui/device_manager.h - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jun 10 15:48:03 2026
+	* Date:     Wed Jun 17 01:17:42 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef DEVICE_MANAGER_H
+#define DEVICE_MANAGER_H
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -29,6 +29,5 @@
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void serial_putc(char c);
-void serial_puts(const char *s);
+void device_manager_run();;
 #endif

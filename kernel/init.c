@@ -22,37 +22,38 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "screen/screen.h"
-#include "arch/x86/io.h"
-#include "fs/amfs.h"
-#include "drivers/serial.h"
-#include "arch/x86/timer.h"
-#include "drivers/keyboard.h"
-#include "hw/acpi.h"
-#include "mm/pmm.h"
-#include "internal/multiboot.h"
-#include "arch/x86/interrupts.h"
-#include "hw/pci.h"
-#include "hw/ide.h"
-#include "arch/x86/gdt.h"
-#include "hw/e1000.h"
-#include "mm/heap.h"
-#include "arch/x86/idt.h"
-#include "kernel/syscall.h"
-#include "screen/printk.h"
-#include "fs/fs.h"
-#include "drivers/mouse.h"
-#include "kernel/kernel.h"
-#include "internal/amitx_consts.h"
+#include <screen/screen.h>
+#include <arch/x86/io.h>
+#include <fs/amfs.h>
+#include <drivers/serial.h>
+#include <arch/x86/timer.h>
+#include <drivers/keyboard.h>
+#include <hw/acpi.h>
+#include <mm/pmm.h>
+#include <internal/multiboot.h>
+#include <arch/x86/interrupts.h>
+#include <hw/pci.h>
+#include <hw/ide.h>
+#include <arch/x86/gdt.h>
+#include <hw/e1000.h>
+#include <mm/heap.h>
+#include <arch/x86/idt.h>
+#include <kernel/syscall.h>
+#include <screen/printk.h>
+#include <fs/fs.h>
+#include <drivers/mouse.h>
+#include <kernel/kernel.h>
+#include <internal/amitx_consts.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-extern void gdt_install();
 extern uint32_t multiboot_info_ptr;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-void storage_init(void) {
+static int storage_init(void) {
     pci_device_t *dev = pci_get_first_device();
     int found_ide = 0;
 
@@ -88,8 +89,7 @@ void storage_init(void) {
                         amfs_ls();
 
                         char buf[256];
-                        int len = amfs_read_file("helloworld.txt",
-                                                  buf, sizeof(buf));
+                        int len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
                         if (len > 0) {
                             buf[len] = '\0';
                             printk("[amfs] Read back: %s", buf);
@@ -141,7 +141,20 @@ void storage_init(void) {
     if (!found_ide) {
         printk("[storage] No supported mass-storage controller found\n");
     }
+    return 0;
 }
+
+kscope_node_t storage_node = {
+    .name = "storage",
+    .id = 0x000D,
+    .class = KSCOPE_CLASS_STORAGE,
+    .subclass = KSCOPE_SUBCLASS_STORAGE_CONTROLLER,
+    .requires = (kscope_node_t*[]){&pci_node, &heap_node},
+    .require_count = 2,
+    .provides = (const char*[]){"storage.block", "fs.amfs"},
+    .provide_count = 2,
+    .init = storage_init,
+};
 
 void pci_log_to_fs(void) {
     char *buf = (char *)malloc(4096);
@@ -189,36 +202,22 @@ void pci_log_to_fs(void) {
 
     amfs_write_file("pci_devices.txt", buf, pos);
     free(buf);
-    printk("[pci_log] Wrote pci_devices.txt to disk\n");
 }
 
 void kernel_setup(void) {
-    screen_init();
-    gdt_init_tss();
-    gdt_install();
-    tss_set_esp0(0x90000);
-    pic_remap();
-    idt_install();
-	__asm__ __volatile__("sti");
-    init_keyboard();
-    init_timer(100);
+    kscope_register_all();
+    kscope_probe_all();
+    kscope_dump();
+
     fs_init();
-    syscall_init();
-    init_mouse();
-    pic_unmask_irq(2);
-	serial_init();
-	heap_init();
-    pmm_init();
+    syscall_init(); 
+
     pmm_print_map();
-	pci_init();
 	pci_print_all_devices();
-	acpi_init();
     acpi_print_info();
-
-    storage_init();
     pci_log_to_fs();
+    kscope_log_to_fs();
 
-    e1000_init();
     puts("\nPress ENTER to continue...");
     while (keyboard_getchar() != '\n');
 

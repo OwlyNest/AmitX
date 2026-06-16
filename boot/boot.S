@@ -33,8 +33,9 @@ _start:
     mov $stack_top, %esp   # Set stack pointer
 
     push %ebx
+    push %eax
     call kernel_early_init
-    add $4, %esp
+    add $8, %esp
     
     call kernel_main       # Enter kernel
 

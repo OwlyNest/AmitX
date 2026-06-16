@@ -1,9 +1,11 @@
-#include "drivers/keyboard.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "arch/x86/time.h"
-#include "arch/x86/interrupts.h"
-#include "internal/amitx_consts.h"
+#include <drivers/keyboard.h>
+#include <arch/x86/io.h>
+#include <screen/screen.h>
+#include <arch/x86/time.h>
+#include <arch/x86/interrupts.h>
+#include <internal/amitx_consts.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -157,11 +159,24 @@ void keyboard_callback() {
     }
 }
 
-void init_keyboard() {
+static int init_keyboard() {
     register_interrupt_handler(VECTOR_IRQ1, keyboard_callback);
     __asm__ __volatile__ ("sti");
     pic_unmask_irq(1);
+    return 0;
 }
+
+kscope_node_t keyboard_node = {
+    .name = "PS/2-keyboard",
+    .id = 0x0005,
+    .class = KSCOPE_CLASS_DRIVER,
+    .subclass = KSCOPE_SUBCLASS_DRIVER_KEYBOARD,
+    .requires = (kscope_node_t *[]){ &x86_pic_node, &x86_idt_node },
+    .require_count = 2,
+    .provides = (const char *[]){"drivers.keyboard", "irq.1"},
+    .provide_count = 2,
+    .init = init_keyboard
+};
 
 void reset_keyboard_state() {
     for (int i = 0; i < MAX_SCANCODE; i++) key_state[i] = 0;

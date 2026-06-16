@@ -49,7 +49,6 @@ typedef struct boot_info {
     int             valid;
 } boot_info_t;
 
-void pmm_init(void);
 void *pmm_alloc_frame(void);
 void pmm_free_frame(void *frame);
 void *pmm_alloc_frames(uint32_t count);

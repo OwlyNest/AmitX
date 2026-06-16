@@ -22,11 +22,13 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "mm/pmm.h"
-#include "mm/heap.h"
-#include "screen/printk.h"
-#include "lib/string.h"
-#include "internal/amitx_consts.h"
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
+#include <mm/pmm.h>
+#include <mm/heap.h>
+#include <screen/printk.h>
+#include <lib/string.h>
+#include <internal/amitx_consts.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -178,14 +180,14 @@ int kernel_early_init(uint32_t magic, multiboot_info_t *mb_info) {
         }
     } else {
         /* Calculate total RAM from memory map */
-        uint64_t max_addr = 0;
         multiboot_mmap_entry_t *entry;
+        uint64_t available_ram = 0;
         MULTIBOOT_MMAP_FOR_EACH(mb_info, entry) {
-            uint64_t end = entry->addr + entry->len;
-            if (end > max_addr)
-                max_addr = end;
+            if (entry->type == MMAP_AVAILABLE) {
+                available_ram += entry->len;
+            }
         }
-        total_ram = max_addr;
+        total_ram = available_ram;
     }
 
     /* Sanity check: do we have enough RAM? */
@@ -202,7 +204,7 @@ int kernel_early_init(uint32_t magic, multiboot_info_t *mb_info) {
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)
  * ======================================================================= */
-void pmm_init(void) {
+static int pmm_init(void) {
     if (!boot_info.valid) {
         printk("[pmm] Boot info invalid, using 16MB fallback\n");
         total_ram = 16 * 1024 * 1024;
@@ -256,14 +258,25 @@ void pmm_init(void) {
     boot_info.total_frames = total_frames;
     boot_info.kernel_end = kernel_end;
 
-    printk("[pmm] Initialized: %u total frames (%u MB), %u free, %u used\n",
-           total_frames, (total_frames * FRAME_SIZE) >> 20,
-           total_frames - used_frames, used_frames);
+    printk("[pmm] Initialized: %u total frames (%u MB), ...", total_frames, total_ram >> 20);
     printk("[pmm] Bitmap at 0x%08x, size %u bytes\n",
            (uint32_t)bitmap, bitmap_size);
     printk("[pmm] Kernel end: 0x%08x, Total RAM: %u MB\n",
            kernel_end, (uint32_t)(total_ram >> 20));
+    return 0;
 }
+
+kscope_node_t pmm_node = {
+    .name = "pmm",
+    .id = 0x0007,
+    .class = KSCOPE_CLASS_MEMORY,
+    .subclass = KSCOPE_SUBCLASS_MEMORY_PMM,
+    .requires = NULL,
+    .require_count = 0,
+    .provides = (const char *[]){"mem.physical", "mem.pages"},
+    .provide_count = 2,
+    .init = pmm_init
+};
 
 /* ==========================================================================
  * Allocate a single physical frame

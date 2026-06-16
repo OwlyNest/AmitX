@@ -9,7 +9,6 @@
 #define KEY_RIGHT  0x83
 #define KEY_ESC    0x1B
 
-void init_keyboard();
 void keyboard_callback();
 void reset_keyboard_state();
 

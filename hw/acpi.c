@@ -21,13 +21,15 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "hw/acpi.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "mm/heap.h"
-#include "screen/printk.h"
-#include "internal/amitx_consts.h"
-#include "internal/virtmem.h"
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
+#include <hw/acpi.h>
+#include <arch/x86/io.h>
+#include <screen/screen.h>
+#include <mm/heap.h>
+#include <screen/printk.h>
+#include <internal/amitx_consts.h>
+#include <internal/virtmem.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -155,7 +157,7 @@ void* acpi_find_table(const char* signature) {
 /* ==========================================================================
  * ACPI initialization
  * ======================================================================= */
-int acpi_init(void) {
+static int acpi_init(void) {
     printk("[acpi] Initializing ACPI subsystem...\n");
 
     acpi_state.rsdp = acpi_find_rsdp();
@@ -182,6 +184,19 @@ int acpi_init(void) {
     printk("[acpi] Initialization complete\n");
     return 0;
 }
+
+kscope_node_t acpi_node = {
+    .name = "acpi",
+    .id = 0x000A,
+    .class = KSCOPE_CLASS_POWER,
+    .subclass = KSCOPE_SUBCLASS_POWER_ACPI,
+    .requires = (kscope_node_t *[]){&heap_node},
+    .require_count = 1,
+    .provides = (const char *[]){"power.acpi", "hw.tables"},
+    .provide_count = 2,
+    .init = acpi_init,
+
+};
 
 /* ==========================================================================
  * Power management

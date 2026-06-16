@@ -1,10 +1,12 @@
 
-#include "mm/heap.h"
-#include "screen/screen.h"
+#include <mm/heap.h>
+#include <screen/screen.h>
 #include <stdint.h>
 #include <stddef.h>
-#include "internal/amitx_consts.h"
-#include "lib/string.h"
+#include <internal/amitx_consts.h>
+#include <lib/string.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 
 #define ALIGN16(x) (((x) + 15) & ~15)
 
@@ -20,12 +22,24 @@ static uint8_t* heap_base;
 static uint8_t* heap_end;
 static uint8_t* heap_break;
 
-void heap_init(void) {
+static int heap_init(void) {
     heap_base  = (uint8_t*)HEAP_START_ADDR;
     heap_end   = heap_base + HEAP_SIZE;
     heap_break = heap_base;
+    return 0;
 }
 
+kscope_node_t heap_node = {
+    .name = "heap",
+    .id = 0x0008,
+    .class = KSCOPE_CLASS_MEMORY,
+    .subclass = KSCOPE_SUBCLASS_MEMORY_HEAP,
+    .requires = (kscope_node_t *[]){&pmm_node},
+    .require_count = 1,
+    .provides = (const char *[]){"mem.heap", "mem.kmalloc"},
+    .provide_count = 2,
+    .init = heap_init,
+};
 
 static Block* head = NULL;
 

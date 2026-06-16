@@ -1,7 +1,7 @@
 /*
-	* drivers/serial.h - [Enter description]
+	* include/ui/system_manager.h - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jun 10 15:48:03 2026
+	* Date:     Tue Jun 16 23:33:46 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef SYSTEM_MANAGER_H
+#define SYSTEM_MANAGER_H
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -29,6 +29,5 @@
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void serial_putc(char c);
-void serial_puts(const char *s);
+void system_manager_run(void);
 #endif

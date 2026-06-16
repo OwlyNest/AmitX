@@ -22,10 +22,10 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "screen/printk.h"
-#include "screen/screen.h"
-#include "drivers/serial.h"
-#include "lib/string.h"
+#include <screen/printk.h>
+#include <screen/screen.h>
+#include <drivers/serial.h>
+#include <lib/string.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -248,7 +248,7 @@ int ksnprintf(char *buf, size_t size, const char *fmt, ...) {
 }
 
 void printk(const char *fmt, ...) {
-    char buf[512];
+    char buf[4096];
 
     va_list args;
     va_start(args, fmt);

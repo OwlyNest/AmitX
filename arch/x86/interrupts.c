@@ -1,11 +1,13 @@
-#include "screen/screen.h"
-#include "arch/x86/io.h"
-#include "screen/printk.h"
-#include "hw/acpi.h"
-#include "arch/x86/interrupts.h"
-#include "arch/x86/time.h"
-#include "internal/amitx_consts.h"
+#include <screen/screen.h>
+#include <arch/x86/io.h>
+#include <screen/printk.h>
+#include <hw/acpi.h>
+#include <arch/x86/interrupts.h>
+#include <arch/x86/time.h>
+#include <internal/amitx_consts.h>
 #include <stdint.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 
 #define MAX_INTERRUPTS 256
 
@@ -114,7 +116,7 @@ void divide_by_zero_handler(uint32_t interrupt_number, uint32_t err) {
 }
 
 // PIC remapping stays unchanged
-void pic_remap() {
+static int pic_remap() {
     outb(PORT_PIC_MASTER_CMD, PIC_ICW1_INIT);
     outb(PORT_PIC_SLAVE_CMD, PIC_ICW1_INIT);
 
@@ -132,7 +134,20 @@ void pic_remap() {
     outb(PORT_PIC_SLAVE_DATA, 0xFF);     // Mask all slave IRQs
 
     printk("PIC remapped, all IRQs masked\n");
+    return 0;
 }
+
+kscope_node_t x86_pic_node = {
+    .name = "x86-pic",
+    .id = 0x0002,
+    .class = KSCOPE_CLASS_CORE,
+    .subclass = KSCOPE_SUBCLASS_CORE_PIC,
+    .requires = (kscope_node_t*[]){ &x86_gdt_node },
+    .require_count = 1,
+    .provides = (const char*[]){"cpu.pic", "irq.controller"},
+	.provide_count = 2,
+    .init = pic_remap,
+};
 
 __attribute__((noreturn))
 void panic(const char* msg, uint32_t int_no, uint32_t err) {

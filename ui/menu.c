@@ -22,12 +22,14 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "ui/menu.h"
-#include "kernel/kernel.h"
-#include "drivers/keyboard.h"
-#include "screen/screen.h"
-#include "internal/amitx_consts.h"
-#include "shell/cyclone.h"
+#include <ui/menu.h>
+#include <ui/system_manager.h>
+#include <ui/device_manager.h>
+#include <kernel/kernel.h>
+#include <drivers/keyboard.h>
+#include <screen/screen.h>
+#include <internal/amitx_consts.h>
+#include <shell/cyclone.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -36,8 +38,8 @@ int load_cyclone = 0;
 int menu = 0;
 
 const char* main_menu[] = {
-    "System Info",
-    "Files",
+    "Device Manager",
+    "System Manager",
 	"Settings",
     "Cyclone",
     "Reboot",
@@ -73,7 +75,7 @@ void menu_select(int choise) {
 	clear();
 	switch (choise) {
 		case 0: device_manager_run(); break;
-		case 1: break;
+		case 1: system_manager_run(); break;
 		case 2: break;
 		case 3: load_cyclone = 1; cyclone_main(1); break;
 		case 4: system_reboot(); break;

@@ -5,12 +5,14 @@
  * Copyright © 2026 OwlyNest
  */
 
-#include "hw/pci.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "screen/printk.h"
-#include "mm/heap.h"
-#include "lib/string.h"
+#include <hw/pci.h>
+#include <arch/x86/io.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
+#include <screen/screen.h>
+#include <screen/printk.h>
+#include <mm/heap.h>
+#include <lib/string.h>
 
 /* ==========================================================================
  * Globals
@@ -296,7 +298,7 @@ void pci_scan_bus(uint8_t bus) {
     }
 }
 
-void pci_init(void) {
+static int  pci_init(void) {
     printk("[pci] Initializing PCI subsystem...\n");
     pci_device_list = NULL;
     pci_device_count = 0;
@@ -305,7 +307,20 @@ void pci_init(void) {
     pci_scan_bus(0);
 
     printk("[pci] Found %d device(s)\n", pci_device_count);
+    return 0;
 }
+
+kscope_node_t pci_node = {
+    .name = "pci-bus",
+    .id = 0x0009,
+    .class = KSCOPE_CLASS_CORE,
+    .subclass = KSCOPE_SUBCLASS_CORE_PCI,
+    .requires = (kscope_node_t *[]){&heap_node},
+    .require_count = 1,
+    .provides = (const char *[]){"bus.pci", "hw.enumerate"},
+    .provide_count = 2,
+    .init = pci_init
+};
 
 /* ==========================================================================
  * Device lookup

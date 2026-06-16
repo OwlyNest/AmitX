@@ -1,11 +1,11 @@
-#include "lib/string.h"
-#include "tests/pmm_test.h"
-#include "screen/screen.h"
-#include "mm/heap.h"
-#include "drivers/keyboard.h"
-#include "kernel/kernel.h"
-#include "screen/printk.h"
-#include "tests/tests.h"
+#include <lib/string.h>
+#include <tests/pmm_test.h>
+#include <screen/screen.h>
+#include <mm/heap.h>
+#include <drivers/keyboard.h>
+#include <kernel/kernel.h>
+#include <screen/printk.h>
+#include <tests/tests.h>
 
 extern int load_cyclone;
 extern int menu;

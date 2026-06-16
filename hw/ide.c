@@ -22,10 +22,10 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "hw/ide.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "screen/printk.h"
+#include <hw/ide.h>
+#include <arch/x86/io.h>
+#include <screen/screen.h>
+#include <screen/printk.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 

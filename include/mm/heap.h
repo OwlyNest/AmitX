@@ -4,8 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void heap_init(void);
-
 void* malloc(size_t size);
 void* calloc(size_t num, size_t size);
 void* realloc(void* ptr, size_t new_size);

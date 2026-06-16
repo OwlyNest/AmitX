@@ -1,7 +1,7 @@
 /*
-	* drivers/serial.h - [Enter description]
+	* kernel/kscope_registry.c - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jun 10 15:48:03 2026
+	* Date:     Tue Jun 16 13:54:20 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,15 +20,30 @@
 */
 
 /* --- Macros ---*/
-#ifndef SERIAL_H
-#define SERIAL_H
-/* --- Includes ---*/
 
+/* --- Includes ---*/
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void serial_putc(char c);
-void serial_puts(const char *s);
-#endif
+
+/* -- Functions ---*/
+void kscope_register_all(void) {
+	kscope_register(&x86_gdt_node);
+	kscope_register(&x86_pic_node);
+	kscope_register(&x86_idt_node);
+	kscope_register(&pit_timer_node);
+	kscope_register(&keyboard_node);
+	kscope_register(&screen_node);
+	kscope_register(&pmm_node);
+	kscope_register(&heap_node);
+	kscope_register(&pci_node);
+	kscope_register(&acpi_node);
+	kscope_register(&serial_node);
+	kscope_register(&storage_node);
+	kscope_register(&mouse_node);
+	kscope_register(&e1000_node);
+}

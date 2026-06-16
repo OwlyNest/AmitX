@@ -7,14 +7,8 @@
 #define COLOR_THEME_STATUS  0x1F  /* white on blue */
 #define COLOR_THEME_HIGHLIGHT 0xF0 /* black on white */
 
-#define DM_LIST_X       1
-#define DM_LIST_Y       2
-#define DM_LIST_W       78
-#define DM_LIST_H       20
-#define DM_MAX_DEVICES  32
 
 /* Initialize video memory pointer (must call before any screen ops) */
-void screen_init(void);
 
 /* VGA text rendering */
 void clear();
@@ -44,6 +38,4 @@ void draw_list(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const char* 
 /* Mouse */
 void draw_mouse_cursor();
 void reset_mouse_cursor_state();
-
-void device_manager_run();
 #endif

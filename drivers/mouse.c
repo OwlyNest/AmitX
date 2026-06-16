@@ -1,9 +1,11 @@
-#include "drivers/mouse.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "arch/x86/interrupts.h"
-#include "internal/amitx_consts.h"
-#include "screen/printk.h"
+#include <drivers/mouse.h>
+#include <arch/x86/io.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
+#include <screen/screen.h>
+#include <arch/x86/interrupts.h>
+#include <internal/amitx_consts.h>
+#include <screen/printk.h>
 /*
     * Get ready for the buggyest mouse you'll ever use
     * if you run in a VM, try to ignore your native mouse
@@ -88,7 +90,7 @@ void mouse_handler() {
     }
 }
 
-void init_mouse() {
+static int init_mouse() {
     uint8_t status;
 
     mouse_wait(1);
@@ -109,7 +111,21 @@ void init_mouse() {
     register_interrupt_handler(VECTOR_IRQ12, mouse_handler);
     printk("Mouse initialized.\n");
     pic_unmask_irq(12);
+    pic_unmask_irq(2);
+    return 0;
 }
+
+kscope_node_t mouse_node = {
+    .name = "PS/2-mouse",
+    .id = 0x000C,
+    .class = KSCOPE_CLASS_DRIVER,
+    .subclass = KSCOPE_SUBCLASS_DRIVER_MOUSE,
+    .requires = (kscope_node_t*[]){&x86_pic_node, &x86_idt_node},
+    .require_count = 2,
+    .provides = (const char*[]){"input.mouse", "irq.12"},
+    .provide_count = 2,
+    .init = init_mouse,
+};
 
 void get_mouse_position(int* x, int* y) {
     *x = mouse_x;

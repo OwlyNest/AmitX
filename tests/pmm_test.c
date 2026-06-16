@@ -1,10 +1,10 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "mm/pmm.h"
-#include "screen/printk.h"
-#include "lib/string.h"
-#include "tests/pmm_test.h"
+#include <mm/pmm.h>
+#include <screen/printk.h>
+#include <lib/string.h>
+#include <tests/pmm_test.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -130,7 +130,7 @@ static void test_double_free(void) {
 /* ==========================================================================
  * Test: contiguous allocation
  * ======================================================================= */
-static void test_contiguous(void) {
+ static void test_contiguous(void) {
     printk("[pmm_test] contiguous alloc...\n");
 
     void *p = pmm_alloc_frames(4);
@@ -139,25 +139,31 @@ static void test_contiguous(void) {
         return;
     }
 
-    /* Verify contiguous: each frame should be FRAME_SIZE apart */
-    uint32_t base = (uint32_t)p;
-    int ok = 1;
-    for (int i = 1; i < 4; i++) {
-        /* We can't peek inside the allocator, but we can verify
-         * the returned pointer is frame-aligned and the next
-         * single alloc doesn't overlap */
-        if ((base + i * FRAME_SIZE) >= (uint32_t)pmm_get_total_frames() << FRAME_SIZE_SHIFT) {
-            ok = 0;
-            break;
-        }
+    /* Verify frame-aligned */
+    if ((uint32_t)p & FRAME_SIZE_MASK) {
+        test_fail("contiguous alloc not frame-aligned");
+        pmm_free_frames(p, 4);
+        return;
     }
 
+    /* Verify by allocating next single frame — should be 4 frames after */
+    void *q = pmm_alloc_frame();
+    if (!q) {
+        test_fail("follow-up alloc failed");
+        pmm_free_frames(p, 4);
+        return;
+    }
+
+    uint32_t p_frame = (uint32_t)p >> FRAME_SIZE_SHIFT;
+    uint32_t q_frame = (uint32_t)q >> FRAME_SIZE_SHIFT;
+
+    pmm_free_frame(q);
     pmm_free_frames(p, 4);
 
-    if (ok)
+    if (q_frame == p_frame + 4)
         test_pass("contiguous alloc (4 frames)");
     else
-        test_fail("contiguous alloc sanity check failed");
+        test_fail("contiguous alloc not actually contiguous");
 }
 
 /* ==========================================================================

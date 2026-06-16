@@ -1,9 +1,11 @@
-#include "arch/x86/timer.h"
-#include "arch/x86/io.h"
-#include "screen/screen.h"
-#include "arch/x86/interrupts.h"
-#include "screen/printk.h"
-#include "internal/amitx_consts.h"
+#include <arch/x86/timer.h>
+#include <arch/x86/io.h>
+#include <screen/screen.h>
+#include <arch/x86/interrupts.h>
+#include <screen/printk.h>
+#include <internal/amitx_consts.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 #include <stdint.h>
 
 extern void register_interrupt_handler(int n, void (*handler)());
@@ -32,3 +34,20 @@ void init_timer(uint32_t frequency) {
     __asm__ __volatile__ ("sti");
     pic_unmask_irq(0);
 }
+
+static int timer_kscope_init(void) {
+    init_timer(100);
+    return 0;
+}
+
+kscope_node_t pit_timer_node = {
+    .name = "pit-timer",
+    .id = 0x0004,
+    .class = KSCOPE_CLASS_TIME,
+    .subclass = KSCOPE_SUBCLASS_TIME_PIT,
+    .requires = (kscope_node_t *[]){ &x86_pic_node, &x86_idt_node },
+    .require_count = 1,
+    .provides = (const char *[]){"time.pit", "irq.0", "sched.timer"},
+    .provide_count = 3,
+    .init = timer_kscope_init
+};

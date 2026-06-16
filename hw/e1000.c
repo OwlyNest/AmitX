@@ -22,12 +22,14 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "hw/e1000.h"
-#include "arch/x86/io.h"
-#include "screen/printk.h"
-#include "mm/heap.h"
-#include "lib/string.h"
-#include "hw/pci.h"
+#include "internal/kscope.h"
+#include "internal/kscope_nodes.h"
+#include <hw/e1000.h>
+#include <arch/x86/io.h>
+#include <screen/printk.h>
+#include <mm/heap.h>
+#include <lib/string.h>
+#include <hw/pci.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -57,7 +59,7 @@ static uint16_t e1000_read_eeprom(uint8_t addr) {
     return (e1000_read(E1000_REG_EERD) >> 16) & 0xFFFF;
 }
 
-void e1000_init(void) {
+static int  e1000_init(void) {
     pci_device_t* dev = pci_get_device(0x8086, 0x100e);
     if (!dev) {
         dev = pci_get_device(0x8086, 0x100f);  /* MT */
@@ -67,7 +69,7 @@ void e1000_init(void) {
     }
     if (!dev) {
         printk("[e1000] No e1000 device found\n");
-        return;
+        return 1;
     }
 
     printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",
@@ -140,16 +142,14 @@ void e1000_init(void) {
     /* Program TX ring */
     e1000_write(E1000_REG_TDBAL, (uint32_t)tx_ring);
     e1000_write(E1000_REG_TDBAH, 0);
-    e1000_write(E1000_REG_TDLEN,
-                sizeof(struct e1000_tx_desc) * TX_RING_SIZE);
+    e1000_write(E1000_REG_TDLEN, sizeof(struct e1000_tx_desc) * TX_RING_SIZE);
     e1000_write(E1000_REG_TDH, 0);
     e1000_write(E1000_REG_TDT, 0);
 
     /* Program RX ring */
     e1000_write(E1000_REG_RDBAL, (uint32_t)rx_ring);
     e1000_write(E1000_REG_RDBAH, 0);
-    e1000_write(E1000_REG_RDLEN,
-                sizeof(struct e1000_rx_desc) * RX_RING_SIZE);
+    e1000_write(E1000_REG_RDLEN, sizeof(struct e1000_rx_desc) * RX_RING_SIZE);
     e1000_write(E1000_REG_RDH, 0);
     e1000_write(E1000_REG_RDT, RX_RING_SIZE - 1);
 
@@ -166,7 +166,20 @@ void e1000_init(void) {
                 | E1000_TCTL_PSP);
 
     printk("[e1000] Initialization complete\n");
+    return 0;
 }
+
+kscope_node_t e1000_node = {
+    .name = "e1000-nic",
+    .id = 0x000E,
+    .class = KSCOPE_CLASS_NETWORK,
+    .subclass = KSCOPE_SUBCLASS_NETWORK_E1000,
+    .requires = (kscope_node_t *[]){&heap_node, &pci_node},
+    .require_count = 2,
+    .provides = (const char *[]){"net.e1000", "net.eth"},
+    .provide_count = 2,
+    .init = e1000_init
+};
 
 int e1000_send(const void* data, uint16_t len) {
     if (len > 2048) {

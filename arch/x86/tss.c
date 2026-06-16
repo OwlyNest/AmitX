@@ -22,12 +22,13 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "arch/x86/gdt.h"
-#include "screen/printk.h"
+#include <arch/x86/gdt.h>
+#include <screen/printk.h>
+#include <internal/kscope.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-
+extern void gdt_install();
 /* --- Prototypes ---*/
 
 /* --- Main ---*/
@@ -45,3 +46,22 @@ void gdt_init_tss(void) {
     tss_desc->granularity = ((limit >> 16) & 0x0F);
     tss_desc->base_high = (base >> 24) & 0xFF;
 }
+
+static int x86_gdt_init(void) {
+	gdt_init_tss();
+	gdt_install();
+	tss_set_esp0(0x90000);
+	return 0;
+}
+
+kscope_node_t x86_gdt_node = {
+	.name = "x86-gdt",
+	.id = 0x0001,
+	.class = KSCOPE_CLASS_CORE,
+	.subclass = KSCOPE_SUBCLASS_CORE_GDT,
+	.requires = NULL,
+	.require_count = 0,
+	.provides = (const char*[]){"cpu.gdt", "cpu.tss", "cpu.segments"},
+	.provide_count = 3,
+	.init = x86_gdt_init,
+};

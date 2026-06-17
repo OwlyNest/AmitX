@@ -4,7 +4,7 @@ echo "[x] Pushing AmitX"
 REPO_URL="git@github.com:OwlyNest/AmitX.git"
 
 #Extract version info
-VERSION="v0.2.0"
+VERSION="v0.9"
 COMMIT_MSG=${*:-"Update on: AmitX version $VERSION"}
 
 #Clear stuck rebase state if it exists

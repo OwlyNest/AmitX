@@ -22,19 +22,19 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "screen/screen.h"
-#include "drivers/keyboard.h"
-#include "drivers/mouse.h"
-#include "kernel/kernel.h"
-#include "mm/heap.h"
-#include "screen/printk.h"
-#include "arch/x86/io.h"
-#include "arch/x86/gdt.h"
-#include "hw/acpi.h"
-#include "kernel/syscall.h"
-#include "shell/cyclone.h"
-#include "internal/amitx_consts.h"
-#include "ui/menu.h"
+#include <screen/screen.h>
+#include <drivers/keyboard.h>
+#include <drivers/mouse.h>
+#include <kernel/kernel.h>
+#include <mm/heap.h>
+#include <screen/printk.h>
+#include <arch/x86/io.h>
+#include <arch/x86/gdt.h>
+#include <hw/acpi.h>
+#include <kernel/syscall.h>
+#include <shell/cyclone.h>
+#include <internal/amitx_consts.h>
+#include <ui/menu.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 /* --- Globals ---*/

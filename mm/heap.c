@@ -1,6 +1,8 @@
 
 #include <mm/heap.h>
+#include <mm/pmm.h>
 #include <screen/screen.h>
+#include <screen/printk.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <internal/amitx_consts.h>
@@ -17,15 +19,23 @@ typedef struct Block {
 } __attribute__((aligned(16))) Block;
 
 #define BLOCK_SIZE sizeof(Block)
+#define HEAP_INITIAL_PAGES 1
 
 static uint8_t* heap_base;
 static uint8_t* heap_end;
 static uint8_t* heap_break;
 
 static int heap_init(void) {
-    heap_base  = (uint8_t*)HEAP_START_ADDR;
-    heap_end   = heap_base + HEAP_SIZE;
+    void* initial = pmm_alloc_frames(HEAP_INITIAL_PAGES);
+    if (!initial) {
+        printk("[heap] Failed to allocate initial pages from PMM\n");
+        return -1;
+    }
+    
+    heap_base = (uint8_t*)initial;
+    heap_end = heap_base + (HEAP_INITIAL_PAGES * FRAME_SIZE);
     heap_break = heap_base;
+    printk("[heap] Initialized at %p, size %u bytes\n", heap_base, HEAP_INITIAL_PAGES * FRAME_SIZE);
     return 0;
 }
 
@@ -104,7 +114,11 @@ void* malloc(size_t size) {
 
 void free(void* ptr) {
     if (!ptr) return;
+    if ((uintptr_t)ptr & 0xF) return;
+
     Block* block = (Block*)ptr - 1;
+    if ((uint8_t*)block < heap_base || (uint8_t*)block >= heap_end) return;
+
     if (block->free) return;
     block->free = 1;
 
@@ -125,6 +139,8 @@ void free(void* ptr) {
 }
 
 void* calloc(size_t num, size_t size) {
+    if (num == 0 || size == 0) return NULL;
+    if (SIZE_MAX / num < size) return NULL;
     size_t total = num * size;
     void* ptr = malloc(total);
     if (ptr) memset(ptr, 0, total);
@@ -188,7 +204,37 @@ void* realloc(void* ptr, size_t new_size) {
 
     Block* block = (Block*)ptr - 1;
     if (block->size >= new_size) {
+        /* Shrink if worth it */
+        size_t leftover = block->size - new_size;
+        if (leftover > BLOCK_SIZE + 16) {  /* threshold */
+            /* Split block, free tail */
+            Block* new_block = (Block*)((uint8_t*)(block + 1) + new_size);
+            new_block->size = leftover - BLOCK_SIZE;
+            new_block->free = 1;
+            new_block->next = block->next;
+            
+            block->size = new_size;
+            block->next = new_block;
+            
+            /* Coalesce new_block with next if possible */
+            if (new_block->next && new_block->next->free) {
+                new_block->size += BLOCK_SIZE + new_block->next->size;
+                new_block->next = new_block->next->next;
+            }
+        }
         return ptr;
+    }
+
+    /* Grow */
+    if (block->next && block->next->free) {
+        size_t combined = block->size + BLOCK_SIZE + block->next->size;
+        if (combined >= new_size) {
+            /* Absorb next block */
+            block->size = combined;
+            block->next = block->next->next;
+            /* May need to split if combined > new_size */
+            return ptr;
+        }
     }
 
     void* new_ptr = malloc(new_size);
@@ -219,102 +265,36 @@ void print_heap_state() {
         current = current->next;
     }
 }
-void test_malloc_splitting(void) {
-    puts("[Test] malloc + splitting\n");
-
-    void* p1 = malloc(100);
-    puts("Allocated p1 = ");
-    puthex((uint32_t)p1);
-    puts("\n");
-
-    void* p2 = malloc(50);
-    puts("Allocated p2 = ");
-    puthex((uint32_t)p2);
-    puts("\n");
-
-    print_heap_state();
-
-    free(p2);
-    puts("Freed p2\n");
-
-    print_heap_state();
-
-    void* p3 = malloc(20);
-    puts("Allocated p3 (should split free block) = ");
-    puthex((uint32_t)p3);
-    puts("\n");
-
-    print_heap_state();
-}
-
-void test_realloc() {
-
-    char* p1 = malloc(10);
-    for (int i = 0; i < 10; i++) {
-        p1[i] = 'A' + i;
-    }
-
-    puts("Allocated p1 = ");
-    puthex((uint32_t)p1);
-    puts("\n");
-
-    char* p2 = realloc(p1, 20);
-    puts("Reallocated p1 to p2 = ");
-    puthex((uint32_t)p2);
-    puts("\n");
-
-    puts("p2 contents: ");
-    for (int i = 0; i < 10; i++) {
-        putc(p2[i]);
-    }
-    puts("\n");
-
-    print_heap_state();
-}
 
 void* sbrk(ptrdiff_t increment) {
     uint8_t* prev_break = heap_break;
     uint8_t* new_break = heap_break + increment;
 
-    if (new_break > heap_end || new_break < (uint8_t*)HEAP_START_ADDR) {
-        return (void*)-1; // error
+    if (increment == 0) {
+        return prev_break;
     }
 
+    if (new_break < heap_base) {
+        return (void*)-1;  /* cannot shrink below base */
+    }
+
+    /* Need to grow? */
+    if (new_break > heap_end) {
+        uint32_t needed = (uint32_t)(new_break - heap_end);
+        uint32_t frames = (needed + FRAME_SIZE - 1) >> FRAME_SIZE_SHIFT;
+        if (frames == 0) frames = 1;
+    
+        if (pmm_alloc_at((uintptr_t)heap_end, frames) != 0) {
+            printk("[heap] sbrk: cannot allocate at %p\n", heap_end);
+            return (void*)-1;
+        }
+    
+        heap_end += frames * FRAME_SIZE;
+    }
+
+    /* Can shrink without freeing physical memory — keep it, just move break */
+    /* Or: if shrink is significant, free pages to PMM */
+    
     heap_break = new_break;
     return prev_break;
-}
-
-void test_sbrk() {
-    puts("[Test] sbrk\n");
-
-    void* a = sbrk(0);
-    puts("Heap start: "); puthex((uint32_t)a); puts("\n");
-
-    void* b = sbrk(128);
-    puts("Allocated 128 bytes via sbrk: "); puthex((uint32_t)b); puts("\n");
-
-    void* c = sbrk(0);
-    puts("New break: "); puthex((uint32_t)c); puts("\n");
-}
-
-void test_heap_final() {
-    puts("[heap test] Start\n");
-
-    char* a = malloc(64);
-    char* b = malloc(32);
-    char* c = malloc(16);
-    print_heap_state();
-
-    free(b);
-    print_heap_state();
-
-    char* d = malloc(24);
-    print_heap_state();
-
-    free(a);
-    free(c);
-    free(d);
-    print_heap_state();
-
-    puts("[heap test] Done\n");
 }

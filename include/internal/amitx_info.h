@@ -3,7 +3,7 @@
 
 // Core OS variables
 #define AMITX_NAME           "AmitX OS"
-#define AMITX_VERSION        "v0.2.1"
+#define AMITX_VERSION        "v0.9"
 #ifndef AMITX_BUILD_DATE
     #define AMITX_BUILD_DATE "2026-6-15"
 #endif

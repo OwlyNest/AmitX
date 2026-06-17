@@ -110,11 +110,6 @@ void pic_unmask_irq(uint8_t irq) {
     value = inb(port) & ~(1 << irq);
     outb(port, value);
 }
-
-void divide_by_zero_handler(uint32_t interrupt_number, uint32_t err) {
-    panic("Divide by zero", interrupt_number, err);
-}
-
 // PIC remapping stays unchanged
 static int pic_remap() {
     outb(PORT_PIC_MASTER_CMD, PIC_ICW1_INIT);

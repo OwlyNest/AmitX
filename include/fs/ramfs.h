@@ -1,8 +1,8 @@
 #ifndef RAMFS_H
 #define RAMFS_H
 
-#include "fs/vfs.h"
-#include "mm/heap.h"
+#include <fs/vfs.h>
+#include <mm/heap.h>
 
 #define RAMFS_MAX_CHILDREN 16
 

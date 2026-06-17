@@ -1,6 +1,6 @@
 
-#include "screen/screen.h"
-#include "logo/logo.h"
+#include <screen/screen.h>
+#include <logo/logo.h>
 
 void draw_logo1() {
     move_cursor(0, 2);

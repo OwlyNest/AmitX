@@ -390,3 +390,75 @@ uint64_t pmm_get_total_ram(void) {
 const boot_info_t *pmm_get_boot_info(void) {
     return &boot_info;
 }
+
+void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames) {
+    if (count == 0 || align_frames == 0) {
+        return NULL;
+    }
+
+    if (align_frames & (align_frames - 1)) {
+        return NULL;
+    }
+
+    if (align_frames == 1) {
+        return pmm_alloc_frames(count);
+    }
+
+    uint32_t i = 0;
+
+    while (i < total_frames) {
+        /* Skip used frames */
+        while (i < total_frames && bitmap_test(i)) {
+            i++;
+        }
+        if (i >= total_frames) {
+            break;
+        }
+
+        uint32_t aligned = (i + align_frames - 1) & ~(align_frames - 1);
+
+        if (aligned + count > total_frames) {
+            break;
+        }
+
+        int ok = 1;
+        for (uint32_t j = aligned; j < aligned + count; j++) {
+            if (bitmap_test(j)) {
+                /* Collision */
+                i = j + 1;
+                ok = 0;
+                break;
+            }
+        }
+
+        if (ok) {
+            for (uint32_t j = aligned; j < aligned + count; j++) {
+                bitmap_set(j);
+                used_frames++;
+            }
+            return (void *)(aligned << FRAME_SIZE_SHIFT);
+        }
+    }
+
+    printk("[pmm] alloc_aligned(%u, %u) failed\n", count, align_frames);
+    return NULL;
+}
+
+int pmm_alloc_at(uintptr_t addr, uint32_t count) {
+    uint32_t start_frame = addr >> FRAME_SIZE_SHIFT;
+    if (start_frame + count > total_frames)
+        return -1;
+
+    /* Verify all frames are free */
+    for (uint32_t i = 0; i < count; i++) {
+        if (bitmap_test(start_frame + i))
+            return -1;  /* already allocated */
+    }
+
+    /* Mark used */
+    for (uint32_t i = 0; i < count; i++) {
+        bitmap_set(start_frame + i);
+        used_frames++;
+    }
+    return 0;
+}

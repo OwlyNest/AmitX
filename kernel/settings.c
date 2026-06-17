@@ -1,7 +1,7 @@
-#include "kernel/settings.h"
-#include "lib/string.h"
-#include "screen/screen.h"
-#include "fs/fs.h"
+#include <kernel/settings.h>
+#include <lib/string.h>
+#include <screen/screen.h>
+#include <fs/fs.h>
 
 #define MAX_SETTINGS 16
 

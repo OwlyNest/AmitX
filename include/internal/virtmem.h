@@ -24,6 +24,7 @@
 
 /* --- Includes ---*/
 #include <stdint.h>
+#include <internal/amitx_consts.h>
 
 /* --- Macros ---*/
 /* ==========================================================================

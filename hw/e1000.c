@@ -22,8 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "internal/kscope.h"
-#include "internal/kscope_nodes.h"
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 #include <hw/e1000.h>
 #include <arch/x86/io.h>
 #include <screen/printk.h>

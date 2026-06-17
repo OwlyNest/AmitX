@@ -1,7 +1,7 @@
-#include "kernel/settings.h"
-#include "screen/screen.h"
-#include "screen/printk.h"
-#include "fs/fs.h"
+#include <kernel/settings.h>
+#include <screen/screen.h>
+#include <screen/printk.h>
+#include <fs/fs.h>
 
 void test_settings_persistence(void) {
     printk("\n[TEST] Settings Persistence\n");

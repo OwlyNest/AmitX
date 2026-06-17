@@ -1,6 +1,6 @@
-#include "arch/x86/time.h"
-#include "arch/x86/timer.h"
-#include "screen/screen.h"
+#include <arch/x86/time.h>
+#include <arch/x86/timer.h>
+#include <screen/screen.h>
 #include <stdint.h>
 
 volatile uint32_t tick_count = 0;

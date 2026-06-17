@@ -1,12 +1,12 @@
 
-#include "shell/commands.h"
-#include "shell/cyclone.h"
-#include "screen/screen.h"
-#include "lib/string.h"
-#include "shell/utils.h"
-#include "kernel/kernel.h"
-#include "arch/x86/time.h"
-#include "tests/tests.h"
+#include <shell/commands.h>
+#include <shell/cyclone.h>
+#include <screen/screen.h>
+#include <lib/string.h>
+#include <shell/utils.h>
+#include <kernel/kernel.h>
+#include <arch/x86/time.h>
+#include <tests/tests.h>
 
 extern int tick_count;
 extern int load_cyclone;

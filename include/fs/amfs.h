@@ -23,7 +23,7 @@
 #ifndef AMFS_H
 #define AMFS_H
 
-#define AMFS_MAGIC          "AMFS"
+#define AMFS_MAGIC        "AMFS"
 #define AMFS_VERSION      1
 #define AMFS_SECTOR_SIZE  512
 #define AMFS_MAX_FILES    64

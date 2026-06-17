@@ -249,6 +249,26 @@ static void test_reserve_unreserve(void) {
 }
 
 /* ==========================================================================
+ * Test: aligned frames
+ * ======================================================================= */
+void test_pmm_aligned(void) {
+    printk("[pmm_test] aligned alloc...\n");
+
+    void *p = pmm_alloc_aligned(1, 4);
+    if (!p) {
+        test_fail("aligned alloc failed");
+        return;
+    }
+
+    uint32_t frame = (uint32_t)p >> FRAME_SIZE_SHIFT;
+    if (frame & 3) {
+        test_fail("frame ot aligned to 4");
+    }
+
+    test_pass("frame aligned to 4");
+    pmm_free_frames(p, 1);
+}
+/* ==========================================================================
  * Run all PMM tests
  * ======================================================================= */
 void pmm_run_tests(void) {
@@ -263,6 +283,7 @@ void pmm_run_tests(void) {
     test_null_free();
     test_exhaustion();
     test_reserve_unreserve();
+    test_pmm_aligned();
 
     printk("====================================\n");
     printk("Results: %d passed, %d failed\n", tests_passed, tests_failed);

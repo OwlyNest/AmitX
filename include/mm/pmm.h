@@ -24,7 +24,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "internal/multiboot.h"
+#include <internal/multiboot.h>
 
 #define FRAME_SIZE              4096
 #define FRAME_ALIGN             4096
@@ -61,5 +61,7 @@ uint32_t pmm_get_total_frames(void);
 uint32_t pmm_get_free_frames(void);
 uint64_t pmm_get_total_ram(void);
 const boot_info_t *pmm_get_boot_info(void);
+void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames);
+int pmm_alloc_at(uintptr_t addr, uint32_t count);
 
 #endif

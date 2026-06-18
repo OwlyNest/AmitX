@@ -72,10 +72,27 @@ void halt(void) {
 }
 
 void pic_eoi(uint8_t irq) {
-    if (irq >= 40) {
-        outb(PORT_PIC_SLAVE_CMD, PIC_EOI);  // Slave PIC
+    uint8_t isr;
+
+    if (irq == 7) {
+        outb(PORT_PIC_MASTER_CMD, 0x0B);
+        isr = inb(PORT_PIC_MASTER_CMD);
+        if (!(isr & 0x80)) {
+            return;
+        }
     }
-    outb(PORT_PIC_MASTER_CMD, PIC_EOI);      // Master PIC
+    if (irq == 15) {
+        outb(PORT_PIC_SLAVE_CMD, 0x0B);
+        isr = inb(PORT_PIC_SLAVE_CMD);
+        if (!(isr & 0x80)) {
+            outb(PORT_PIC_MASTER_CMD, PIC_EOI);
+            return;
+        }
+    }
+    if (irq >= 8) {
+        outb(PORT_PIC_SLAVE_CMD, PIC_EOI);
+    }
+    outb(PORT_PIC_MASTER_CMD, PIC_EOI);
 }
 
 void isr_handler(int int_no, uint32_t err) {

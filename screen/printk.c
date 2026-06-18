@@ -258,5 +258,5 @@ void printk(const char *fmt, ...) {
     va_end(args);
 
     puts(buf);
-    serial_puts(buf);
+    serial_puts_default(buf);
 }

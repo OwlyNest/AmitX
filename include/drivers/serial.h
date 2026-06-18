@@ -25,10 +25,23 @@
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/
+#include <stdint.h>
+typedef struct {
+	uint16_t base;
+	uint16_t baud_div;
+	uint8_t  flags;
+#define SERIAL_PRESENT 0x01
+#define SERIAL_FIF0    0x02
+} serial_port_t;
 
 /* --- Globals ---*/
-
+extern serial_port_t serial_com1;
 /* --- Prototypes ---*/
-void serial_putc(char c);
-void serial_puts(const char *s);
+void serial_putc(serial_port_t *port, char c);
+void serial_puts(serial_port_t *port, const char *s);
+void serial_putc_default(char c);
+void serial_puts_default(const char *c);
+
+int serial_getc(serial_port_t *port);  /* Returns char, or -1 if none */
+int serial_getc_default(void);
 #endif

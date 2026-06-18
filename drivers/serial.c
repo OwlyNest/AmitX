@@ -27,6 +27,7 @@
 #include <internal/amitx_consts.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -35,7 +36,28 @@
 
 /* --- Functions ---*/
 
+static int serial_detect(uint16_t base) {
+	uint8_t tmp;
+
+	outb(base + 7, 0x5A);
+	tmp = inb(base + 7);
+	if (tmp != 0x5A) {
+		return -1;
+	}
+
+	outb(base + 7, 0xA5);
+	tmp = inb(base + 7);
+	if (tmp != 0xA5) {
+		return -1;
+	}
+	return 0;
+}
+
 static int serial_init(void) {
+	if (serial_detect(PORT_SERIAL) != 0) {
+		return -1;
+	}
+	
 	outb(PORT_SERIAL + 1, 0x00); // Disable all interrupts
 	outb(PORT_SERIAL + 3, 0x80); // Enable DLAB (set bound rate divisor)
 	outb(PORT_SERIAL + 0, 0x03); // Set divisor to 3 (38400 bound)

@@ -38,7 +38,7 @@ set timeout=0
 set default=0
 
 menuentry \"AmitX Kernel\" {
-    multiboot /boot/kernel.bin
+    multiboot2 /boot/kernel.bin
     boot
 }
 EOF

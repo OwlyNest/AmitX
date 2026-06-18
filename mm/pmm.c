@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/multiboot.h"
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <mm/pmm.h>
@@ -29,6 +30,7 @@
 #include <screen/printk.h>
 #include <lib/string.h>
 #include <internal/amitx_consts.h>
+#include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -155,51 +157,58 @@ void pmm_unreserve_region(uintptr_t start, size_t length) {
  * Validates multiboot, detects RAM, saves boot info.
  * Returns 0 on success, non-zero on fatal error.
  * ======================================================================= */
-int kernel_early_init(uint32_t magic, multiboot_info_t *mb_info) {
-    memset(&boot_info, 0, sizeof(boot_info));
-    boot_info.magic = magic;
-    boot_info.mb_info = mb_info;
-    boot_info.kernel_start = 0x00100000; /* Linker starts at 1MB */
-    boot_info.kernel_end = (uint32_t)_end;
-
-    /* Validate multiboot magic */
-    if (!multiboot_valid_magic(magic)) {
-        /* Can't printk yet, but we can return error */
+    int kernel_early_init(uint32_t magic, void *mb_info) {
+        memset(&boot_info, 0, sizeof(boot_info));
+        boot_info.magic = magic;
         boot_info.valid = 0;
-        return 1;
-    }
 
-    /* Check for memory map */
-    if (!multiboot_has_mmap(mb_info)) {
-        /* Fallback: use mem_lower/mem_upper (in KB, above 1MB) */
-        if (multiboot_has_mem_info(mb_info)) {
-            total_ram = ((uint64_t)mb_info->mem_upper + 1024) * 1024;
-        } else {
-            /* Absolute fallback: assume 16MB */
-            total_ram = 16 * 1024 * 1024;
+        if (magic != MB2_BOOT_MAGIC) {
+            return 1;
         }
-    } else {
-        /* Calculate total RAM from memory map */
-        multiboot_mmap_entry_t *entry;
+
+        mb2_tag_t *tag;
         uint64_t available_ram = 0;
-        MULTIBOOT_MMAP_FOR_EACH(mb_info, entry) {
-            if (entry->type == MMAP_AVAILABLE) {
-                available_ram += entry->len;
+        int has_mmap = 0;
+
+        MB2_TAG_FOREACH(mb_info, tag) {
+            switch (tag->type) {
+                case MB2_TAG_MMAP: {
+                    mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+                    uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
+                    mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
+
+                    for (uint32_t i = 0; i < num; i++) {
+                        mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
+                        if (e->type == MB2_MMAP_AVAILABLE) {
+                            available_ram += e->length;
+                        }
+                    }
+                    has_mmap = 1;
+                    break;
+                }
+                case MB2_TAG_BASIC_MEM: {
+                    if (!has_mmap) {
+                        uint32_t *mem = (uint32_t *)(tag + 1);
+                        available_ram = ((uint64_t)mem[1] + 1024) * 1024;
+                    }
+                    break;
+                }
             }
         }
+        if (available_ram == 0) {
+            available_ram = 16 * 1024 * 1024;
+        }
+
         total_ram = available_ram;
-    }
 
-    /* Sanity check: do we have enough RAM? */
-    if (total_ram < PMM_MIN_MEMORY) {
-        boot_info.valid = 0;
-        return 2;
-    }
+        if (total_ram < PMM_MIN_MEMORY) {
+            return 2;
+        }
 
-    boot_info.total_ram = total_ram;
-    boot_info.valid = 1;
-    return 0;
-}
+        boot_info.total_ram = total_ram;
+        boot_info.valid = 1;
+        return 0;
+    }
 
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)

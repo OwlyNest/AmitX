@@ -63,6 +63,32 @@
 #define MMAP_NVS                4
 #define MMAP_BADRAM             5
 
+
+#define MB2_BOOT_MAGIC 0x36d76289
+
+#define MB2_TAG_END         0
+#define MB2_TAG_CMDLINE     1
+#define MB2_TAG_BOOTLOADER  2
+#define MB2_TAG_MODULE      3
+#define MB2_TAG_BASIC_MEM   4
+#define MB2_TAG_BIOS_BOOT   5
+#define MB2_TAG_MMAP        6
+#define MB2_TAG_VBE         7
+#define MB2_TAG_FRAMEBUFFER 8
+#define MB2_TAG_ELF_SECTIONS 9
+#define MB2_TAG_APM         10
+#define MB2_TAG_EFI_32      11
+#define MB2_TAG_EFI_64      12
+#define MB2_TAG_SMBIOS      13
+#define MB2_TAG_ACPI_OLD    14
+#define MB2_TAG_ACPI_NEW    15
+#define MB2_TAG_NETWORK     16
+#define MB2_TAG_EFI_MMAP    17
+#define MB2_TAG_EFI_BS      18
+#define MB2_TAG_EFI_32_IH   19
+#define MB2_TAG_EFI_64_IH   20
+#define MB2_TAG_LOAD_BASE   21
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* ==========================================================================
@@ -110,6 +136,38 @@ typedef struct multiboot_mmap_entry {
     uint64_t len;
     uint32_t type;
 } __attribute__((packed)) multiboot_mmap_entry_t;
+
+
+typedef struct mb2_tag {
+    uint32_t type;
+    uint32_t size;
+} __attribute__((packed)) mb2_tag_t;
+
+typedef struct mb2_tag_mmap {
+    mb2_tag_t tag;
+    uint32_t entry_size;
+    uint32_t entry_version;
+    /* entries follow */
+} __attribute__((packed)) mb2_tag_mmap_t;
+
+typedef struct mb2_mmap_entry {
+    uint64_t base_addr;
+    uint64_t length;
+    uint32_t type;
+    uint32_t reserved;
+} __attribute__((packed)) mb2_mmap_entry_t;
+
+#define MB2_MMAP_AVAILABLE 1
+#define MB2_MMAP_RESERVED  2
+#define MB2_MMAP_ACPI_RECLAIM 3
+#define MB2_MMAP_NVS       4
+#define MB2_MMAP_BADRAM    5
+
+/* Iterator: skip 8-byte fixed header, then walk tags */
+#define MB2_TAG_FOREACH(mb, tag) \
+    for ((tag) = (mb2_tag_t *)((uint8_t *)(mb) + 8); \
+         (tag)->type != MB2_TAG_END; \
+         (tag) = (mb2_tag_t *)((uint8_t *)(tag) + (((tag)->size + 7) & ~7)))
 
 /* --- Prototypes ---*/
 static inline int multiboot_valid_magic(uint32_t magic);

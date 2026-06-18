@@ -96,7 +96,8 @@ unsigned char keyboard_getchar(void) {
 /* IRQ1 handler                                                       */
 /* ------------------------------------------------------------------ */
 
-void keyboard_callback() {
+void keyboard_callback(interrupt_frame_t *frame) {
+    (void)frame;
     uint8_t scancode = inb(PORT_KBD_DATA);
 
     if (scancode == SC_PREFIX_E0) {

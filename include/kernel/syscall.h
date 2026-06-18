@@ -3,6 +3,7 @@
 #define SYSCALL_H
 
 #include <stdint.h>
+#include <arch/x86/interrupts.h>
 
 #define MAX_SYSCALLS 32
 
@@ -18,7 +19,7 @@
 
 typedef int (*syscall_func_t)(uint32_t, uint32_t, uint32_t);
 
-void syscall_handler();                      // Called from isr128
+void syscall_dispatch(interrupt_frame_t *frame);               // Called from isr128
 void register_syscall(int num, syscall_func_t func);
 void syscall_init();
 

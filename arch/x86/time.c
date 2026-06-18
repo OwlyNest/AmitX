@@ -1,3 +1,4 @@
+#include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
 #include <arch/x86/timer.h>
 #include <screen/screen.h>
@@ -10,7 +11,8 @@ extern int menu;
     * PIT is 100 Hz
 */
 
-void timer_callback() {
+void timer_callback(interrupt_frame_t *frame) {
+    (void)frame;
     tick_count++;
     if (menu) {
         draw_uptime();

@@ -12,7 +12,8 @@ extern void register_interrupt_handler(int n, void (*handler)());
 
 static void (*timer_handler)() = 0;
 
-void timer_callback_wrapper() {
+void timer_callback_wrapper(interrupt_frame_t *frame) {
+    (void)frame;
     if (timer_handler) timer_handler();
 }
 

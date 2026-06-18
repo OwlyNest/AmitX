@@ -210,7 +210,7 @@ void kernel_setup(void) {
     kscope_dump();
 
     fs_init();
-    syscall_init(); 
+    syscall_init();
 
     pmm_print_map();
 	pci_print_all_devices();

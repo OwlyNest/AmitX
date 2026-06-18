@@ -12,17 +12,17 @@ void register_syscall(int num, syscall_func_t func) {
     }
 }
 
-void syscall_handler() {
-    uint32_t num, a1, a2, a3;
-
-    asm volatile (
-        "" : "=a"(num), "=b"(a1), "=c"(a2), "=d"(a3)
-    );
+void syscall_dispatch(interrupt_frame_t *frame) {
+    uint32_t num = frame->eax;
+    uint32_t a1  = frame->ebx;
+    uint32_t a2  = frame->ecx;
+    uint32_t a3  = frame->edx;
 
     if (num < MAX_SYSCALLS && syscall_table[num]) {
-        syscall_table[num](a1, a2, a3);
+        /* Return value goes back in frame->eax */
+        frame->eax = syscall_table[num](a1, a2, a3);
     } else {
-        puts("Invalid syscall\n");
+        frame->eax = -1;  /* Invalid syscall */
     }
 }
 

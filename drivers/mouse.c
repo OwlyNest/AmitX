@@ -46,7 +46,8 @@ static uint8_t mouse_read() {
     return inb(PORT_KBD_DATA);
 }
 
-void mouse_handler() {
+void mouse_handler(interrupt_frame_t *frame) {
+    (void)frame;
     uint8_t status = inb(PORT_KBD_STATUS);
     if (!(status & 1)) return;
 

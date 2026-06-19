@@ -52,6 +52,7 @@ const int main_menu_count = sizeof(main_menu) / sizeof(main_menu[0]);
 void menu_select(int choise);
 /* --- Functions ---*/
 void menu_run(void) {
+	clear();
 	menu = 1;
 	draw_start();
 

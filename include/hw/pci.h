@@ -164,16 +164,27 @@
 #define PCI_CONFIG_DATA  0xCFC
 
 /* ==========================================================================
+ * PCIe capability register offsets
+ * ======================================================================= */
+#define PCI_PCIE_CAP         0x02
+#define PCI_PCIE_DEV_CAP     0x04
+#define PCI_PCIE_DEV_CTRL    0x08
+#define PCI_PCIE_LINK_CAP    0x0C
+#define PCI_PCIE_LINK_CTRL   0x10
+#define PCI_PCIE_LINK_STATUS 0x12
+/* --- Typedefs - Structs - Enums ---*/
+/* ==========================================================================
  * BAR descriptor
  * ======================================================================= */
-typedef struct {
+ typedef struct {
     uint32_t raw;
-    uint32_t base;
+    uint32_t base;          /* current or assigned base */
     uint32_t size;
     uint8_t  is_io;
     uint8_t  is_64;
     uint8_t  is_prefetch;
-    uint8_t  index;     /* 0-5 */
+    uint8_t  index;
+    uint8_t  assigned;      /* NEW: 1 if kernel assigned this address */
 } pci_bar_t;
 
 /* ==========================================================================
@@ -224,10 +235,7 @@ typedef struct pci_device {
     struct pci_device* next;
 } pci_device_t;
 
-/* ==========================================================================
- * Function prototypes
- * ======================================================================= */
-
+/* --- Prototypes ---*/
 /* Low-level config space access */
 uint32_t pci_read_config(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 void     pci_write_config(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val);

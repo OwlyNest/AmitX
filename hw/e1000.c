@@ -22,6 +22,11 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/amitx_consts.h"
+#include <arch/x86/idt.h>
+#include <arch/x86/interrupts.h>
+#include <arch/x86/time.h>
+#include <mm/pmm.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <hw/e1000.h>
@@ -31,140 +36,273 @@
 #include <lib/string.h>
 #include <hw/pci.h>
 #include <stdint.h>
+
 /* --- Typedefs - Structs - Enums ---*/
-
+struct rx_packet {
+    struct rx_packet *next;
+    uint16_t len;
+    uint8_t data[2048];
+};
 /* --- Globals ---*/
-static volatile uint32_t* e1000_mmio;
-static struct e1000_tx_desc* tx_ring;
-static struct e1000_rx_desc* rx_ring;
-static uint8_t* tx_buffers[TX_RING_SIZE];
-static uint8_t* rx_buffers[RX_RING_SIZE];
-static uint16_t tx_idx = 0;
-static uint16_t rx_idx = 0;
+static struct e1000_device e1000_dev;
+static int e1000_ready = 0;
+static struct rx_packet *rx_queue_head = NULL;
+static struct rx_packet *rx_queue_tail = NULL;
 /* --- Prototypes ---*/
-
+static uint32_t e1000_read(struct e1000_device *dev, uint32_t reg);
+static void e1000_write(struct e1000_device *dev, uint32_t reg, uint32_t val);
+static uint16_t e1000_read_eeprom(struct e1000_device *dev, uint8_t addr);
+static int e1000_detect_eeprom(struct e1000_device *dev);
+static void e1000_read_mac(struct e1000_device *dev);
+static void e1000_write_mac(struct e1000_device *dev);
+static void e1000_reset(struct e1000_device *dev);
+static void e1000_init_rx(struct e1000_device *dev);
+static void e1000_init_tx(struct e1000_device *dev);
+static int e1000_probe(struct pci_device **out_dev);
 /* --- Functions ---*/
 
-static uint32_t e1000_read(uint32_t reg) {
-	return e1000_mmio[reg / 4];
+static void e1000_rx_enqueue(const uint8_t *data, uint16_t len) {
+    struct rx_packet *pkt = (struct rx_packet *)malloc(sizeof(struct rx_packet));
+    if (!pkt) {
+        e1000_dev.stats.rx_dropped++;
+        return;
+    }
+    pkt->next = NULL;
+    pkt->len = len;
+    memcpy(pkt->data, data, len);
+
+    if (rx_queue_tail) {
+        rx_queue_tail->next = pkt;
+    } else {
+        rx_queue_head = pkt;
+    }
+    rx_queue_tail = pkt;
 }
 
-static void e1000_write(uint32_t reg, uint32_t val) {
-	e1000_mmio[reg / 4] = val;
+struct rx_packet *e1000_rx_dequeue(void) {
+    struct rx_packet *pkt = rx_queue_head;
+    if (pkt) {
+        rx_queue_head = pkt->next;
+        if (!rx_queue_head) rx_queue_tail = NULL;
+    }
+    return pkt;
 }
 
-static uint16_t e1000_read_eeprom(uint8_t addr) {
-    e1000_write(E1000_REG_EERD, 1 | (addr << 8));
-    while (!(e1000_read(E1000_REG_EERD) & (1 << 4)));
-    return (e1000_read(E1000_REG_EERD) >> 16) & 0xFFFF;
+static uint32_t e1000_read(struct e1000_device *dev, uint32_t reg) {
+	return dev->mmio[reg / 4];
+}
+
+static void e1000_write(struct e1000_device *dev, uint32_t reg, uint32_t val) {
+	dev-> mmio[reg / 4] = val;
+}
+
+static uint16_t e1000_read_eeprom(struct e1000_device *dev, uint8_t addr) {
+    e1000_write(dev, E1000_REG_EERD, 1 | (addr << 8));
+    while (!(e1000_read(dev, E1000_REG_EERD) & (1 << 4)));
+    return (e1000_read(dev, E1000_REG_EERD) >> 16) & 0xFFFF;
+}
+
+static int e1000_detect_eeprom(struct e1000_device *dev) {
+    uint32_t eecd = e1000_read(dev, E1000_REG_EECD);
+    /* BIT 8: EEPresent */
+    return (eecd & (1 << 8)) ? 1 : 0;
+}
+
+static void e1000_read_mac(struct e1000_device *dev) {
+    if (e1000_detect_eeprom(dev)) {
+        uint16_t w0 = e1000_read_eeprom(dev, 0);
+        uint16_t w1 = e1000_read_eeprom(dev, 1);
+        uint16_t w2 = e1000_read_eeprom(dev, 2);
+
+        dev->mac[0] = w0 & 0xFF;
+        dev->mac[1] = (w0 >> 8) & 0xFF;
+        dev->mac[2] = w1 & 0xFF;
+        dev->mac[3] = (w1 >> 8) & 0xFF;
+        dev->mac[4] = w2 & 0xFF;
+        dev->mac[5] = (w2 >> 8) & 0xFF;
+    } else {
+        /* Fallback, read from filter regs */
+        uint32_t ral = e1000_read(dev, E1000_REG_RAL);
+        uint32_t rah = e1000_read(dev, E1000_REG_RAH);
+
+        dev->mac[0] = ral & 0xFF;
+        dev->mac[1] = (ral >> 8) & 0xFF;
+        dev->mac[2] = (ral >> 16) & 0xFF;
+        dev->mac[3] = (ral >> 24) & 0xFF;
+        dev->mac[4] = rah & 0xFF;
+        dev->mac[5] = (rah >> 8) & 0xFF;
+    }
+}
+
+static void e1000_write_mac(struct e1000_device *dev) {
+    uint32_t ral = dev->mac[0]
+                 | (dev->mac[1] << 8)
+                 | (dev->mac[2] << 16)
+                 | (dev->mac[3] << 24);
+    uint32_t rah = dev->mac[4]
+                 | (dev->mac[5] << 8)
+                 | (1 << 31); /* Address Valid bit */
+
+    e1000_write(dev, E1000_REG_RAL, ral);
+    e1000_write(dev, E1000_REG_RAH, rah);
+}
+
+static void e1000_reset(struct e1000_device *dev) {
+    /* Perform device reset */
+    e1000_write(dev, E1000_REG_CTRL, E1000_CTRL_RST);
+    while (e1000_read(dev, E1000_REG_CTRL) & E1000_CTRL_RST);
+
+    /* PHY reset can take up to 1ms on real hardware */
+    sleep_ms(2); /* 2ms for safety */
+
+    /* mask all interrupts, clear pending */
+    e1000_write(dev, E1000_REG_IMC, 0xFFFFFFFF);
+    (void) e1000_read(dev, E1000_REG_ICR);
+}
+
+static void e1000_init_rx(struct e1000_device *dev) {
+    void *raw;
+    
+    raw = (void *)malloc(sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE + 15);
+
+    dev->rx_ring = (struct e1000_rx_desc *)(((uint32_t)raw + 15) & ~15);
+
+    memset(dev->rx_ring, 0, sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE);
+
+
+    for (int i = 0; i < E1000_RX_RING_SIZE; i++) {
+        dev->rx_buffers[i] = (uint8_t *)malloc(2048);
+        dev->rx_ring[i].addr = (uint64_t)(uint32_t)dev->rx_buffers[i];
+        dev->rx_ring[i].status = 0;
+    }
+
+    e1000_write(dev, E1000_REG_RDBAL, (uint32_t)dev->rx_ring);
+    e1000_write(dev, E1000_REG_RDBAH, 0);
+    e1000_write(dev, E1000_REG_RDLEN, sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE);
+    e1000_write(dev, E1000_REG_RDH, 0);
+    e1000_write(dev, E1000_REG_RDT, E1000_RX_RING_SIZE - 1);
+    e1000_write(dev, E1000_REG_RCTL, E1000_RCTL_EN | E1000_RCTL_BAM | E1000_RCTL_BSIZE_2048 | E1000_RCTL_SECRC);
+}
+
+static void e1000_init_tx(struct e1000_device *dev) {
+    void *raw;
+    
+    raw = (void *)malloc(sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE + 15);
+
+    dev->tx_ring = (struct e1000_tx_desc *)(((uint32_t)raw + 15) & ~15);
+
+    memset(dev->tx_ring, 0, sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE);
+
+    for (int i = 0; i < E1000_TX_RING_SIZE; i++) {
+        dev->tx_buffers[i] = (uint8_t *)malloc(2048);
+        dev->tx_ring[i].addr = (uint64_t)(uint32_t)dev->tx_buffers[i];
+        dev->tx_ring[i].status = E1000_TXD_STAT_DD;
+    }
+
+    e1000_write(dev, E1000_REG_TDBAL, (uint32_t)dev->tx_ring);
+    e1000_write(dev, E1000_REG_TDBAH, 0);
+    e1000_write(dev, E1000_REG_TDLEN, sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE);
+    e1000_write(dev, E1000_REG_TDH, 0);
+    e1000_write(dev, E1000_REG_TDT, 0);
+    e1000_write(dev, E1000_REG_TCTL, E1000_TCTL_EN | E1000_TCTL_PSP);
+
+    /* Inter packet gap: 10, 10 10 (IEEE 802.3) */
+    e1000_write(dev, E1000_REG_TIPG, 0x0060200A);
+}
+
+static int e1000_probe(struct pci_device **out_dev) {
+    static const uint16_t ids[] = {
+        E1000_DEV_82540EM,
+        E1000_DEV_82545EM_COPPER,
+        E1000_DEV_82546EB_COPPER,
+        E1000_DEV_82541EI,
+        E1000_DEV_82541ER,
+        E1000_DEV_82541GI,
+        E1000_DEV_82541PI,
+        E1000_DEV_82544EI,
+        E1000_DEV_82544EI_FIBER,
+        E1000_DEV_82545EM_FIBER,
+        E1000_DEV_82546EB_FIBER,
+        E1000_DEV_82546EB_QUAD,
+        0
+    };
+
+    for (int i = 0; ids[i] != 0; i++) {
+        struct pci_device *d = pci_get_device(0x8086, ids[i]);
+        if (d) {
+            *out_dev = d;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static void e1000_irq_handler(interrupt_frame_t *frame) {
+    (void)frame;
+    uint32_t icr = e1000_read(&e1000_dev, E1000_REG_ICR);
+
+    if (icr & (1 << 6)) {  /* RXT0 */
+        uint8_t buf[2048];
+        int n;
+        while ((n = e1000_receive(buf, sizeof(buf))) > 0) {
+            e1000_rx_enqueue(buf, n);
+        }
+    }
+
+    if (icr & (1 << 0)) {  /* TXDW */
+        /* Reclaim descriptors — e1000_send() handles this on next call */
+    }
+
+    if (icr & (1 << 2)) {  /* LSC */
+        e1000_poll_link();
+    }
 }
 
 static int  e1000_init(void) {
-    pci_device_t* dev = pci_get_device(0x8086, 0x100e);
-    if (!dev) {
-        dev = pci_get_device(0x8086, 0x100f);  /* MT */
-    }
-    if (!dev) {
-        dev = pci_get_device(0x8086, 0x1010);  /* T */
-    }
-    if (!dev) {
-        printk("[e1000] No e1000 device found\n");
+    struct pci_device *pci_dev;
+
+    if (e1000_probe(&pci_dev) != 0) {
+        printk("[e1000] No compatible device found\n");
         return 1;
     }
 
-    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",
-           dev->bus, dev->device, dev->function, dev->bars[0].base);
+    e1000_dev.pci = pci_dev;
+    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n", pci_dev->bus, pci_dev->device, pci_dev->function, pci_dev->bars[0].base);
 
-    /* Check if BAR0 is I/O or MMIO. Low bit set = I/O space. */
-    if (dev->bars[0].base & 1) {
-        printk("[e1000] Warning: BAR0 is I/O space, this driver expects MMIO\n");
-        /* For I/O space you'd use in/out on (base & ~3).
-         * QEMU typically gives MMIO, so we continue with a warning. */
+    if (pci_dev->bars[0].base & 1) {
+        printk("[e1000] Error: BAR0 is I/O, driver needs MMIO\n");
+        return 1;
     }
 
-    e1000_mmio = (volatile uint32_t*)(dev->bars[0].base & ~0xF);
+    e1000_dev.mmio = (volatile uint32_t *)(pci_dev->bars[0].base & ~0xF);
 
-    /* Read MAC from EEPROM */
-    uint16_t mac_word0 = e1000_read_eeprom(0);
-    uint16_t mac_word1 = e1000_read_eeprom(1);
-    uint16_t mac_word2 = e1000_read_eeprom(2);
+    e1000_reset(&e1000_dev);
+    e1000_read_mac(&e1000_dev);
+    e1000_write_mac(&e1000_dev);
 
-    uint8_t mac[6];
-    mac[0] = mac_word0 & 0xFF;
-    mac[1] = (mac_word0 >> 8) & 0xFF;
-    mac[2] = mac_word1 & 0xFF;
-    mac[3] = (mac_word1 >> 8) & 0xFF;
-    mac[4] = mac_word2 & 0xFF;
-    mac[5] = (mac_word2 >> 8) & 0xFF;
+    printk("[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+        e1000_dev.mac[0], e1000_dev.mac[1],
+        e1000_dev.mac[2], e1000_dev.mac[3],
+        e1000_dev.mac[4], e1000_dev.mac[5]);
 
-    printk("[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    /* Force link up */
+    uint32_t ctrl = e1000_read(&e1000_dev, E1000_REG_CTRL);
+    e1000_write(&e1000_dev, E1000_REG_CTRL, ctrl | E1000_CTRL_SLU);
 
-    /* Reset */
-    uint32_t ctrl = e1000_read(E1000_REG_CTRL);
-    e1000_write(E1000_REG_CTRL, ctrl | E1000_CTRL_RST);
-    while (e1000_read(E1000_REG_CTRL) & E1000_CTRL_RST);
+    e1000_init_rx(&e1000_dev);
+    e1000_init_tx(&e1000_dev);
 
-    /* Disable interrupts */
-    e1000_write(E1000_REG_IMC, 0xFFFFFFFF);
+    e1000_poll_link();
 
-    /* Set link up */
-    ctrl = e1000_read(E1000_REG_CTRL);
-    e1000_write(E1000_REG_CTRL, ctrl | E1000_CTRL_SLU);
+    e1000_write(&e1000_dev, E1000_REG_IMS,
+        (1 << 0)   /* TXDW */
+      | (1 << 6)   /* RXT0 */
+      | (1 << 2)); /* LSC */
 
-    /* Allocate rings (16-byte aligned) */
-    tx_ring = (struct e1000_tx_desc*)malloc(
-        sizeof(struct e1000_tx_desc) * TX_RING_SIZE + 15);
-    tx_ring = (struct e1000_tx_desc*)(
-        ((uint32_t)tx_ring + 15) & ~15);
-    memset(tx_ring, 0,
-           sizeof(struct e1000_tx_desc) * TX_RING_SIZE);
 
-    rx_ring = (struct e1000_rx_desc*)malloc(
-        sizeof(struct e1000_rx_desc) * RX_RING_SIZE + 15);
-    rx_ring = (struct e1000_rx_desc*)(
-        ((uint32_t)rx_ring + 15) & ~15);
-    memset(rx_ring, 0,
-           sizeof(struct e1000_rx_desc) * RX_RING_SIZE);
-
-    /* Allocate buffers */
-    for (int i = 0; i < TX_RING_SIZE; i++) {
-        tx_buffers[i] = (uint8_t*)malloc(2048);
-        tx_ring[i].addr = (uint64_t)(uint32_t)tx_buffers[i];
-        tx_ring[i].status = E1000_TXD_STAT_DD;  /* Done, owned by CPU */
-    }
-
-    for (int i = 0; i < RX_RING_SIZE; i++) {
-        rx_buffers[i] = (uint8_t*)malloc(2048);
-        rx_ring[i].addr = (uint64_t)(uint32_t)rx_buffers[i];
-        rx_ring[i].status = 0;  /* Owned by hardware */
-    }
-
-    /* Program TX ring */
-    e1000_write(E1000_REG_TDBAL, (uint32_t)tx_ring);
-    e1000_write(E1000_REG_TDBAH, 0);
-    e1000_write(E1000_REG_TDLEN, sizeof(struct e1000_tx_desc) * TX_RING_SIZE);
-    e1000_write(E1000_REG_TDH, 0);
-    e1000_write(E1000_REG_TDT, 0);
-
-    /* Program RX ring */
-    e1000_write(E1000_REG_RDBAL, (uint32_t)rx_ring);
-    e1000_write(E1000_REG_RDBAH, 0);
-    e1000_write(E1000_REG_RDLEN, sizeof(struct e1000_rx_desc) * RX_RING_SIZE);
-    e1000_write(E1000_REG_RDH, 0);
-    e1000_write(E1000_REG_RDT, RX_RING_SIZE - 1);
-
-    /* Enable RX: 2048 byte buffers, broadcast, unicast, strip CRC */
-    e1000_write(E1000_REG_RCTL,
-                  E1000_RCTL_EN
-                | E1000_RCTL_BAM
-                | E1000_RCTL_BSIZE_2048
-                | E1000_RCTL_SECRC);
-
-    /* Enable TX: pad short packets */
-    e1000_write(E1000_REG_TCTL,
-                  E1000_TCTL_EN
-                | E1000_TCTL_PSP);
-
+    register_interrupt_handler(VECTOR_IRQ10, e1000_irq_handler);
+    pic_unmask_irq(10);
+    e1000_ready = 1;
     printk("[e1000] Initialization complete\n");
     return 0;
 }
@@ -181,70 +319,137 @@ kscope_node_t e1000_node = {
     .init = e1000_init
 };
 
+int e1000_poll_link(void) {
+    if (!e1000_ready) {
+        return -1;
+    }
+
+    uint32_t status = e1000_read(&e1000_dev, E1000_REG_STATUS);
+    int up = (status & E1000_STATUS_LU) ? 1 : 0;
+
+    if (up && !(e1000_dev.flags & E1000_FLAG_LINK_UP)) {
+        e1000_dev.flags |= E1000_FLAG_LINK_UP;
+        printk("[e1000] Link up\n");
+    } else if (!up && (e1000_dev.flags & E1000_FLAG_LINK_UP)) {
+        e1000_dev.flags &= ~E1000_FLAG_LINK_UP;
+        printk("[e1000] Link down\n");
+    }
+
+    return up;
+}
+
+const uint8_t *e1000_get_mac(void) {
+    return e1000_ready ? e1000_dev.mac : NULL;
+}
+
 int e1000_send(const void* data, uint16_t len) {
-    if (len > 2048) {
-        return -1;  /* Packet too large for buffer */
+    if (!e1000_ready) {
+        return -1;
+    }
+    if (!data || len > 2048) {
+        return -1;
     }
 
-    struct e1000_tx_desc* desc = &tx_ring[tx_idx];
+    struct e1000_tx_desc* desc = &e1000_dev.tx_ring[e1000_dev.tx_tail];
 
-    /* Wait for hardware to finish with this descriptor */
-    while (!(desc->status & E1000_TXD_STAT_DD)) {
-        /* Spin until done. In a real OS you might sleep or
-         * check the next descriptor instead of busy-waiting. */
+    /* If this descriptor is still owned by hardware, try to reclaim */
+    if (!(desc->status & E1000_TXD_STAT_DD)) {
+        /* Reclaim completed descriptors from head */
+        while (e1000_dev.tx_head != e1000_dev.tx_tail) {
+            struct e1000_tx_desc* d = &e1000_dev.tx_ring[
+                e1000_dev.tx_head];
+            if (!(d->status & E1000_TXD_STAT_DD)) {
+                break;
+            }
+            e1000_dev.tx_head = (e1000_dev.tx_head + 1)
+                % E1000_TX_RING_SIZE;
+        }
+
+        /* After reclaim, is our target descriptor free? */
+        if (!(desc->status & E1000_TXD_STAT_DD)) {
+            e1000_dev.stats.tx_dropped++;
+            return -1;  /* Ring full */
+        }
     }
 
-    /* Copy packet data into the pre-allocated buffer */
-    memcpy(tx_buffers[tx_idx], data, len);
+    memcpy(e1000_dev.tx_buffers[e1000_dev.tx_tail], data, len);
 
-    /* Fill descriptor */
     desc->length = len;
     desc->cso = 0;
     desc->css = 0;
     desc->special = 0;
-    desc->cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_IFCS | E1000_TXD_CMD_RS;
-    desc->status = 0;  /* Clear DD, hand to hardware */
+    desc->cmd = E1000_TXD_CMD_EOP
+              | E1000_TXD_CMD_IFCS
+              | E1000_TXD_CMD_RS;
+    desc->status = 0;
 
-    /* Advance tail pointer to notify hardware */
-    tx_idx = (tx_idx + 1) % TX_RING_SIZE;
-    e1000_write(E1000_REG_TDT, tx_idx);
+    __asm__ volatile ("" ::: "memory");
+
+    e1000_dev.tx_tail = (e1000_dev.tx_tail + 1)
+        % E1000_TX_RING_SIZE;
+    e1000_write(&e1000_dev, E1000_REG_TDT,
+                e1000_dev.tx_tail);
+
+    e1000_dev.stats.tx_packets++;
+    e1000_dev.stats.tx_bytes += len;
 
     return 0;
 }
 
 int e1000_receive(void* buf, uint16_t buf_len) {
-    struct e1000_rx_desc* desc = &rx_ring[rx_idx];
-
-    /* Check if hardware has written a packet here */
-    if (!(desc->status & E1000_RXD_STAT_DD)) {
-        return 0;  /* No packet available */
+    if (!e1000_ready || !buf || buf_len == 0) {
+        return -1;
     }
 
-    /* Check for errors */
-    if (desc->errors) {
-        /* Error in this packet — skip it but still advance */
-        printk("[e1000] RX error: 0x%02x\n", desc->errors);
+    struct e1000_rx_desc *desc = &e1000_dev.rx_ring[e1000_dev.rx_head];
+
+    if (!(desc->status & E1000_RXD_STAT_DD)) {
+        return 0; /* No available packet */
     }
 
     uint16_t len = desc->length;
-    if (len > buf_len) {
-        len = buf_len;  /* Truncate if user buffer too small */
+
+    if (desc->errors) {
+        e1000_dev.stats.rx_errors++;
+        /* Consume descriptor to avoid stall */
     }
 
-    /* Copy packet out to caller */
-    memcpy(buf, rx_buffers[rx_idx], len);
+    if (len > buf_len) {
+        len = buf_len;
+    }
 
-    /* Reset descriptor for reuse by hardware */
+    memcpy(buf, e1000_dev.rx_buffers[e1000_dev.rx_head], len);
+
+    /* Reset descriptor for hardware reuse */
     desc->status = 0;
     desc->length = 0;
     desc->errors = 0;
     desc->checksum = 0;
     desc->special = 0;
 
-    /* Advance our index and update RDT to allow reuse */
-    rx_idx = (rx_idx + 1) % RX_RING_SIZE;
-    uint16_t rdt = (rx_idx - 1 + RX_RING_SIZE) % RX_RING_SIZE;
-    e1000_write(E1000_REG_RDT, rdt);
+    __asm__ volatile ("" ::: "memory");
 
-    return (int)len;
+    uint16_t desc_idx = e1000_dev.rx_head;
+    e1000_dev.rx_head = (e1000_dev.rx_head + 1) & (E1000_RX_RING_SIZE - 1);
+
+    e1000_write(&e1000_dev, E1000_REG_RDT, desc_idx);
+
+    e1000_dev.stats.rx_packets++;
+    e1000_dev.stats.rx_bytes += len;
+
+    return (int) len;
+}
+
+void e1000_shutdown(void) {
+    if (!e1000_ready) return;
+    
+    e1000_write(&e1000_dev, E1000_REG_IMC, 0xFFFFFFFF);
+    e1000_write(&e1000_dev, E1000_REG_RCTL, 0);
+    e1000_write(&e1000_dev, E1000_REG_TCTL, 0);
+    
+    e1000_ready = 0;
+}
+
+const struct e1000_stats *e1000_get_stats(void) {
+    return e1000_ready ? &e1000_dev.stats : NULL;
 }

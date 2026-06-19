@@ -27,10 +27,15 @@
 #include <drivers/mouse.h>
 #include <kernel/kernel.h>
 #include <mm/heap.h>
+#include <drivers/serial.h>
 #include <screen/printk.h>
 #include <arch/x86/io.h>
 #include <arch/x86/gdt.h>
+#include <lib/string.h>
+#include <arch/x86/timer.h>
+#include <arch/x86//time.h>
 #include <hw/acpi.h>
+#include <hw/e1000.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
 #include <internal/amitx_consts.h>
@@ -39,6 +44,7 @@
 /* --- Typedefs - Structs - Enums ---*/
 /* --- Globals ---*/
 int owly;
+extern volatile uint32_t tick_count;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/

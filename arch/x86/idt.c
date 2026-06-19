@@ -41,6 +41,8 @@ extern void isr31();
 
 extern void isr32();
 extern void isr33();
+extern void isr36();
+extern void isr42();
 extern void isr44();
 extern void isr128();
 extern void load_idt(uint32_t);
@@ -78,6 +80,8 @@ static int idt_install() {
 
     idt_set_gate(32,  (uint32_t)isr32,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     idt_set_gate(33,  (uint32_t)isr33,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(36,  (uint32_t)isr36,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(42,  (uint32_t)isr42,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     idt_set_gate(44,  (uint32_t)isr44,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_USER  );
 

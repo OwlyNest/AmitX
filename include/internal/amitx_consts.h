@@ -127,6 +127,8 @@
  * ======================================================================= */
 #define VECTOR_IRQ0             32
 #define VECTOR_IRQ1             33
+#define VECTOR_IRQ4             36
+#define VECTOR_IRQ10            42
 #define VECTOR_IRQ12            44
 #define VECTOR_SYSCALL          128
 

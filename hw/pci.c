@@ -13,12 +13,16 @@
 #include <screen/printk.h>
 #include <mm/heap.h>
 #include <lib/string.h>
+#include <stdint.h>
 
 /* ==========================================================================
  * Globals
  * ======================================================================= */
 static pci_device_t* pci_device_list = NULL;
 static int pci_device_count = 0;
+static uint8_t visited_buses[256] = {0};
+static uint32_t pci_io_next = 0xC000;     /* start above legacy ports */
+static uint32_t pci_mem_next = 0xE0000000; /* start high in 32-bit space */
 
 /* ==========================================================================
  * Low-level config space access
@@ -40,10 +44,11 @@ void pci_write_config(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint3
 }
 
 uint16_t pci_read_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg) {
-    uint32_t val = pci_read_config(bus, dev, func, reg);
-    if (reg & 2) return (val >> 16) & 0xFFFF;
-    return val & 0xFFFF;
+    uint32_t val = pci_read_config(bus, dev, func, reg & ~3);
+    // Shift accurately based on the specific target byte offset inside the 32-bit DWORD
+    return (val >> ((reg & 3) * 8)) & 0xFFFF;
 }
+
 
 uint8_t pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg) {
     uint32_t val = pci_read_config(bus, dev, func, reg & ~3);
@@ -119,6 +124,7 @@ void pci_parse_bars(pci_device_t* dev) {
             dev->bars[i].is_io = 1;
             dev->bars[i].base = bar_val & PCI_BAR_IO_ADDR_MASK;
             dev->bars[i].is_prefetch = 0;
+            dev->bars[i].size = pci_bar_get_size(dev, i); // Get size immediately
         } else {
             dev->bars[i].is_io = 0;
             dev->bars[i].base = bar_val & PCI_BAR_MEM_ADDR_MASK;
@@ -127,10 +133,15 @@ void pci_parse_bars(pci_device_t* dev) {
             uint8_t mem_type = bar_val & PCI_BAR_MEM_TYPE_MASK;
             if (mem_type == PCI_BAR_MEM_TYPE_64 && i < 5) {
                 dev->bars[i].is_64 = 1;
-                uint32_t upper = pci_read_config(dev->bus, dev->device, dev->function, reg + 4);
-                /* For 32-bit kernel, we can only use the lower 32 bits */
-                (void)upper;
-                i++;  /* Skip the upper half */
+                dev->bars[i].size = pci_bar_get_size(dev, i); // Get size before incrementing
+                
+                // Zero out the upper pseudo-BAR bookkeeping slot
+                dev->bars[i + 1].base = 0;
+                dev->bars[i + 1].size = 0;
+                
+                i++;  /* Now safely skip the upper half */
+            } else {
+                dev->bars[i].size = pci_bar_get_size(dev, i); // Standard 32-bit sizing
             }
         }
 
@@ -151,27 +162,79 @@ void pci_bar_enable(pci_device_t* dev, uint8_t bar_idx) {
     } else {
         cmd |= PCI_CMD_MEM_SPACE;
     }
-    pci_write_config(dev->bus, dev->device, dev->function, PCI_COMMAND,
-                     (pci_read_config(dev->bus, dev->device, dev->function, PCI_COMMAND) & 0xFFFF0000) | cmd);
+    
+    // Always enable Bus Mastering for network adapters to allow DMA transfers
+    cmd |= (1u << 2); 
+
+    pci_write_config(dev->bus, dev->device, dev->function, PCI_COMMAND, (pci_read_config(dev->bus, dev->device, dev->function, PCI_COMMAND) & 0xFFFF0000) | cmd);
 }
+
+int pci_assign_bar(pci_device_t *dev, uint8_t bar_index) {
+    if (bar_index >= dev->bar_count) return -1;
+
+    pci_bar_t *bar = &dev->bars[bar_index];
+    if (bar->size == 0) return 0; /* Nothing to assign */
+    if (bar->base != 0) return 0; /* BIOS already assigned */
+
+    uint32_t align = bar->size;
+
+    if (bar->is_io) {
+        /* I/O space: Round up to size alignment */
+        pci_io_next = (pci_io_next + align - 1) & ~(align - 1);
+        if (pci_io_next + bar->size > 0x10000) {
+            printk("[pci] Out of I/O space for BAR%d on %02x:%02x.%x\n", bar_index, dev->bus, dev->device, dev->function);
+         return -1;
+        }
+
+        bar->base = pci_io_next;
+        pci_io_next += bar->size;
+    } else {
+        /* Memory space: round up to size alignment */
+        pci_mem_next = (pci_mem_next + align - 1) & ~(align - 1);
+        if (pci_mem_next + bar->size < pci_mem_next) {  /* overflow */
+            printk("[pci] Out of memory space for BAR%d on %02x:%02x.%x\n", bar_index, dev->bus, dev->device, dev->function);
+            return -1;
+        }
+        bar->base = pci_mem_next;
+        pci_mem_next += bar->size;
+    }
+
+    bar->assigned = 1;
+
+    /* Write assigned address back to BAR */
+    uint8_t reg = PCI_BAR0 + (bar_index * 4);
+    pci_write_config(dev->bus, dev->device, dev->function, reg, bar->base);
+    
+    /* For 64-bit BARs, write upper 32 bits (0 for 32-bit kernel) */
+    if (bar->is_64 && bar_index < 5) {
+        pci_write_config(dev->bus, dev->device, dev->function, reg + 4, 0);
+    }
+    
+    printk("[pci] Assigned BAR%d on %02x:%02x.%x: %s 0x%08x size 0x%x\n", bar_index, dev->bus, dev->device, dev->function, bar->is_io ? "I/O" : "MEM", bar->base, bar->size);
+    
+    return 0;
+}
+
 
 /* ==========================================================================
  * Capability parsing
  * ======================================================================= */
 
-void pci_parse_capabilities(pci_device_t* dev) {
+ void pci_parse_capabilities(pci_device_t* dev) {
     uint16_t status = pci_read_config_word(dev->bus, dev->device, dev->function, PCI_STATUS);
     if (!(status & PCI_STATUS_CAP_LIST)) return;
 
-    uint8_t cap_ptr = pci_read_config_byte(dev->bus, dev->device, dev->function, PCI_CAP_PTR) & 0xFC;
+    // Do NOT mask 0xFC here. Read the raw offset pointer.
+    uint8_t cap_ptr = pci_read_config_byte(dev->bus, dev->device, dev->function, PCI_CAP_PTR);
     pci_capability_t* last = NULL;
 
-    while (cap_ptr != 0 && cap_ptr != 0xFF) {
+    // A capability pointer must be 4-byte aligned. Valid pointers are >= 0x40.
+    while (cap_ptr >= 0x40 && cap_ptr < 0xFF) {
         uint8_t cap_id = pci_read_config_byte(dev->bus, dev->device, dev->function, cap_ptr);
         uint8_t next_ptr = pci_read_config_byte(dev->bus, dev->device, dev->function, cap_ptr + 1);
 
         pci_capability_t* cap = (pci_capability_t*)malloc(sizeof(pci_capability_t));
-        if (!cap) break;
+        if (!cap) break; // Use break instead of continue to prevent infinite loops on failure
 
         cap->id = cap_id;
         cap->next = next_ptr;
@@ -185,7 +248,8 @@ void pci_parse_capabilities(pci_device_t* dev) {
         }
         last = cap;
 
-        cap_ptr = next_ptr & 0xFC;
+        // Advance directly to the next pointer raw value.
+        cap_ptr = next_ptr;
     }
 }
 
@@ -259,6 +323,8 @@ static void pci_add_device(pci_device_t* dev) {
 }
 
 void pci_scan_bus(uint8_t bus) {
+    if (visited_buses[bus]) return;
+    visited_buses[bus] = 1;
     for (uint8_t dev = 0; dev < 32; dev++) {
         uint32_t id = pci_read_config(bus, dev, 0, PCI_VENDOR_ID);
         uint16_t vendor = id & 0xFFFF;
@@ -298,13 +364,24 @@ void pci_scan_bus(uint8_t bus) {
     }
 }
 
-static int  pci_init(void) {
+static int pci_init(void) {
     printk("[pci] Initializing PCI subsystem...\n");
     pci_device_list = NULL;
     pci_device_count = 0;
 
-    /* Start scan from bus 0 */
     pci_scan_bus(0);
+    /* Assign unassigned BARs */
+    pci_device_t *dev = pci_device_list;
+    while (dev) {
+        for (uint8_t i = 0; i < dev->bar_count; i++) {
+            if (dev->bars[i].size > 0 && dev->bars[i].base == 0) {
+                pci_assign_bar(dev, i);
+            }
+        }
+        /* Enable I/O and Memory space */
+        pci_set_command(dev, PCI_CMD_IO_SPACE | PCI_CMD_MEM_SPACE | PCI_CMD_BUS_MASTER);
+        dev = dev->next;
+    }
 
     printk("[pci] Found %d device(s)\n", pci_device_count);
     return 0;
@@ -473,15 +550,66 @@ const char* pci_subclass_name(uint8_t class_code, uint8_t subclass) {
 /* ==========================================================================
  * Debug output
  * ======================================================================= */
+void pci_print_pcie_info(pci_device_t *dev) {
+    if (!pci_has_capability(dev, PCI_CAP_ID_EXP)) {
+        printk("  PCIe: N/A (legacy PCI)\n");
+        return;
+    }
+
+    pci_capability_t *cap = dev->capabilities;
+    while (cap && cap->id != PCI_CAP_ID_EXP)
+        cap = cap->next_cap;
+    if (!cap)
+        return;
+
+    uint8_t off = cap->offset;
+
+    uint16_t pcie_cap = pci_read_config_word(dev->bus, dev->device, dev->function, off + PCI_PCIE_CAP);
+    uint8_t dev_type = (pcie_cap >> 4) & 0x0F;
+
+    const char *types[] = {
+        "Endpoint", "Legacy Endpoint", "Reserved", "Reserved",
+        "Root Port", "Upstream Switch", "Downstream Switch",
+        "PCIe-PCI Bridge", "PCI-PCIe Bridge", "Root Complex Integrated",
+        "Root Complex Event Collector"
+    };
+
+    printk("  PCIe: %s\n", dev_type < 11 ? types[dev_type] : "Unknown");
+
+    uint32_t link_cap = pci_read_config(dev->bus, dev->device, dev->function, off + PCI_PCIE_LINK_CAP);
+    uint8_t max_speed = link_cap & 0x0F;
+    uint8_t max_width = (link_cap >> 4) & 0x3F;
+
+    uint16_t link_status = pci_read_config_word(dev->bus, dev->device, dev->function, off + PCI_PCIE_LINK_STATUS);
+    uint8_t cur_speed = link_status & 0x0F;
+    uint8_t cur_width = (link_status >> 4) & 0x3F;
+
+    // Prepend an entry at index 0 to align arrays safely with the spec values
+    const char *speeds[] = {"Invalid", "2.5 GT/s", "5.0 GT/s", "8.0 GT/s", "16.0 GT/s", "32.0 GT/s", "64.0 GT/s"};
+
+    // Check bounds cleanly against the maximum index (7 elements total, valid up to index 6)
+    const char *max_speed_str = (max_speed > 0 && max_speed < 7) ? speeds[max_speed] : "Unknown";
+    const char *cur_speed_str = (cur_speed > 0 && cur_speed < 7) ? speeds[cur_speed] : "Unknown";
+
+    printk("  Link: max %s x%u, current %s x%u\n", max_speed_str, max_width, cur_speed_str, cur_width);
+
+}
+
 
 void pci_print_device(pci_device_t* dev) {
-    printk("PCI %02x:%02x.%x  %04x:%04x  %s (%s)  Rev %02x  IRQ %u\n",
+    printk("PCI %02x:%02x.%x  %04x:%04x  %s (%s)  Rev %02x",
            dev->bus, dev->device, dev->function,
            dev->vendor_id, dev->device_id,
            pci_class_name(dev->class_code),
            pci_subclass_name(dev->class_code, dev->subclass),
            dev->revision,
            dev->interrupt_line);
+
+        if (dev->interrupt_line == 0 && dev->class_code == PCI_CLASS_MASS_STORAGE) {
+            printk("  IRQ: ISA (legacy)\n");
+        } else {
+            printk("  IRQ: %u\n", dev->interrupt_line);
+        }
 
     for (uint8_t i = 0; i < dev->bar_count; i++) {
         if (dev->bars[i].base == 0 && dev->bars[i].size == 0) continue;
@@ -505,6 +633,7 @@ void pci_print_device(pci_device_t* dev) {
         }
         printk("\n");
     }
+    pci_print_pcie_info(dev);
 }
 
 void pci_print_all_devices(void) {

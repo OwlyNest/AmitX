@@ -40,6 +40,8 @@
 
 .global isr32
 .global isr33
+.global isr36
+.global isr42
 .global isr44
 .global isr128
 
@@ -224,6 +226,69 @@ isr33:
 
     push 0
     push 33
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    pop edi
+    pop esi
+    pop ebp
+    pop esp
+    pop ebx
+    pop edx
+    pop ecx
+    pop eax
+
+    iret
+
+# IRQ4 (serial)
+isr36:
+    
+    push eax
+    push ecx
+    push edx
+    push ebx
+    push esp
+    push ebp
+    push esi
+    push edi
+
+    push 0              
+    push 36
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    pop edi
+    pop esi
+    pop ebp
+    pop esp
+    pop ebx
+    pop edx
+    pop ecx
+    pop eax
+
+    iret
+
+# IRQ10 (E1000)
+isr42:
+    push eax
+    push ecx
+    push edx
+    push ebx
+    push esp
+    push ebp
+    push esi
+    push edi
+
+    push 0              
+    push 42
     
     push esp
     call isr_handler

@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 #ifndef SERIAL_H
 #define SERIAL_H
+#define SERIAL_RX_BUFSZ 256
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -32,6 +33,10 @@ typedef struct {
 	uint8_t  flags;
 #define SERIAL_PRESENT 0x01
 #define SERIAL_FIF0    0x02
+#define SERIAL_IRQ_EN  0x04
+	volatile uint8_t rx_buf[SERIAL_RX_BUFSZ];
+	volatile uint16_t rx_head;
+	volatile uint16_t rx_tail;
 } serial_port_t;
 
 /* --- Globals ---*/
@@ -44,4 +49,6 @@ void serial_puts_default(const char *c);
 
 int serial_getc(serial_port_t *port);  /* Returns char, or -1 if none */
 int serial_getc_default(void);
+int serial_gets(serial_port_t *port, char *buf, int buflen);
+int serial_gets_default(char *buf, int buflen);
 #endif

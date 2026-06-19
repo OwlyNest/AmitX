@@ -205,6 +205,7 @@ void pmm_unreserve_region(uintptr_t start, size_t length) {
             return 2;
         }
 
+        boot_info.mb_info = (multiboot_info_t *)mb_info;  /* store for later */
         boot_info.total_ram = total_ram;
         boot_info.valid = 1;
         return 0;
@@ -229,28 +230,63 @@ static int pmm_init(void) {
     bitmap_size = (total_frames + 7) >> 3;
 
     /* Place bitmap right after kernel end, page-aligned */
-    bitmap = (uint8_t *)(((uint32_t)_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1));
+    uint32_t mb_end = (uint32_t)boot_info.mb_info + *(uint32_t *)boot_info.mb_info;
+
+    printk("mb_end = 0x%08x\n", mb_end);
+    uint32_t placement = ((uint32_t)_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
+
+    if (boot_info.mb_info) {
+        uint32_t mb_end =
+            ((uint32_t)boot_info.mb_info +
+            *(uint32_t *)boot_info.mb_info +
+            FRAME_ALIGN - 1)
+            & ~(FRAME_ALIGN - 1);
+
+        if (mb_end > placement)
+            placement = mb_end;
+    }
+
+    bitmap = (uint8_t *)placement;
+    printk("_end       = 0x%08x\n", (uint32_t)_end);
+    printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
+    printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
+    printk("mb_info    = 0x%08x\n", (uint32_t)boot_info.mb_info);
 
     /* Mark everything as used, then free available regions */
     memset(bitmap, 0xFF, bitmap_size);
     used_frames = total_frames;
 
-    /* Parse memory map and free available regions */
-    if (boot_info.valid && multiboot_has_mmap(boot_info.mb_info)) {
-        multiboot_mmap_entry_t *entry;
-        MULTIBOOT_MMAP_FOR_EACH(boot_info.mb_info, entry) {
-            if (entry->type == MMAP_AVAILABLE) {
-                uint64_t addr = entry->addr;
-                uint64_t len = entry->len;
-                pmm_unreserve_region((uintptr_t)addr, (size_t)len);
+    /* Parse MB2 memory map if available */
+    if (boot_info.valid && boot_info.mb_info) {
+        mb2_tag_t *tag;
+        int found_mmap = 0;
+        
+        MB2_TAG_FOREACH(boot_info.mb_info, tag) {
+            printk("tag=%p type=%u size=%u\n", tag, tag->type, tag->size);
+            if (tag->type == MB2_TAG_MMAP) {
+                found_mmap = 1;
+                mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+                uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
+                mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
+                
+                for (uint32_t i = 0; i < num; i++) {
+                    mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
+                    if (e->type == MB2_MMAP_AVAILABLE) {
+                        pmm_unreserve_region((uintptr_t)e->base_addr, (size_t)e->length);
+                    }
+                }
+                break;  /* done with mmap */
             }
         }
-    } else if (boot_info.valid && multiboot_has_mem_info(boot_info.mb_info)) {
-        /* Fallback: free everything above 1MB up to mem_upper */
-        uint32_t mem_upper_kb = boot_info.mb_info->mem_upper;
-        pmm_unreserve_region(0x00100000, (size_t)mem_upper_kb * 1024);
+        
+        if (!found_mmap) {
+            /* Fallback: free 1MB to total_ram */
+            printk("[pmm] No MB2 mmap, freeing 1MB to end of RAM\n");
+            pmm_unreserve_region(0x00100000, (size_t)(total_ram - 0x100000));
+        }
     } else {
-        /* Ultimate fallback: free 1MB-16MB */
+        /* Ultimate fallback */
+        printk("[pmm] freeing 1MB-16MB\n");
         pmm_unreserve_region(0x00100000, 15 * 1024 * 1024);
     }
 

@@ -19,9 +19,20 @@
 	* Statements and declarations:   Max one per line
 */
 
+/*
+    * todo
+    * 1) Multiple COM ports — probe COM1-COM4, register per-port KScope nodes
+    * 2) Baud rate selection — runtime config, not hardcoded 38400
+    * 3) Line status/error handling — overrun, parity, framing errors
+    * 4) Transmit IRQ — interrupt-driven TX for faster output
+    * 5) Flow control — RTS/CTS for reliable high-speed comms
+    * 6) Locking — spinlock for SMP safety (future)
+*/
+
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "arch/x86/interrupts.h"
 #include <drivers/serial.h>
 #include <arch/x86/io.h>
 #include <internal/amitx_consts.h>
@@ -53,26 +64,51 @@ static int serial_detect(uint16_t base) {
 	return 0;
 }
 
-static int serial_init(void) {
+static void serial_irq_handler(interrupt_frame_t *frame) {
+	(void)frame;
+
 	serial_port_t *port = &serial_com1;
 
-	port->base = PORT_SERIAL;
-	if (serial_detect(PORT_SERIAL) != 0) {
-		return -1;
-	}
+    while (inb(port->base + 5) & 0x01) {  /* LSR bit 0 = Data Ready */
+        uint8_t c = inb(port->base);
+        uint16_t next = (port->rx_head + 1) % SERIAL_RX_BUFSZ;
+        if (next != port->rx_tail) {  /* drop if full */
+            port->rx_buf[port->rx_head] = c;
+            port->rx_head = next;
+        }
+    }
+}
 
-	port->flags = SERIAL_PRESENT;
+static int serial_init(void) {
+    serial_port_t *port = &serial_com1;
 
-	outb(port->base + 1, 0x00); // Disable all interrupts
-	outb(port->base + 3, 0x80); // Enable DLAB (set bound rate divisor)
-	outb(port->base + 0, 0x03); // Set divisor to 3 (38400 bound)
-	outb(port->base + 1, 0x00);  /* High byte of divisor */
-    outb(port->base + 3, 0x03);  /* 8 bits, no parity, one stop bit */
-    outb(port->base + 2, 0xC7);  /* Enable FIFO, clear them, 14-byte threshold */
-    outb(port->base + 4, 0x0B);  /* IRQs enabled, RTS/DSR set */
+    port->base = PORT_SERIAL;
+    port->rx_head = 0;
+    port->rx_tail = 0;
 
-	port->flags |= SERIAL_FIF0;
-	return 0;
+    if (serial_detect(port->base) != 0)
+        return -1;
+
+    port->flags = SERIAL_PRESENT;
+
+    outb(port->base + 1, 0x00);  /* Disable interrupts during setup */
+    outb(port->base + 3, 0x80);  /* DLAB */
+    outb(port->base + 0, 0x03);  /* Divisor low */
+    outb(port->base + 1, 0x00);  /* Divisor high */
+    outb(port->base + 3, 0x03);  /* 8N1 */
+    outb(port->base + 2, 0xC7);  /* FIFO enable, clear, 14-byte thresh */
+    outb(port->base + 4, 0x0B);  /* DTR, RTS, OUT2 */
+
+    port->flags |= SERIAL_FIF0;
+
+    /* Enable Received Data Available interrupt */
+    outb(port->base + 1, 0x01);  /* IER bit 0 = RDAI */
+    port->flags |= SERIAL_IRQ_EN;
+
+	register_interrupt_handler(VECTOR_IRQ4, serial_irq_handler);
+	pic_unmask_irq(4);
+
+    return 0;
 }
 
 kscope_node_t serial_node = {
@@ -115,15 +151,46 @@ void serial_puts_default(const char *s) {
 }
 
 int serial_getc(serial_port_t *port) {
-	if (!(port->flags & SERIAL_PRESENT))
+    if (!(port->flags & SERIAL_PRESENT))
         return -1;
 
-    if (!(inb(port->base + 5) & 0x01))
-        return -1;  /* No data */
-
-    return inb(port->base);
+    if (port->flags & SERIAL_IRQ_EN) {
+        /* Read from buffer */
+        if (port->rx_head == port->rx_tail)
+            return -1;
+        uint8_t c = port->rx_buf[port->rx_tail];
+        port->rx_tail = (port->rx_tail + 1) % SERIAL_RX_BUFSZ;
+        return c;
+    } else {
+        /* Polling fallback */
+        if (!(inb(port->base + 5) & 0x01))
+            return -1;
+        return inb(port->base);
+    }
 }
 
 int serial_getc_default(void) {
 	return serial_getc(&serial_com1);
+}
+
+int serial_gets(serial_port_t *port, char *buf, int buflen) {
+    for (int i = 0; i < buflen - 1; i++) {
+        int c = serial_getc(port);
+        if (c == -1) {
+            /* No data available — return what we have, or block? */
+            buf[i] = '\0';
+            return i;  /* return chars read so far */
+        }
+        if (c == '\n' || c == '\r') {
+            buf[i] = '\0';
+            return i;
+        }
+        buf[i] = (char)c;
+    }
+    buf[buflen - 1] = '\0';
+    return buflen - 1;
+}
+
+int serial_gets_default(char *buf, int buflen) {
+    return serial_gets(&serial_com1, buf, buflen);
 }

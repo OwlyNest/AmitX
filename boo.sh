@@ -59,7 +59,7 @@ qemu-system-i386 \
     -monitor none \
     -machine pc \
     -device vmware-svga \
-    -display gtk \
+    -display vnc \
     -full-screen
 
 QEMU_EXIT=$?

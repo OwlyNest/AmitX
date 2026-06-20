@@ -20,22 +20,30 @@ typedef struct Block {
 
 #define BLOCK_SIZE sizeof(Block)
 #define HEAP_INITIAL_PAGES 1
+#define HEAP_ARENA_PAGES (HEAP_SIZE / FRAME_SIZE)
 
 static uint8_t* heap_base;
 static uint8_t* heap_end;
 static uint8_t* heap_break;
 
 static int heap_init(void) {
-    void* initial = pmm_alloc_frames(HEAP_INITIAL_PAGES);
-    if (!initial) {
-        printk("[heap] Failed to allocate initial pages from PMM\n");
+    const boot_info_t *info = pmm_get_boot_info();
+    if (!info || !info->valid) {
+        printk("[heap] Boot info not available\n");
         return -1;
     }
-    
-    heap_base = (uint8_t*)initial;
-    heap_end = heap_base + (HEAP_INITIAL_PAGES * FRAME_SIZE);
+
+    /* Place heap right after the kernel image, page-aligned */
+    uint32_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
+
+    /* Reserve the entire arena in the PMM so we have a contiguous runway */
+    pmm_reserve_region(start, HEAP_SIZE);
+
+    heap_base = (uint8_t *)start;
+    heap_end  = heap_base + (HEAP_INITIAL_PAGES * FRAME_SIZE);
     heap_break = heap_base;
-    printk("[heap] Initialized at %p, size %u bytes\n", heap_base, HEAP_INITIAL_PAGES * FRAME_SIZE);
+
+    printk("[heap] Initialized at %p, initial %u pages, arena %u KB\n", heap_base, HEAP_INITIAL_PAGES, HEAP_SIZE / 1024);
     return 0;
 }
 
@@ -275,26 +283,27 @@ void* sbrk(ptrdiff_t increment) {
     }
 
     if (new_break < heap_base) {
-        return (void*)-1;  /* cannot shrink below base */
+        printk("[heap] sbrk: cannot shrink below heap base\n");
+        return (void*)-1;
     }
 
-    /* Need to grow? */
+    if (new_break > heap_base + HEAP_SIZE) {
+        printk("[heap] sbrk: heap arena exhausted (need %p, limit %p)\n",
+               new_break, heap_base + HEAP_SIZE);
+        return (void*)-1;
+    }
+
+    /* Commit more of the reserved arena if needed */
     if (new_break > heap_end) {
         uint32_t needed = (uint32_t)(new_break - heap_end);
         uint32_t frames = (needed + FRAME_SIZE - 1) >> FRAME_SIZE_SHIFT;
         if (frames == 0) frames = 1;
-    
-        if (pmm_alloc_at((uintptr_t)heap_end, frames) != 0) {
-            printk("[heap] sbrk: cannot allocate at %p\n", heap_end);
-            return (void*)-1;
-        }
-    
+
+        printk("[heap] sbrk: growing committed region %p -> %p (+%u frames)\n",
+               heap_end, heap_end + frames * FRAME_SIZE, frames);
         heap_end += frames * FRAME_SIZE;
     }
 
-    /* Can shrink without freeing physical memory — keep it, just move break */
-    /* Or: if shrink is significant, free pages to PMM */
-    
     heap_break = new_break;
     return prev_break;
 }

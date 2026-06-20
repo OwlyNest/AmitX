@@ -38,11 +38,6 @@
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
-struct rx_packet {
-    struct rx_packet *next;
-    uint16_t len;
-    uint8_t data[2048];
-};
 /* --- Globals ---*/
 static struct e1000_device e1000_dev;
 static int e1000_ready = 0;
@@ -161,14 +156,13 @@ static void e1000_reset(struct e1000_device *dev) {
 }
 
 static void e1000_init_rx(struct e1000_device *dev) {
-    void *raw;
-    
-    raw = (void *)malloc(sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE + 15);
-
-    dev->rx_ring = (struct e1000_rx_desc *)(((uint32_t)raw + 15) & ~15);
-
+    uint32_t ring_pages = (sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE + FRAME_SIZE - 1) / FRAME_SIZE;
+    dev->rx_ring = (struct e1000_rx_desc *)pmm_alloc_aligned(ring_pages, ring_pages);
+    if (!dev->rx_ring) {
+        printk("[e1000] Failed to allocate RX ring\n");
+        return;
+    }
     memset(dev->rx_ring, 0, sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE);
-
 
     for (int i = 0; i < E1000_RX_RING_SIZE; i++) {
         dev->rx_buffers[i] = (uint8_t *)malloc(2048);
@@ -185,14 +179,14 @@ static void e1000_init_rx(struct e1000_device *dev) {
 }
 
 static void e1000_init_tx(struct e1000_device *dev) {
-    void *raw;
-    
-    raw = (void *)malloc(sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE + 15);
-
-    dev->tx_ring = (struct e1000_tx_desc *)(((uint32_t)raw + 15) & ~15);
-
+    uint32_t ring_pages = (sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE + FRAME_SIZE - 1) / FRAME_SIZE;
+    dev->tx_ring = (struct e1000_tx_desc *)pmm_alloc_aligned(ring_pages, ring_pages);
+    if (!dev->tx_ring) {
+        printk("[e1000] Failed to allocate TX ring\n");
+        return;
+    }
     memset(dev->tx_ring, 0, sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE);
-
+    
     for (int i = 0; i < E1000_TX_RING_SIZE; i++) {
         dev->tx_buffers[i] = (uint8_t *)malloc(2048);
         dev->tx_ring[i].addr = (uint64_t)(uint32_t)dev->tx_buffers[i];
@@ -205,8 +199,6 @@ static void e1000_init_tx(struct e1000_device *dev) {
     e1000_write(dev, E1000_REG_TDH, 0);
     e1000_write(dev, E1000_REG_TDT, 0);
     e1000_write(dev, E1000_REG_TCTL, E1000_TCTL_EN | E1000_TCTL_PSP);
-
-    /* Inter packet gap: 10, 10 10 (IEEE 802.3) */
     e1000_write(dev, E1000_REG_TIPG, 0x0060200A);
 }
 
@@ -258,7 +250,7 @@ static void e1000_irq_handler(interrupt_frame_t *frame) {
     }
 }
 
-static int  e1000_init(void) {
+static int e1000_init(void) {
     struct pci_device *pci_dev;
 
     if (e1000_probe(&pci_dev) != 0) {
@@ -267,7 +259,9 @@ static int  e1000_init(void) {
     }
 
     e1000_dev.pci = pci_dev;
-    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n", pci_dev->bus, pci_dev->device, pci_dev->function, pci_dev->bars[0].base);
+    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",
+           pci_dev->bus, pci_dev->device, pci_dev->function,
+           pci_dev->bars[0].base);
 
     if (pci_dev->bars[0].base & 1) {
         printk("[e1000] Error: BAR0 is I/O, driver needs MMIO\n");
@@ -281,27 +275,37 @@ static int  e1000_init(void) {
     e1000_write_mac(&e1000_dev);
 
     printk("[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        e1000_dev.mac[0], e1000_dev.mac[1],
-        e1000_dev.mac[2], e1000_dev.mac[3],
-        e1000_dev.mac[4], e1000_dev.mac[5]);
+           e1000_dev.mac[0], e1000_dev.mac[1],
+           e1000_dev.mac[2], e1000_dev.mac[3],
+           e1000_dev.mac[4], e1000_dev.mac[5]
+        );
 
-    /* Force link up */
     uint32_t ctrl = e1000_read(&e1000_dev, E1000_REG_CTRL);
     e1000_write(&e1000_dev, E1000_REG_CTRL, ctrl | E1000_CTRL_SLU);
 
     e1000_init_rx(&e1000_dev);
+    if (!e1000_dev.rx_ring) {
+        printk("[e1000] RX init failed\n");
+        return 1;
+    }
+
     e1000_init_tx(&e1000_dev);
+    if (!e1000_dev.tx_ring) {
+        printk("[e1000] TX init failed\n");
+        /* TODO: free RX ring */
+        return 1;
+    }
 
     e1000_poll_link();
 
     e1000_write(&e1000_dev, E1000_REG_IMS,
-        (1 << 0)   /* TXDW */
-      | (1 << 6)   /* RXT0 */
-      | (1 << 2)); /* LSC */
-
+                  (1 << 0)   /* TXDW */
+                | (1 << 6)   /* RXT0 */
+                | (1 << 2)); /* LSC */
 
     register_interrupt_handler(VECTOR_IRQ10, e1000_irq_handler);
     pic_unmask_irq(10);
+
     e1000_ready = 1;
     printk("[e1000] Initialization complete\n");
     return 0;
@@ -397,8 +401,12 @@ int e1000_send(const void* data, uint16_t len) {
 }
 
 int e1000_receive(void* buf, uint16_t buf_len) {
-    if (!e1000_ready || !buf || buf_len == 0) {
+    if (!e1000_ready || !buf) {
         return -1;
+    }
+
+    if (buf_len == 0) {
+        return 0;
     }
 
     struct e1000_rx_desc *desc = &e1000_dev.rx_ring[e1000_dev.rx_head];
@@ -441,15 +449,43 @@ int e1000_receive(void* buf, uint16_t buf_len) {
 }
 
 void e1000_shutdown(void) {
-    if (!e1000_ready) return;
-    
+    if (!e1000_ready) {
+        return;
+    }
+
     e1000_write(&e1000_dev, E1000_REG_IMC, 0xFFFFFFFF);
     e1000_write(&e1000_dev, E1000_REG_RCTL, 0);
     e1000_write(&e1000_dev, E1000_REG_TCTL, 0);
-    
-    e1000_ready = 0;
-}
 
-const struct e1000_stats *e1000_get_stats(void) {
-    return e1000_ready ? &e1000_dev.stats : NULL;
+    /* Drain RX queue */
+    while (rx_queue_head) {
+        struct rx_packet *pkt = rx_queue_head;
+        rx_queue_head = pkt->next;
+        free(pkt);
+    }
+    rx_queue_tail = NULL;
+
+    /* Free packet buffers */
+    for (int i = 0; i < E1000_TX_RING_SIZE; i++) {
+        if (e1000_dev.tx_buffers[i]) {
+            free(e1000_dev.tx_buffers[i]);
+            e1000_dev.tx_buffers[i] = NULL;
+        }
+    }
+    for (int i = 0; i < E1000_RX_RING_SIZE; i++) {
+        if (e1000_dev.rx_buffers[i]) {
+            free(e1000_dev.rx_buffers[i]);
+            e1000_dev.rx_buffers[i] = NULL;
+        }
+    }
+
+    uint32_t tx_ring_pages = (sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE + FRAME_SIZE - 1) / FRAME_SIZE;
+    uint32_t rx_ring_pages = (sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE + FRAME_SIZE - 1) / FRAME_SIZE;
+    pmm_free_frames(e1000_dev.tx_ring, tx_ring_pages);
+    pmm_free_frames(e1000_dev.rx_ring, rx_ring_pages);
+
+    e1000_ready = 0;
+    e1000_dev.tx_head = 0;
+    e1000_dev.tx_tail = 0;
+    e1000_dev.rx_head = 0;
 }

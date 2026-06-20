@@ -36,6 +36,14 @@
 #define ACPI_MADT_SIG       "APIC"
 #define ACPI_DSDT_SIG       "DSDT"
 #define ACPI_SSDT_SIG       "SSDT"
+/* ==========================================================================
+* MADT
+* ======================================================================= */
+#define MADT_TYPE_LAPIC 0
+#define MADT_TYPE_IOAPIC 1
+#define MADT_TYPE_ISO 2
+#define MADT_TYPE_NMI 4
+#define MADT_TYPE_LAPIC_ADDR 5
 
 /* ==========================================================================
  * ACPI PM1 control bits
@@ -44,6 +52,7 @@
 #define ACPI_PM1_SLP_TYP_MASK   0x1C00
 #define ACPI_PM1_SLP_TYP_SHIFT  10
 #define ACPI_PM1_SCI_EN     (1 << 0)
+
 
 /* ==========================================================================
  * QEMU PIIX4 hardcoded SLP_TYP values (for systems without AML parser)
@@ -189,6 +198,50 @@ typedef struct __attribute__((packed)) {
     uint8_t  entries[0];
 } acpi_madt_t;
 
+typedef struct __attribute__((packed)) {
+    uint8_t type;
+    uint8_t length;
+} madt_entry_header_t;
+
+/* Type 0: Processor Local APIC */
+typedef struct __attribute__((packed)) {
+    madt_entry_header_t header;
+    uint8_t acpi_processor_id;
+    uint8_t apic_id;
+    uint32_t flags; /* bit 0: enabled, bit 1: online capable */
+} madt_lapic_t;
+
+/* Type 1: I/O APIC*/
+typedef struct __attribute__((packed)) {
+    madt_entry_header_t header;
+    uint8_t  io_apic_id;
+    uint8_t  reserved;
+    uint32_t io_apic_addr;
+    uint32_t gsi_base;
+} madt_ioapic_t;
+
+/* Type 2: Interrupt Source Override */
+typedef struct __attribute__((packed)) {
+    madt_entry_header_t header;
+    uint8_t  bus_source;      /* always 0 (ISA) */
+    uint8_t  irq_source;      /* ISA IRQ (0-15) */
+    uint32_t gsi;             /* Global System Interrupt */
+    uint16_t flags;           /* polarity, trigger mode */
+} madt_iso_t;
+
+/* Parsed MADT state */
+typedef struct {
+    uint8_t  num_cpus;
+    uint8_t  cpu_apic_ids[8];     /* Up to 8 cores for now */
+    uint8_t  cpu_enabled[8];
+
+    int      has_ioapic;
+    uint32_t ioapic_addr;
+    uint32_t ioapic_gsi_base;
+
+    /* IRQ remapping: isa_irq[0-15] -> gsi, -1 if not overridden */
+    int      iso_map[16];
+} madt_parsed_t;
 
 /* ==========================================================================
  * Runtime state
@@ -219,4 +272,6 @@ int  acpi_is_initialized(void);
 /* Low-level helpers (exposed for debugging) */
 void* acpi_find_table(const char* signature);
 
+void acpi_parse_madt(void);
+const madt_parsed_t* acpi_get_madt_parsed(void);
 #endif

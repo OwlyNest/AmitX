@@ -36,6 +36,7 @@
 
 /* --- Globals ---*/
 static acpi_state_t acpi_state = { 0 };
+static madt_parsed_t madt_parsed = { 0 };
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -181,6 +182,7 @@ static int acpi_init(void) {
         printk("[acpi] MADT found at 0x%p\n", acpi_state.madt);
 
     acpi_state.initialized = 1;
+    acpi_parse_madt();
     printk("[acpi] Initialization complete\n");
     return 0;
 }
@@ -333,4 +335,79 @@ void acpi_print_info(void) {
     }
 
     printk("========================\n\n");
+}
+
+void acpi_parse_madt(void) {
+    if (!acpi_state.madt) {
+        printk("[acpi] No MADT to parse\n");
+        return;
+    }
+
+    memset(&madt_parsed, 0, sizeof(madt_parsed));
+    for (int i = 0; i < 16; i++) {
+        madt_parsed.iso_map[i] = i; /* Default: Identity mapping */
+    }
+
+    uint32_t madt_len = acpi_state.madt->header.length;
+    uint32_t offset = sizeof(acpi_madt_t);
+
+    while (offset < madt_len) {
+        madt_entry_header_t *entry = (madt_entry_header_t *)((uint8_t *)acpi_state.madt + offset);
+
+        if (entry->length < 2) {
+            printk("[acpi] MADT entry with invalid length, aborting parse\n");
+            break;
+        }
+
+        switch (entry->type) {
+            case MADT_TYPE_LAPIC: {
+                madt_lapic_t *lapic = (madt_lapic_t *)entry;
+                if (madt_parsed.num_cpus < 8) {
+                    uint8_t idx = madt_parsed.num_cpus++;
+                    madt_parsed.cpu_apic_ids[idx] = lapic->apic_id;
+                    madt_parsed.cpu_enabled[idx] = (lapic->flags & 1) ? 1 : 0;
+                }
+                break;
+            }
+
+            case MADT_TYPE_IOAPIC: {
+                madt_ioapic_t* ioapic = (madt_ioapic_t*)entry;
+                madt_parsed.has_ioapic = 1;
+                madt_parsed.ioapic_addr = ioapic->io_apic_addr;
+                madt_parsed.ioapic_gsi_base = ioapic->gsi_base;
+                break;
+            }
+
+            case MADT_TYPE_ISO: {
+                madt_iso_t* iso = (madt_iso_t*)entry;
+                if (iso->irq_source < 16) {
+                    madt_parsed.iso_map[iso->irq_source] = (int)iso->gsi;
+                }
+                break;
+            }
+
+            case MADT_TYPE_LAPIC_ADDR: {
+                /* 64-bit local APIC override — ignore for now, we have 32-bit */
+                break;
+            }
+
+            default: {
+                /* Unknown entry type, skip */
+                break;
+            }
+        }
+        offset += entry->length;
+    }
+
+    printk("[acpi] MADT parsed: %u CPU(s), I/O APIC %s\n", madt_parsed.num_cpus, madt_parsed.has_ioapic ? "present" : "absent");
+    for (uint8_t i = 0; i < madt_parsed.num_cpus; i++) {
+        printk("  CPU %u: APIC ID=%u, %s\n", i, madt_parsed.cpu_apic_ids[i], madt_parsed.cpu_enabled[i] ? "enabled" : "disabled");
+    }
+    if (madt_parsed.has_ioapic) {
+        printk("  I/O APIC at 0x%x, GSI base %u\n", madt_parsed.ioapic_addr, madt_parsed.ioapic_gsi_base);
+    }
+}
+
+const madt_parsed_t* acpi_get_madt_parsed(void) {
+    return &madt_parsed;
 }

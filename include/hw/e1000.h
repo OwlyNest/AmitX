@@ -146,6 +146,12 @@ struct e1000_device {
 #define E1000_FLAG_LINK_UP (1 << 0)
 };
 
+struct rx_packet {
+	struct rx_packet *next;
+    uint16_t len;
+    uint8_t data[2048];
+};
+
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/

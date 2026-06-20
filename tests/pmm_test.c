@@ -223,13 +223,13 @@ static void test_exhaustion(void) {
 /* ==========================================================================
  * Test: reserve and unreserve regions
  * ======================================================================= */
-static void test_reserve_unreserve(void) {
+ static void test_reserve_unreserve(void) {
     printk("[pmm_test] reserve/unreserve...\n");
 
     uint32_t free_before = pmm_get_free_frames();
 
-    /* Reserve a region we know is free (pick something high, above bitmap) */
-    uintptr_t test_addr = 0x00200000; /* 2MB */
+    /* Well above heap arena (kernel_end + HEAP_SIZE ≈ 0x00222000) */
+    uintptr_t test_addr = 0x01000000; /* 16MB */
     pmm_reserve_region(test_addr, FRAME_SIZE * 4);
 
     if (pmm_get_free_frames() != free_before - 4) {

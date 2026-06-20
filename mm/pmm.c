@@ -491,16 +491,17 @@ void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames) {
 
 int pmm_alloc_at(uintptr_t addr, uint32_t count) {
     uint32_t start_frame = addr >> FRAME_SIZE_SHIFT;
-    if (start_frame + count > total_frames)
-        return -1;
 
-    /* Verify all frames are free */
-    for (uint32_t i = 0; i < count; i++) {
-        if (bitmap_test(start_frame + i))
-            return -1;  /* already allocated */
+    if (start_frame + count > total_frames) {
+        return -1;
     }
 
-    /* Mark used */
+    for (uint32_t i = 0; i < count; i++) {
+        if (bitmap_test(start_frame + i)) {
+            return -1;
+        }
+    }
+
     for (uint32_t i = 0; i < count; i++) {
         bitmap_set(start_frame + i);
         used_frames++;

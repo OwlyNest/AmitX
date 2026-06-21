@@ -39,6 +39,16 @@ typedef struct pmm_stats {
     uint32_t reserved_frames;
 } pmm_stats_t;
 
+typedef struct framebuffer_info {
+	uint64_t addr;
+    uint32_t pitch;
+    uint32_t width;
+    uint32_t height;
+    uint8_t  bpp;
+    uint8_t  type;      /* 0=indexed, 1=RGB, 2=EGP */
+    uint8_t  valid;     /* 1 if framebuffer tag was present */
+} framebuffer_info_t;
+
 typedef struct boot_info {
     uint32_t        magic;
     multiboot_info_t *mb_info;
@@ -47,6 +57,7 @@ typedef struct boot_info {
     uint32_t        kernel_start;
     uint32_t        kernel_end;
     int             valid;
+	framebuffer_info_t fb;
 } boot_info_t;
 
 void *pmm_alloc_frame(void);

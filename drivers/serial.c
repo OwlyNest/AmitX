@@ -116,10 +116,10 @@ kscope_node_t serial_node = {
 	.id = 0x000B,
 	.class = KSCOPE_CLASS_DRIVER,
 	.subclass = KSCOPE_SUBCLASS_DRIVER_SERIAL,
-	.requires = NULL,
-	.require_count = 0,
-	.provides = (const char *[]){"io.serial", "debug.port"},
-	.provide_count = 2,
+	.requires = (kscope_node_t*[]){&x86_pic_node},
+	.require_count = 1,
+	.provides = (const char *[]){"io.serial", "debug.port", "irq.4"},
+	.provide_count = 3,
 	.init = serial_init
 };
 

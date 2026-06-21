@@ -316,10 +316,10 @@ kscope_node_t e1000_node = {
     .id = 0x000E,
     .class = KSCOPE_CLASS_NETWORK,
     .subclass = KSCOPE_SUBCLASS_NETWORK_E1000,
-    .requires = (kscope_node_t *[]){&heap_node, &pci_node},
-    .require_count = 2,
-    .provides = (const char *[]){"net.e1000", "net.eth"},
-    .provide_count = 2,
+    .requires = (kscope_node_t *[]){&heap_node, &pci_node, &x86_pic_node},
+    .require_count = 3,
+    .provides = (const char *[]){"net.e1000", "net.eth", "irq.10"},
+    .provide_count = 3,
     .init = e1000_init
 };
 

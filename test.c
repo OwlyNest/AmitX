@@ -1,7 +1,7 @@
 /*
-	* include/drivers/keyboard.h - Keyboard interface
+	* test.c - [Enter description]
 	* Author:   amity
-	* Date:     Sat Jun 20 22:53:20 2026
+	* Date:     
 	* Copyright © 2026 OwlyNest
 */
 
@@ -19,25 +19,21 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
+/* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <stdint.h>
 
-/* --- Macros ---*/
-/* Special non-ASCII key codes */
-#define KEY_UP     0x80
-#define KEY_DOWN   0x81
-#define KEY_LEFT   0x82
-#define KEY_RIGHT  0x83
-#define KEY_ESC    0x1B
+/* --- Typedefs - Structs - Enums ---*/
+
+/* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void reset_keyboard_state(void);
 
-unsigned char keyboard_getchar(void);
-int  keyboard_has_char(void);     /* non-blocking check */
-void keyboard_flush(void);        /* clear buffer */
+/* --- Main ---*/
 
-#endif
+int main(int argc, char** argv) {
+	return 0;
+}
+
+/* --- Functions ---*/
+

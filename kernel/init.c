@@ -56,6 +56,7 @@ extern uint32_t multiboot_info_ptr;
 static int storage_init(void) {
     pci_device_t *dev = pci_get_first_device();
     int found_ide = 0;
+    int fs_mounted = 0;
 
     while (dev) {
         if (dev->class_code != PCI_CLASS_MASS_STORAGE) {
@@ -71,36 +72,56 @@ static int storage_init(void) {
                 break;
             }
             case 0x01: {  /* IDE */
-                if (!found_ide) {
-                    found_ide = 1;
-                    /* IDE in compatibility mode uses fixed legacy ports.
-                     * BAR0-BAR3 are often 0; BAR4 is bus-master DMA.
-                     * We use the standard primary channel ports. */
-                    ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
-
-                    uint16_t identify[256];
-                    if (ide_identify(0, identify) == 0) {
-                        if (amfs_mount() != 0) {
-                            amfs_mkfs(10 * 2048);
-                            amfs_mount();
-                            amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19);
-                            amfs_write_file("README", "AmitX Filesystem v0.1\n", 22);
-                        }
-                        amfs_ls();
-
-                        char buf[256];
-                        int len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
-                        if (len > 0) {
-                            buf[len] = '\0';
-                            printk("[amfs] Read back: %s", buf);
-                        }
-                        len = amfs_read_file("README", buf, sizeof(buf));
-                        if (len > 0) {
-                            buf[len] = '\0';
-                            printk("[amfs] Read back: %s", buf);
-                        }
+                if (found_ide)
+                    break;
+    
+                found_ide = 1;
+    
+                /* IDE compatibility mode uses fixed legacy ports */
+                ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
+    
+                uint16_t identify[256];
+                int present_drive = -1;
+    
+                for (int drive = 0; drive < 2; drive++) {
+                    if (ide_identify(drive, identify) == 0) {
+                        present_drive = drive;
+                        break;
                     }
                 }
+    
+                if (present_drive < 0) {
+                    printk("[storage] No IDE drive present\n");
+                    break;
+                }
+    
+                /* Try to mount existing filesystem */
+                if (amfs_mount() == 0) {
+                    printk("[storage] AmFS mounted from existing image\n");
+                    fs_mounted = 1;
+                    break;
+                }
+    
+                printk("[storage] No valid AmFS, formatting...\n");
+                if (amfs_mkfs(10 * 2048) != 0) {
+                    printk("[storage] amfs_mkfs failed\n");
+                    break;
+                }
+    
+                if (amfs_mount() != 0) {
+                    printk("[storage] amfs_mount failed after mkfs\n");
+                    break;
+                }
+    
+                /* Create default files */
+                if (amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19) != 0) {
+                    printk("[storage] Failed to write helloworld.txt\n");
+                }
+                if (amfs_write_file("README", "AmitX Filesystem v0.1\n", 22) != 0) {
+                    printk("[storage] Failed to write README\n");
+                }
+    
+                fs_mounted = 1;
                 break;
             }
             case 0x02: { /* Floppy Disk */
@@ -140,6 +161,27 @@ static int storage_init(void) {
     }
     if (!found_ide) {
         printk("[storage] No supported mass-storage controller found\n");
+    }
+
+    if (fs_mounted) {
+        amfs_ls();
+
+        char buf[256];
+        int len;
+
+        len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
+        if (len > 0) {
+            buf[len] = '\0';
+            printk("[amfs] Read back: %s", buf);
+        }
+
+        len = amfs_read_file("README", buf, sizeof(buf));
+        if (len > 0) {
+            buf[len] = '\0';
+            printk("[amfs] Read back: %s", buf);
+        }
+    } else {
+        printk("[storage] No filesystem available, skipping file ops\n");
     }
     return 0;
 }
@@ -215,8 +257,10 @@ void kernel_setup(void) {
     pmm_print_map();
 	pci_print_all_devices();
     acpi_print_info();
-    pci_log_to_fs();
-    kscope_log_to_fs();
+    if (amfs_is_mounted()) {
+        pci_log_to_fs();
+        kscope_log_to_fs();
+    }
 
     puts("\nPress ENTER to continue...");
     while (keyboard_getchar() != '\n');

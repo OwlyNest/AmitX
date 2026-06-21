@@ -29,12 +29,11 @@
 #include <mm/heap.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
+
+/* --- Globals ---*/
+/* --- Prototypes ---*/
 static amfs_superblock_t sb;
 static int mounted = 0;
-/* --- Globals ---*/
-
-/* --- Prototypes ---*/
-
 /* --- Functions ---*/
 
 static int read_sector(uint32_t lba, void *buf) {
@@ -317,4 +316,9 @@ void amfs_ls(void) {
 
 int amfs_exists(const char* name) {
     return find_dirent(name, NULL) != NULL;
+}
+
+
+int amfs_is_mounted(void) {
+    return mounted;
 }

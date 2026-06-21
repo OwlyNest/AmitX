@@ -41,11 +41,19 @@ static int sm_selected = 0;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-static const char* sm_state_str(int state) {
+// typedef enum {
+//     KSCOPE_STATE_REGISTERED = 0,
+//     KSCOPE_STATE_PROBING    = 1,
+//     KSCOPE_STATE_OK         = 2,
+//     KSCOPE_STATE_FAILED     = -1,
+// } kscope_state_t;
+static const char* sm_state_str(kscope_state_t state) {
     switch (state) {
-        case 1:  return "OK";
-        case -1: return "FAIL";
-        default: return "REG";
+		case KSCOPE_STATE_FAILED:      return "FAIL";
+        case KSCOPE_STATE_REGISTERED:  return "REG";
+		case KSCOPE_STATE_PROBING:     return "PROB";
+        case KSCOPE_STATE_OK:          return "OK";
+        default: return "ERR"; /* Undefined territory */
     }
 }
 
@@ -76,7 +84,7 @@ static void sm_draw_list(void) {
         uint8_t is_sel = (idx == sm_selected);
         uint8_t row_color = is_sel ? ((hi_bg << 4) | (hi_fg & 0x0F)) : ((bg << 4) | (fg & 0x0F));
 
-        kscope_node_t *node = kscope_get_node(idx);
+        const kscope_node_t *node = kscope_get_node(idx);
         char line[76];
         ksnprintf(line, sizeof(line), "[0x%04x] (%s) %-16s %-12s", node->id, sm_state_str(node->state), node->name, kscope_class_name(node->class));
 
@@ -171,8 +179,8 @@ void system_manager_run(void) {
 			}
 		} else if (c == '\n') {
 			if (kscope_get_count() > 0) {
-				kscope_node_t *node = kscope_get_node(sm_selected);
-				sm_draw_detail(node);
+				const kscope_node_t *node = kscope_get_node(sm_selected);
+				sm_draw_detail((kscope_node_t *)node);
 
 				while (1) {
 					unsigned char d = keyboard_getchar();

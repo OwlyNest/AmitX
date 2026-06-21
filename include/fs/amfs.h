@@ -64,4 +64,5 @@ int  amfs_read_file(const char* name, char* buf, uint32_t buf_size);
 int  amfs_delete_file(const char* name);
 void amfs_ls(void);
 int  amfs_exists(const char* name);
+int  amfs_is_mounted(void);
 #endif

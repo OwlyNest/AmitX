@@ -35,7 +35,7 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-static boot_info_t boot_info;
+boot_info_t boot_info;
 static uint8_t *bitmap;
 static uint32_t total_frames = 0;
 static uint32_t used_frames = 0;
@@ -157,59 +157,88 @@ void pmm_unreserve_region(uintptr_t start, size_t length) {
  * Validates multiboot, detects RAM, saves boot info.
  * Returns 0 on success, non-zero on fatal error.
  * ======================================================================= */
-    int kernel_early_init(uint32_t magic, void *mb_info) {
-        memset(&boot_info, 0, sizeof(boot_info));
-        boot_info.magic = magic;
-        boot_info.valid = 0;
+int kernel_early_init(uint32_t magic, void *mb_info) {
+    memset(&boot_info, 0, sizeof(boot_info));
+    boot_info.magic = magic;
+    boot_info.valid = 0;
 
-        if (magic != MB2_BOOT_MAGIC) {
-            return 1;
-        }
+    if (magic != MB2_BOOT_MAGIC) {
+        return 1;
+    }
 
-        mb2_tag_t *tag;
-        uint64_t available_ram = 0;
-        int has_mmap = 0;
+    mb2_tag_t *tag;
+    uint64_t available_ram = 0;
+    int has_mmap = 0;
 
-        MB2_TAG_FOREACH(mb_info, tag) {
-            switch (tag->type) {
-                case MB2_TAG_MMAP: {
-                    mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
-                    uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
-                    mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
+    MB2_TAG_FOREACH(mb_info, tag) {
+        switch (tag->type) {
+            case MB2_TAG_MMAP: {
+                mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+                uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
+                mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
 
-                    for (uint32_t i = 0; i < num; i++) {
-                        mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
-                        if (e->type == MB2_MMAP_AVAILABLE) {
-                            available_ram += e->length;
-                        }
+                for (uint32_t i = 0; i < num; i++) {
+                    mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
+                    if (e->type == MB2_MMAP_AVAILABLE) {
+                        available_ram += e->length;
                     }
-                    has_mmap = 1;
-                    break;
                 }
-                case MB2_TAG_BASIC_MEM: {
-                    if (!has_mmap) {
-                        uint32_t *mem = (uint32_t *)(tag + 1);
-                        available_ram = ((uint64_t)mem[1] + 1024) * 1024;
-                    }
-                    break;
+                has_mmap = 1;
+                break;
+            }
+            case MB2_TAG_BASIC_MEM: {
+                if (!has_mmap) {
+                    uint32_t *mem = (uint32_t *)(tag + 1);
+                    available_ram = ((uint64_t)mem[1] + 1024) * 1024;
                 }
+                break;
+            }
+            case MB2_TAG_FRAMEBUFFER: {
+                struct mb2_tag_framebuffer {
+                    mb2_tag_t tag;
+                    uint64_t addr;
+                    uint32_t pitch;
+                    uint32_t width;
+                    uint32_t height;
+                    uint8_t  bpp;
+                    uint8_t  type;
+                    uint16_t reserved;
+                    uint8_t  color_info[0];
+                } __attribute__((packed));
+
+                struct mb2_tag_framebuffer *fb = (struct mb2_tag_framebuffer *)tag;
+
+                boot_info.fb.addr   = fb->addr;
+                boot_info.fb.pitch  = fb->pitch;
+                boot_info.fb.width  = fb->width;
+                boot_info.fb.height = fb->height;
+                boot_info.fb.bpp    = fb->bpp;
+                boot_info.fb.type   = fb->type;
+                boot_info.fb.valid  = 1;
+
+                printk("[boot] Framebuffer: %ux%u @ 0x%08x%08x, %u bpp, pitch %u\n",
+                    fb->width, fb->height,
+                    (uint32_t)(fb->addr >> 32), (uint32_t)fb->addr,
+                    fb->bpp, fb->pitch);
+                break;
             }
         }
-        if (available_ram == 0) {
-            available_ram = 16 * 1024 * 1024;
-        }
-
-        total_ram = available_ram;
-
-        if (total_ram < PMM_MIN_MEMORY) {
-            return 2;
-        }
-
-        boot_info.mb_info = (multiboot_info_t *)mb_info;  /* store for later */
-        boot_info.total_ram = total_ram;
-        boot_info.valid = 1;
-        return 0;
     }
+    if (available_ram == 0) {
+        available_ram = 16 * 1024 * 1024;
+    }
+
+    total_ram = available_ram;
+
+    if (total_ram < PMM_MIN_MEMORY) {
+        return 2;
+    }
+
+    boot_info.mb_info = (multiboot_info_t *)mb_info;  /* store for later */
+    boot_info.total_ram = total_ram;
+    boot_info.valid = 1;
+    return 0;
+}
 
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)

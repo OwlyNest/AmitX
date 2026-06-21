@@ -49,7 +49,7 @@ run "grub-mkrescue -o amitx.iso isodir"
 echo -e "\e[33m[x] Launching QEMU...\e[0m"
 set +e
 
-qemu-system-i386 \
+GDK_BACKEND=x11 qemu-system-i386 \
     -cdrom amitx.iso \
     -drive file=disk.img,format=raw,if=ide \
     -boot d \
@@ -59,7 +59,7 @@ qemu-system-i386 \
     -monitor none \
     -machine pc \
     -device vmware-svga \
-    -display vnc \
+    -display gtk \
     -full-screen
 
 QEMU_EXIT=$?

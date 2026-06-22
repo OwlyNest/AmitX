@@ -57,12 +57,26 @@ static inline int paging_enabled(void) {
 }
 
 /* ==========================================================================
- * Auto-detect: return virtual address if paging is on, physical otherwise.
- * Use this during the transition period or for addresses that may be accessed
- * both before and after paging is enabled.
+ * Auto-detect: return a usable pointer for a physical address.
+ *
+ * Before paging: physical addresses are used directly.
+ * After paging:  we identity-map the first 8 MB, so low physical
+ * addresses still work as direct pointers. For addresses above 8 MB,
+ * we assume they are mapped at KERNEL_VIRT_BASE offset.
+ *
+ * This is a temporary helper until we do a proper higher-half kernel.
  * ======================================================================= */
 static inline void *auto_virt(uint32_t phys_addr) {
-    return paging_enabled() ? PHYS_TO_VIRT(phys_addr) : (void *)phys_addr;
+    if (!paging_enabled()) {
+        return (void *)(uintptr_t)phys_addr;
+    }
+    /* Identity-mapped region: 0 to 8 MB */
+    if (phys_addr < 0x00800000) {
+        return (void *)(uintptr_t)phys_addr;
+    }
+    /* High physical addresses: assume mapped at KERNEL_VIRT_BASE.
+     * (Only works if you actually map them there with map_page!) */
+    return PHYS_TO_VIRT(phys_addr);
 }
 
 /* ==========================================================================

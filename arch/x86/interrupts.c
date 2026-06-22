@@ -5,6 +5,7 @@
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
 #include <internal/amitx_consts.h>
+#include <mm/paging.h>
 #include <stdint.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
@@ -232,6 +233,21 @@ void panic_frame(interrupt_frame_t *frame, const char *msg) {
     move_cursor(10, 12);
     printk("ESI: %08x  EDI: %08x  EBP: %08x  ESP: %08x\n",
            frame->esi, frame->edi, frame->ebp, frame->esp);
+           if (frame->err_no == 14) {
+            uint32_t cr2;
+            __asm__ volatile("mov %%cr2,%0" : "=r"(cr2));
+            move_cursor(10, 13);
+            printk("CR2=%08x\n", cr2);
+
+            uint32_t cr3;
+            __asm__("mov %%cr3,%0\n" : "=r"(cr3));
+            move_cursor(10, 14);
+            printk("CR3=%08x\n", cr3);
+            move_cursor(10, 15);
+            printk("CR2=%08x\n", cr2);
+            move_cursor(10, 16);
+            printk("virt_to_phys(CR2 page)=%08x\n", virt_to_phys(cr2 & ~0xFFF));
+        }
 
     for (;;) {
         __asm__ volatile ("hlt");

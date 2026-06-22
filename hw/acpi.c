@@ -130,8 +130,8 @@ static int acpi_validate_sdt(acpi_sdt_header_t *header,
  * BDA is at physical 0x400; EBDA segment at 0x40E:0x40F.
  * ======================================================================= */
 static acpi_rsdp_t* acpi_find_rsdp_method1(void) {
-    uint16_t *ebda_seg_ptr = (uint16_t *)auto_virt(0x40E);
-    uint16_t ebda_segment = *ebda_seg_ptr;
+    uint16_t ebda_segment;
+    __asm__("movw 0x40E, %0" : "=r"(ebda_segment));
     uint32_t ebda_addr = (uint32_t)ebda_segment << 4;
 
     if (ebda_segment == 0 || ebda_addr < 0x80000 ||

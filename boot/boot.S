@@ -65,9 +65,14 @@ _start:
     add $8, %esp
 
     call pmm_init
-    /* Should probably check if it returns 0 */
+    test %eax, %eax
+    jnz .pmm_fail
 
     call kernel_main
+    jmp halt
+
+.pmm_fail:
+    movl $0xBAD01, %eax
     jmp halt
 
 .no_multiboot2:

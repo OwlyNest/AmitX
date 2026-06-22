@@ -60,6 +60,7 @@ typedef struct boot_info {
 	framebuffer_info_t fb;
 } boot_info_t;
 
+int pmm_init(void);
 void *pmm_alloc_frame(void);
 void pmm_free_frame(void *frame);
 void *pmm_alloc_frames(uint32_t count);

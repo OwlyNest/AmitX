@@ -372,6 +372,26 @@
       "-DAMITX_BUILD_DATE=\"2026-06-22\"",
       "-c",
       "-o",
+      "build/mm/paging.o",
+      "mm/paging.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/mm/paging.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/mm/paging.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-22\"",
+      "-c",
+      "-o",
       "build/mm/pmm.o",
       "mm/pmm.c"
     ],

@@ -32,6 +32,7 @@
 #include <mm/pmm.h>
 #include <internal/multiboot.h>
 #include <arch/x86/interrupts.h>
+#include <mm/paging.h>
 #include <hw/pci.h>
 #include <hw/ide.h>
 #include <arch/x86/gdt.h>
@@ -249,6 +250,7 @@ void pci_log_to_fs(void) {
 void kernel_setup(void) {
     kscope_register_all();
     kscope_probe_all();
+    paging_init();
     kscope_dump();
 
     fs_init();

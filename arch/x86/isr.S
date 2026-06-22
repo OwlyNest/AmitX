@@ -80,7 +80,6 @@ isr\num:
     pop ecx
     pop eax
 
-    sti
     iret
 .endm
 
@@ -117,7 +116,6 @@ isr\num:
     pop ecx
     pop eax
 
-    sti
     add esp, 4            # discard original CPU error code
     iret
 .endm
@@ -367,6 +365,7 @@ isr128:
     pop edx
     pop ecx
     pop eax
+    
     iret
 
 load_idt:

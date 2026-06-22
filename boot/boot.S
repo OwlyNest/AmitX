@@ -64,6 +64,9 @@ _start:
     call kernel_early_init
     add $8, %esp
 
+    call pmm_init
+    add $4, %esp /* Should probably check if it returns 0 */
+
     call kernel_main
     jmp halt
 

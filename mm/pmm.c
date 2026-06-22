@@ -243,7 +243,7 @@ int kernel_early_init(uint32_t magic, void *mb_info) {
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)
  * ======================================================================= */
-static int pmm_init(void) {
+int pmm_init(void) {
     if (!boot_info.valid) {
         printk("[pmm] Boot info invalid, using 16MB fallback\n");
         total_ram = 16 * 1024 * 1024;
@@ -348,8 +348,7 @@ kscope_node_t pmm_node = {
     .requires = NULL,
     .require_count = 0,
     .provides = (const char *[]){"mem.physical", "mem.pages"},
-    .provide_count = 2,
-    .init = pmm_init
+    .provide_count = 2
 };
 
 /* ==========================================================================

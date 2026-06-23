@@ -27,7 +27,7 @@ run "bear -- make clean"
 
 echo -e "\e[33m[x] Building kernel...\e[0m"
 run "bear -- make"
-
+i686-elf-objdump -h kernel.bin
 echo -e "\e[33m[x] Preparing ISO directory...\e[0m"
 run "mkdir -p isodir/boot/grub"
 run "cp kernel.bin isodir/boot/kernel.bin"

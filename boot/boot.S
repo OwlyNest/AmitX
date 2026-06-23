@@ -50,7 +50,7 @@ multiboot_info_ptr:
 _start:
     cli
 
-    /* Save multiboot info pointer */
+    /* Save multiboot info pointer (physical address) */
     movl %ebx, multiboot_info_ptr
 
     /* Verify Multiboot2 magic */

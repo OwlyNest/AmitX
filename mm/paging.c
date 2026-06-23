@@ -35,6 +35,7 @@
 /* Physical address of page directory, set during init.
  * After paging is on, use 0xFFFFF000 (recursive mapping) instead. */
 static uint32_t page_directory_phys = 0;
+static uint32_t identity_map_size = 0;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -53,7 +54,7 @@ static uint32_t page_directory_phys = 0;
  * Initialize paging
  *
  * Creates a page directory and two page tables to identity-map the
- * first 8 MB of physical memory. This covers VGA (0xB8000), the
+ * physical memory. This covers VGA (0xB8000), the
  * kernel (0x100000), the PMM bitmap, and the heap.
  * ======================================================================= */
 void paging_init(void) {
@@ -72,6 +73,7 @@ void paging_init(void) {
 
     /* Identity-map RAM */
     uint32_t pts_needed = ((uint32_t)(pmm_get_total_ram() >> 22)) + 1;
+    identity_map_size = pts_needed * 4 * 1024 * 1024;
 
     for (uint32_t pd_idx = 0; pd_idx < pts_needed; pd_idx++) {
         uint32_t *pt = (uint32_t *)pmm_alloc_frame();
@@ -204,4 +206,8 @@ uint32_t virt_to_phys(uint32_t virt) {
     }
 
     return PTE_ADDR(PT_VIRT(pd_idx)[pt_idx]) | (virt & PAGE_MASK);
+}
+
+uint32_t paging_get_identity_size(void) {
+    return identity_map_size;
 }

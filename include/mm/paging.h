@@ -55,4 +55,5 @@ void paging_init(void);
 int map_page(uint32_t phys, uint32_t virt, uint32_t flags);
 void unmap_page(uint32_t virt);
 uint32_t virt_to_phys(uint32_t virt);
+uint32_t paging_get_identity_size(void);
 #endif

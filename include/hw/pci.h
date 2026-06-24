@@ -176,7 +176,7 @@
 /* ==========================================================================
  * BAR descriptor
  * ======================================================================= */
- typedef struct {
+typedef struct {
     uint32_t raw;
     uint32_t base;          /* current or assigned base */
     uint32_t size;
@@ -241,7 +241,7 @@ uint32_t pci_read_config(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 void     pci_write_config(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val);
 uint16_t pci_read_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 uint8_t  pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
-
+void pci_write_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val);
 /* Device management */
 void        pci_scan_bus(uint8_t bus);
 pci_device_t* pci_get_device(uint16_t vendor, uint16_t device);

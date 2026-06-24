@@ -10,25 +10,25 @@ mb2_header_start:
     .long MB2_LENGTH
     .long -(MB2_MAGIC + MB2_ARCH + MB2_LENGTH)  /* checksum */
 
-    /* Information request tag */
-    .align 8
-    mb2_tag_info:
-        .short 1        /* type = information request */
-        .short 0        /* flags */
-        .long 24        /* size = 8 + 4*num_requests */
-        .long 4         /* basic memory info */
-        .long 6         /* memory map */
-        .long 9         /* ELF sections */
+/* Information request tag */
+.align 8
+mb2_tag_info:
+    .short 1        /* type = information request */
+    .short 0        /* flags */
+    .long 24        /* size = 8 + 4*num_requests */
+    .long 4         /* basic memory info */
+    .long 6         /* memory map */
+    .long 9         /* ELF sections */
 
-    /* Address tag — required for non-ELF or if you want explicit load addresses */
-    /* Skip for now, GRUB handles ELF kernels fine */
+/* Address tag — required for non-ELF or if you want explicit load addresses */
+/* Skip for now, GRUB handles ELF kernels fine */
 
-    /* Null terminator */
-    .align 8
-    mb2_tag_end:
-        .short 0
-        .short 0
-        .long 8
+/* Null terminator */
+.align 8
+mb2_tag_end:
+    .short 0
+    .short 0
+    .long 8
 mb2_header_end:
 
 .section .bss

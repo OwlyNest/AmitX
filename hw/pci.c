@@ -49,6 +49,21 @@ uint16_t pci_read_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t re
     return (val >> ((reg & 3) * 8)) & 0xFFFF;
 }
 
+void pci_write_config_word(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val) {
+    uint32_t aligned = reg & ~3;
+
+    pci_config_addr(bus, dev, func, aligned);
+
+    uint32_t orig = inl(PCI_CONFIG_DATA);
+
+    uint32_t shift = (reg & 3) * 8;
+
+    orig &= ~(0xFFFF << shift);
+    orig |= ((uint32_t)val << shift);
+
+    outl(PCI_CONFIG_DATA, orig);
+}
+
 
 uint8_t pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg) {
     uint32_t val = pci_read_config(bus, dev, func, reg & ~3);
@@ -220,7 +235,7 @@ int pci_assign_bar(pci_device_t *dev, uint8_t bar_index) {
  * Capability parsing
  * ======================================================================= */
 
- void pci_parse_capabilities(pci_device_t* dev) {
+void pci_parse_capabilities(pci_device_t* dev) {
     uint16_t status = pci_read_config_word(dev->bus, dev->device, dev->function, PCI_STATUS);
     if (!(status & PCI_STATUS_CAP_LIST)) return;
 

@@ -60,8 +60,7 @@ GDK_BACKEND=x11 qemu-system-i386 \
     -machine pc \
     -device vmware-svga \
     -display gtk \
-    -full-screen
-
+    
 QEMU_EXIT=$?
 run "make clean"
 

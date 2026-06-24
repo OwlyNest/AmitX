@@ -19,8 +19,10 @@ typedef struct Block {
 } __attribute__((aligned(16))) Block;
 
 #define BLOCK_SIZE sizeof(Block)
-#define HEAP_INITIAL_PAGES 1
-#define HEAP_ARENA_PAGES (HEAP_SIZE / FRAME_SIZE)
+/* --- Heap Configuration --- */
+#define HEAP_SIZE           (32 * 1024 * 1024)     /* 32 MB */
+#define HEAP_INITIAL_PAGES  8
+#define HEAP_ARENA_PAGES    (HEAP_SIZE / FRAME_SIZE)
 
 static uint8_t* heap_base;
 static uint8_t* heap_end;
@@ -33,17 +35,15 @@ static int heap_init(void) {
         return -1;
     }
 
-    /* Place heap right after the kernel image, page-aligned */
     uint32_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
 
-    /* Reserve the entire arena in the PMM so we have a contiguous runway */
     pmm_reserve_region(start, HEAP_SIZE);
 
     heap_base = (uint8_t *)start;
     heap_end  = heap_base + (HEAP_INITIAL_PAGES * FRAME_SIZE);
     heap_break = heap_base;
 
-    printk("[heap] Initialized at %p, initial %u pages, arena %u KB\n", heap_base, HEAP_INITIAL_PAGES, HEAP_SIZE / 1024);
+    printk("[heap] Initialized at %p, initial %u pages, total arena %u MB\n", heap_base, HEAP_INITIAL_PAGES, HEAP_SIZE / (1024*1024));
     return 0;
 }
 

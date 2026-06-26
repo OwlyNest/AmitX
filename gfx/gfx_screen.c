@@ -1,5 +1,5 @@
 /*
-	* drivers/gfx_screen.c - [Enter description]
+	* gfx/gfx_screen.c - [Enter description]
 	* Author:   amity
 	* Date:     Wed Jun 24 16:55:49 2026
 	* Copyright © 2026 OwlyNest
@@ -22,9 +22,9 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/gfx_screen.h>
-#include <drivers/fb.h>
-#include <drivers/font.h>
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
+#include <gfx/font.h>
 #include <screen/printk.h>
 #include <lib/string.h>
 /* --- Typedefs - Structs - Enums ---*/

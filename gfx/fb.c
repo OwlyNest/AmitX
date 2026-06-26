@@ -1,5 +1,5 @@
 /*
-	* drivers/fb.c - [Enter description]
+	* gfx/fb.c - [Enter description]
 	* Author:   amity
 	* Date:     Tue Jun 23 13:13:14 2026
 	* Copyright © 2026 OwlyNest
@@ -22,8 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/fb.h>
-#include <drivers/svga.h>
+#include <gfx/fb.h>
+#include <gfx/svga.h>
 #include <drivers/mouse.h>
 #include <screen/printk.h>
 #include <mm/heap.h>

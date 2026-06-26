@@ -33,7 +33,7 @@
 
 /* --- Includes ---*/
 #include <stdint.h>
-#include <drivers/fb.h>
+#include <gfx/fb.h>
 /* --- Typedefs - Structs - Enums ---*/
 typedef enum {
 	GFX_BG_DESKTOP,

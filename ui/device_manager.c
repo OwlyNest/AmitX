@@ -29,8 +29,8 @@
 
 /* --- Includes ---*/
 #include <ui/device_manager.h>
-#include <drivers/gfx_screen.h>
-#include <drivers/fb.h>
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <hw/pci.h>

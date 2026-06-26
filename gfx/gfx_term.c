@@ -1,5 +1,5 @@
 /*
-	* drivers/gfx_term.c - [Enter description]
+	* gfx/gfx_term.c - [Enter description]
 	* Author:   amity
 	* Date:     Fri Jun 26 09:42:09 2026
 	* Copyright © 2026 OwlyNest
@@ -20,10 +20,10 @@
 */
 
 /* --- Macros ---*/
-#include <drivers/gfx_term.h>
-#include <drivers/gfx_screen.h>
-#include <drivers/fb.h>
-#include <drivers/font.h>
+#include <gfx/gfx_term.h>
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
+#include <gfx/font.h>
 #include <lib/string.h>
 /* --- Includes ---*/
 static int term_px, term_py;        /* panel position */

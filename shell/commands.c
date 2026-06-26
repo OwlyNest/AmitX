@@ -24,9 +24,9 @@
 /* --- Includes ---*/
 #include <shell/commands.h>
 #include <shell/cyclone.h>
-#include <drivers/gfx_term.h>
-#include <drivers/gfx_screen.h>
-#include <drivers/fb.h>
+#include <gfx/gfx_term.h>
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
 #include <logo/logo.h>
 #include <shell/utils.h>
 #include <tests/tests.h>

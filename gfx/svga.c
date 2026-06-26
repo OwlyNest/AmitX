@@ -1,5 +1,5 @@
 /*
-	* drivers/svga.c - VMware SVGA-II display driver
+	* gfx/svga.c - VMware SVGA-II display driver
 	* Author:   amity
 	* Date:     Wed Jun 24 00:00:00 2026
 	* Copyright © 2026 OwlyNest
@@ -22,7 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/svga.h>
+#include <gfx/svga.h>
 #include <hw/pci.h>
 #include <arch/x86/io.h>
 #include <screen/printk.h>

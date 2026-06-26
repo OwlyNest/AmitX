@@ -1,5 +1,5 @@
 /*
-	* drivers/font.c - [Enter description]
+	* gfx/font.c - [Enter description]
 	* Author:   amity
 	* Date:     Wed Jun 24 00:49:10 2026
 	* Copyright © 2026 OwlyNest
@@ -22,8 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/font.h>
-#include <drivers/fb.h>
+#include <gfx/font.h>
+#include <gfx/fb.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/

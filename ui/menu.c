@@ -22,15 +22,15 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "internal/amitx_info.h"
-#include "screen/printk.h"
+#include <internal/amitx_info.h>
+#include <screen/printk.h>
 #include <ui/menu.h>
 #include <ui/system_manager.h>
 #include <ui/device_manager.h>
 #include <kernel/kernel.h>
 #include <drivers/keyboard.h>
-#include <drivers/gfx_screen.h>
-#include <drivers/fb.h>
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
 #include <drivers/mouse.h>
 #include <internal/amitx_consts.h>
 #include <shell/cyclone.h>

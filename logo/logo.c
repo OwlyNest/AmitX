@@ -1,9 +1,9 @@
 
-#include "drivers/font.h"
+#include "gfx/font.h"
 #include <screen/screen.h>
 #include <logo/logo.h>
-#include <drivers/fb.h>
-#include <drivers/gfx_screen.h>
+#include <gfx/fb.h>
+#include <gfx/gfx_screen.h>
 
 void draw_logo1() {
     move_cursor(0, 2);

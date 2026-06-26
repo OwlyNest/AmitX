@@ -272,86 +272,6 @@
       "-DAMITX_BUILD_DATE=\"2026-06-26\"",
       "-c",
       "-o",
-      "build/drivers/fb.o",
-      "drivers/fb.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/drivers/fb.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/drivers/fb.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
-      "-c",
-      "-o",
-      "build/drivers/font.o",
-      "drivers/font.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/drivers/font.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/drivers/font.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
-      "-c",
-      "-o",
-      "build/drivers/gfx_screen.o",
-      "drivers/gfx_screen.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/drivers/gfx_screen.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/drivers/gfx_screen.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
-      "-c",
-      "-o",
-      "build/drivers/gfx_term.o",
-      "drivers/gfx_term.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/drivers/gfx_term.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/drivers/gfx_term.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
-      "-c",
-      "-o",
       "build/drivers/keyboard.o",
       "drivers/keyboard.c"
     ],
@@ -398,26 +318,6 @@
     "directory": "/home/amity/OwlyNest/AmitX",
     "file": "/home/amity/OwlyNest/AmitX/drivers/serial.c",
     "output": "/home/amity/OwlyNest/AmitX/build/drivers/serial.o"
-  },
-  {
-    "arguments": [
-      "/opt/cross/bin/i686-elf-gcc",
-      "-m32",
-      "-ffreestanding",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-Iinclude",
-      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
-      "-c",
-      "-o",
-      "build/drivers/svga.o",
-      "drivers/svga.c"
-    ],
-    "directory": "/home/amity/OwlyNest/AmitX",
-    "file": "/home/amity/OwlyNest/AmitX/drivers/svga.c",
-    "output": "/home/amity/OwlyNest/AmitX/build/drivers/svga.o"
   },
   {
     "arguments": [
@@ -878,6 +778,106 @@
     "directory": "/home/amity/OwlyNest/AmitX",
     "file": "/home/amity/OwlyNest/AmitX/hw/pci.c",
     "output": "/home/amity/OwlyNest/AmitX/build/hw/pci.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
+      "-c",
+      "-o",
+      "build/gfx/fb.o",
+      "gfx/fb.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/gfx/fb.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/gfx/fb.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
+      "-c",
+      "-o",
+      "build/gfx/font.o",
+      "gfx/font.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/gfx/font.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/gfx/font.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
+      "-c",
+      "-o",
+      "build/gfx/gfx_screen.o",
+      "gfx/gfx_screen.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/gfx/gfx_screen.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/gfx/gfx_screen.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
+      "-c",
+      "-o",
+      "build/gfx/gfx_term.o",
+      "gfx/gfx_term.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/gfx/gfx_term.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/gfx/gfx_term.o"
+  },
+  {
+    "arguments": [
+      "/opt/cross/bin/i686-elf-gcc",
+      "-m32",
+      "-ffreestanding",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Iinclude",
+      "-DAMITX_BUILD_DATE=\"2026-06-26\"",
+      "-c",
+      "-o",
+      "build/gfx/svga.o",
+      "gfx/svga.c"
+    ],
+    "directory": "/home/amity/OwlyNest/AmitX",
+    "file": "/home/amity/OwlyNest/AmitX/gfx/svga.c",
+    "output": "/home/amity/OwlyNest/AmitX/build/gfx/svga.o"
   },
   {
     "arguments": [

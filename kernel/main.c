@@ -22,11 +22,13 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/font.h>
+/* initialize with KScope delete soon*/
+#include <gfx/svga.h>
+#include <gfx/fb.h>
+
+/* these can stay */
 #include <screen/screen.h>
 #include <drivers/keyboard.h>
-#include <drivers/svga.h>
-#include <drivers/fb.h>
 #include <drivers/mouse.h>
 #include <kernel/kernel.h>
 #include <mm/heap.h>
@@ -37,7 +39,6 @@
 #include <lib/string.h>
 #include <arch/x86/timer.h>
 #include <arch/x86/time.h>
-#include <drivers/gfx_screen.h>
 #include <hw/acpi.h>
 #include <hw/e1000.h>
 #include <kernel/syscall.h>

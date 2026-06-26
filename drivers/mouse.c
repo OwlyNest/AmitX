@@ -23,10 +23,10 @@
 #define CURSOR_W 11
 #define CURSOR_H 11
 /* --- Includes ---*/
-#include <drivers/gfx_screen.h>
+#include <gfx/gfx_screen.h>
 #include <drivers/mouse.h>
-#include <drivers/fb.h>
-#include <drivers/svga.h>
+#include <gfx/fb.h>
+#include <gfx/svga.h>
 #include <arch/x86/io.h>
 #include <arch/x86/interrupts.h>
 #include <internal/amitx_consts.h>
@@ -53,7 +53,7 @@ static const uint8_t cursor_arrow[CURSOR_H][CURSOR_W] = {
     {1,0,0,0,0,0,0,1,0,0,0},
     {1,0,0,0,0,0,0,0,1,0,0},
     {1,1,1,1,1,1,1,1,1,1,0},
-    {1,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
 };
 
 /* Raw pixel coordinates */

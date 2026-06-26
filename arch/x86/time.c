@@ -22,11 +22,9 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <drivers/gfx_screen.h>
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
 #include <arch/x86/timer.h>
-#include <screen/screen.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/

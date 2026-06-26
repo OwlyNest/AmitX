@@ -93,26 +93,7 @@ void draw_start(void) {
 void kernel_main(void) {
     kernel_setup();
 
-    if (svga_init() == 0) {
-        if (fb_init() == 0) {
-            gfx_screen_init();
-
-            gfx_desktop();
-            gfx_logo_design2(100, 100);
-            gfx_draw_text(100, 90, "Welcome to AmitX!", gfx_theme_color(GFX_FG_TEXT));
-
-            gfx_title_bar(300, 200, 300, "System Menu");
-            gfx_panel(300, 216, 300, 200, gfx_theme_color(GFX_BG_PANEL));
-
-            const char *items[] = {"Terminal", "Files", "Settings", "Reboot"};
-            gfx_list(304, 220, 292, 192, items, 4, 0);
-
-            gfx_status_bar(0, 748, 1024, "AmitX 0.1 | 1024x768x32");
-
-            fb_present();
-            printk("[gfx] UI rendered\n");
-        }
-    }
-
-    while (1);
+    svga_init();
+    fb_init();
+    menu_run();
 }

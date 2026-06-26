@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include <drivers/gfx_screen.h>
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
 #include <arch/x86/timer.h>
@@ -41,11 +42,10 @@ extern int menu;
 /* ==========================================================================
  * PIT IRQ0 handler — increments global tick counter
  * ======================================================================= */
-void timer_callback(interrupt_frame_t *frame) {
+ void timer_callback(interrupt_frame_t *frame) {
     (void)frame;
     tick_count++;
-    if (menu)
-        draw_uptime();
+    /* NOTHING ELSE.  The timer is not a render loop. */
 }
 
 /* ==========================================================================

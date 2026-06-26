@@ -406,7 +406,6 @@ int sputf(char* out, const char* format, ...) {
 
 static uint16_t mouse_prev_char = 0;
 static int mouse_prev_x = -1;
-extern int mouse_x, mouse_y;
 extern uint8_t mouse_buttons;
 static int mouse_prev_y = -1;
 

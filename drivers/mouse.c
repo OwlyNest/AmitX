@@ -1,56 +1,73 @@
 /*
-	* drivers/mouse.c - PS/2 mouse driver
-	* Author:   amity
-	* Date:     Sat Jun 20 22:58:35 2026
-	* Copyright © 2026 OwlyNest
+    * drivers/mouse.c - PS/2 mouse driver
+    * Author:   amity
+    * Date:     Sat Jun 20 22:58:35 2026
+    * Copyright © 2026 OwlyNest
 */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
+    * Encoding:                      UTF-8, Unix line endings
+    * Text font:                     Monospace
+    * Line width:                    Max 80 characters
+    * Indentation:                   Use 4 spaces
+    * Brace style:                   Same line as control statement
+    * Inline comments:               Column 40, wherever possible, else, whole multiple of 20
+    * Section headers:               Use 3 '-' characters before and after
+    * Pointer notation:              Next to variable name, not type
+    * Binary operations:             Space around operator
+    * Empty parameter list:          Use (void) instead of ()
+    * Statements and declarations:   Max one per line
 */
 
 /* --- Macros ---*/
-
+#define CURSOR_W 11
+#define CURSOR_H 11
 /* --- Includes ---*/
+#include <drivers/gfx_screen.h>
 #include <drivers/mouse.h>
+#include <drivers/fb.h>
+#include <drivers/svga.h>
 #include <arch/x86/io.h>
 #include <arch/x86/interrupts.h>
 #include <internal/amitx_consts.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <screen/printk.h>
-#include <screen/screen.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
+static uint32_t cursor_under[CURSOR_W * CURSOR_H];
+static int cursor_prev_x = -1;
+static int cursor_prev_y = -1;
 
-/* Raw pixel coordinates (0..639, 0..399) */
-static volatile int mouse_px_x = 320;
-static volatile int mouse_px_y = 200;
+static const uint8_t cursor_arrow[CURSOR_H][CURSOR_W] = {
+    {1,0,0,0,0,0,0,0,0,0,0},
+    {1,1,0,0,0,0,0,0,0,0,0},
+    {1,0,1,0,0,0,0,0,0,0,0},
+    {1,0,0,1,0,0,0,0,0,0,0},
+    {1,0,0,0,1,0,0,0,0,0,0},
+    {1,0,0,0,0,1,0,0,0,0,0},
+    {1,0,0,0,0,0,1,0,0,0,0},
+    {1,0,0,0,0,0,0,1,0,0,0},
+    {1,0,0,0,0,0,0,0,1,0,0},
+    {1,1,1,1,1,1,1,1,1,1,0},
+    {1,0,0,0,0,0,0,0,0,0,0},
+};
 
-/* Text cell coordinates (0..79, 0..24) */
-volatile int mouse_x = 40;
-volatile int mouse_y = 12;
+/* Raw pixel coordinates */
+static volatile int mouse_px_x = 512;
+static volatile int mouse_px_y = 384;
+
+/* Pixel coordinates exposed to UI */
+volatile int mouse_x = 512;
+volatile int mouse_y = 384;
 volatile uint8_t mouse_buttons = 0;
 
 /* Packet reassembly state */
 static volatile int mouse_cycle = 0;
 static volatile int8_t mouse_bytes[3];
-
-#define MOUSE_MAX_X 639
-#define MOUSE_MAX_Y 399
 
 /* --- Prototypes ---*/
 static void mouse_wait_output(void);
@@ -60,6 +77,64 @@ static int mouse_send_cmd(uint8_t cmd);
 static void mouse_handler(interrupt_frame_t *frame);
 
 /* --- Functions ---*/
+/* --- Cursor helpers --- */
+static void cursor_erase_front(void) {
+    if (cursor_prev_x < 0 || !fb.initialized || !fb.front) return;
+    for (int row = 0; row < CURSOR_H; row++) {
+        for (int col = 0; col < CURSOR_W; col++) {
+            int px = cursor_prev_x + col;
+            int py = cursor_prev_y + row;
+            if (px >= 0 && px < (int)fb.width &&
+                py >= 0 && py < (int)fb.height) {
+                fb.front[py * fb.pitch_px + px] =
+                    cursor_under[row * CURSOR_W + col];
+            }
+        }
+    }
+    if (svga.initialized) {
+        svga_update_rect(cursor_prev_x, cursor_prev_y,
+                         CURSOR_W, CURSOR_H);
+    }
+}
+
+static void cursor_draw_front(int x, int y) {
+    if (!fb.initialized || !fb.front) return;
+    
+    /* Save what's under the new position */
+    for (int row = 0; row < CURSOR_H; row++) {
+        for (int col = 0; col < CURSOR_W; col++) {
+            int px = x + col;
+            int py = y + row;
+            if (px >= 0 && px < (int)fb.width &&
+                py >= 0 && py < (int)fb.height) {
+                cursor_under[row * CURSOR_W + col] =
+                    fb.front[py * fb.pitch_px + px];
+            }
+        }
+    }
+    
+    /* Draw cursor */
+    uint32_t white = FB_RGB(255, 255, 255);
+    for (int row = 0; row < CURSOR_H; row++) {
+        for (int col = 0; col < CURSOR_W; col++) {
+            if (cursor_arrow[row][col]) {
+                int px = x + col;
+                int py = y + row;
+                if (px >= 0 && px < (int)fb.width &&
+                    py >= 0 && py < (int)fb.height) {
+                    fb.front[py * fb.pitch_px + px] = white;
+                }
+            }
+        }
+    }
+    
+    cursor_prev_x = x;
+    cursor_prev_y = y;
+    if (svga.initialized) {
+        svga_update_rect(x, y, CURSOR_W, CURSOR_H);
+    }
+}
+
 
 /* ==========================================================================
  * Wait for PS/2 controller output buffer to have data (bit 0 set)
@@ -116,14 +191,16 @@ static int mouse_send_cmd(uint8_t cmd) {
 
 /* ==========================================================================
  * IRQ12 handler
+ *
+ * ONLY updates coordinates.  NEVER draws here — the UI loop handles
+ * all rendering and presentation.
  * ======================================================================= */
 static void mouse_handler(interrupt_frame_t *frame) {
     (void)frame;
 
     uint8_t status = inb(PORT_KBD_STATUS);
 
-    /* Bit 0: output buffer full. Bit 5: auxiliary device data.
-     * If bit 5 is clear, this is keyboard data — ignore it. */
+    /* Bit 0: output buffer full. Bit 5: auxiliary device data. */
     if (!(status & 0x01) || !(status & 0x20))
         return;
 
@@ -159,19 +236,22 @@ static void mouse_handler(interrupt_frame_t *frame) {
         mouse_px_y -= dy;  /* Y is inverted on screen */
 
         /* Clamp to screen bounds */
+        int max_x = fb.initialized ? (int)fb.width  - 1 : 1023;
+        int max_y = fb.initialized ? (int)fb.height - 1 : 767;
+
         if (mouse_px_x < 0) mouse_px_x = 0;
         if (mouse_px_y < 0) mouse_px_y = 0;
-        if (mouse_px_x > MOUSE_MAX_X) mouse_px_x = MOUSE_MAX_X;
-        if (mouse_px_y > MOUSE_MAX_Y) mouse_px_y = MOUSE_MAX_Y;
+        if (mouse_px_x > max_x) mouse_px_x = max_x;
+        if (mouse_px_y > max_y) mouse_px_y = max_y;
 
-        /* Convert to text coordinates */
-        mouse_x = mouse_px_x / 8;
-        mouse_y = mouse_px_y / 16;
+        mouse_x = mouse_px_x;
+        mouse_y = mouse_px_y;
 
         /* Button state: lower 3 bits of first byte */
         mouse_buttons = mouse_bytes[0] & 0x07;
 
-        draw_mouse_cursor();
+        cursor_erase_front();
+        cursor_draw_front(mouse_x, mouse_y);
 
         mouse_cycle = 0;
         break;
@@ -209,8 +289,7 @@ static int init_mouse(void) {
     uint8_t mouse_id  = mouse_read_byte();
 
     if (self_test != 0xAA) {
-        printk("[mouse] Self-test failed (0x%02x), disabling\n",
-               self_test);
+        printk("[mouse] Self-test failed (0x%02x), disabling\n", self_test);
         return -1;
     }
 
@@ -246,21 +325,31 @@ kscope_node_t mouse_node = {
 };
 
 /* ==========================================================================
- * Get current mouse position in text coordinates
+ * Get current mouse position in pixel coordinates
  * ======================================================================= */
 void get_mouse_position(int *x, int *y) {
     *x = mouse_x;
     *y = mouse_y;
 }
 
+void mouse_refresh_cursor(void) {
+    if (!fb.initialized || !fb.front) return;
+
+    cursor_prev_x = -1;
+    cursor_draw_front(mouse_x, mouse_y);
+}
+
 /* ==========================================================================
  * Reset mouse position to center of screen
  * ======================================================================= */
 void reset_mouse_position(void) {
-    mouse_px_x = 320;
-    mouse_px_y = 200;
-    mouse_x = 40;
-    mouse_y = 12;
+    int cx = fb.initialized ? (int)fb.width  / 2 : 512;
+    int cy = fb.initialized ? (int)fb.height / 2 : 384;
+
+    mouse_px_x = cx;
+    mouse_px_y = cy;
+    mouse_x = cx;
+    mouse_y = cy;
     mouse_cycle = 0;
     mouse_bytes[0] = 0;
     mouse_bytes[1] = 0;

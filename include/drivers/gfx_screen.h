@@ -22,6 +22,15 @@
 /* --- Macros ---*/
 #ifndef GFX_SCREEN_H
 #define GFX_SCREEN_H
+
+
+#define PRINTK_X  8
+#define PRINTK_Y  8
+#define PRINTK_WIDTH  400
+#define PRINTK_HEIGHT  200
+#define PRINTK_ROWS 24
+#define PRINTK_COLS 50
+
 /* --- Includes ---*/
 #include <stdint.h>
 #include <drivers/fb.h>
@@ -86,12 +95,9 @@ void gfx_progress_bar(int x, int y, int w, int h, int percent, uint32_t fill, ui
 void gfx_list(int x, int y, int w, int h, const char **items, int count, int selected);
 void gfx_status_bar(int x, int y, int w, const char *text);
 
-/* Mouse cursor */
-void gfx_draw_cursor(int x, int y);
-void gfx_cursor_show(int x, int y);
-void gfx_cursor_hide(void);
-
 /* Logo */
 void gfx_logo_design2(int x, int y);
+void gfx_draw_uptime(void);
 
+void gfx_printk_puts(const char *str);
 #endif

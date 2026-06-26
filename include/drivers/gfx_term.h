@@ -1,7 +1,7 @@
 /*
-	* include/drivers/mouse.h - Mouse interface
+	* include/drivers/gfx_term.h - [Enter description]
 	* Author:   amity
-	* Date:     Sat Jun 20 22:57:12 2026
+	* Date:     Fri Jun 26 09:42:04 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -19,18 +19,30 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef MOUSE_H
-#define MOUSE_H
+/* --- Macros ---*/
+#ifndef GFX_TERM_H
+#define GFX_TERM_H
 
+#define TERM_FG_DEFAULT 0xFFFFFFFFu
+#define TERM_BG_DEFAULT 0xFF282838u  /* dark panel */
 /* --- Includes ---*/
 #include <stdint.h>
+/* --- Typedefs - Structs - Enums ---*/
 
-extern volatile int mouse_x;
-extern volatile int mouse_y;
+/* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void get_mouse_position(int *x, int *y);
-void reset_mouse_position(void);
-void mouse_refresh_cursor(void);
+void gfx_term_init(int x, int y, int w, int h, uint32_t fg, uint32_t bg);
+void gfx_term_clear(void);
+void gfx_term_putc(char c);
+void gfx_term_puts(const char *str);
+void gfx_term_newline(void);
+void gfx_term_putint(int num);
+void gfx_term_puthex(uint32_t n);
+void gfx_term_move_cursor(int col, int row);
+void gfx_term_draw_prompt(void);
+void gfx_term_backspace(void);
 
+/* Convenience: clear + draw border + title */
+void gfx_term_draw_frame(const char *title);
 #endif

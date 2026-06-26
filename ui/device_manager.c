@@ -19,134 +19,152 @@
 	* Statements and declarations:   Max one per line
 */
 
-/* --- Macros ---*/
-#define DM_LIST_X       1
-#define DM_LIST_Y       2
-#define DM_LIST_W       78
-#define DM_LIST_H       20
-#define DM_MAX_DEVICES  32
+//* --- Macros ---*/
+#define DM_X        112
+#define DM_Y        50
+#define DM_W        800
+#define DM_H        668
+#define DM_ROW_H    20
+#define DM_MAX_DEV  32
 
 /* --- Includes ---*/
 #include <ui/device_manager.h>
-#include <screen/screen.h>
-#include <screen/printk.h>
+#include <drivers/gfx_screen.h>
+#include <drivers/fb.h>
 #include <drivers/keyboard.h>
+#include <drivers/mouse.h>
 #include <hw/pci.h>
-#include <internal/amitx_consts.h>
+#include <screen/printk.h>
 #include <lib/string.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-static pci_device_t *dm_devices[DM_MAX_DEVICES];
+static pci_device_t *dm_devices[DM_MAX_DEV];
 static int dm_device_count = 0;
 static int dm_selected = 0;
-extern uint16_t* video_memory;
-extern uint8_t color;
+
 /* --- Prototypes ---*/
+static void dm_refresh(void);
+static void dm_draw_list(void);
+static void dm_draw_detail(pci_device_t *dev);
+static void dm_present(void);
 
 /* --- Functions ---*/
-static void dm_refresh_devices(void) {
+
+/* ==========================================================================
+ * Present helper
+ * ======================================================================= */
+static void dm_present(void) {
+    fb_present();
+}
+
+/* ==========================================================================
+ * Refresh device list
+ * ======================================================================= */
+static void dm_refresh(void) {
     dm_device_count = 0;
     pci_device_t *dev = pci_get_first_device();
-    while (dev && dm_device_count < DM_MAX_DEVICES) {
+    while (dev && dm_device_count < DM_MAX_DEV) {
         dm_devices[dm_device_count++] = dev;
         dev = dev->next;
     }
 }
 
+/* ==========================================================================
+ * Draw list view
+ * ======================================================================= */
 static void dm_draw_list(void) {
-    uint8_t fg = 15, bg = 0;
-    uint8_t hi_fg = 0, hi_bg = 15;
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
+    uint32_t bg = gfx_theme_color(GFX_BG_PANEL);
+    uint32_t hi = gfx_theme_color(GFX_BG_HIGHLIGHT);
+    uint32_t hifg = gfx_theme_color(GFX_FG_ACCENT);
 
-    draw_box(DM_LIST_X, DM_LIST_Y, DM_LIST_W, DM_LIST_H, fg, bg);
+    gfx_desktop();
 
-    const char *title = " PCI Device Manager ";
-    uint8_t tlen = strlen(title);
-    uint8_t tx = DM_LIST_X + (DM_LIST_W - tlen) / 2;
-    for (uint8_t i = 0; i < tlen; i++) {
-        video_memory[DM_LIST_Y * VGA_WIDTH + tx + i] = (0x02 << 8) | title[i];
-    }
+    gfx_panel(DM_X, DM_Y, DM_W, DM_H, bg);
+    gfx_bevel_in(DM_X, DM_Y, DM_W, DM_H);
+    gfx_title_bar(DM_X, DM_Y, DM_W, " PCI Device Manager ");
 
-    uint8_t visible = DM_LIST_H - 2;
-    uint8_t start = 0;
+    int list_x = DM_X + 8;
+    int list_y = DM_Y + 28;
+    int list_w = DM_W - 16;
+    int list_h = DM_H - 60;
+
+    int visible = list_h / DM_ROW_H;
+    int start = 0;
     if (dm_selected >= visible) {
         start = dm_selected - visible + 1;
     }
 
-    for (uint8_t i = 0; i < visible; i++) {
-        uint8_t idx = start + i;
-        if (idx >= dm_device_count) break;
+    gfx_set_clip(list_x, list_y, list_w, list_h);
 
-        uint8_t row = DM_LIST_Y + 1 + i;
-        uint8_t is_sel = (idx == dm_selected);
-        uint8_t row_color = is_sel
-            ? ((hi_bg << 4) | (hi_fg & 0x0F))
-            : ((bg << 4) | (fg & 0x0F));
+    for (int i = 0; i < visible && (start + i) < dm_device_count; i++) {
+        int idx = start + i;
+        int row_y = list_y + i * DM_ROW_H;
+        uint32_t row_bg = (idx == dm_selected) ? hi : bg;
+        uint32_t row_fg = (idx == dm_selected) ? hifg : fg;
+
+        gfx_fill_rect(list_x, row_y, list_w, DM_ROW_H, row_bg);
 
         pci_device_t *dev = dm_devices[idx];
-        char line[76];
+        char line[80];
         ksnprintf(line, sizeof(line),
-            " %02x:%02x.%x %04x:%04x %-16s %s ",
-            dev->bus, dev->device, dev->function,
-            dev->vendor_id, dev->device_id,
-            pci_subclass_name(dev->class_code, dev->subclass),
-            pci_class_name(dev->class_code));
+                  " %02x:%02x.%x %04x:%04x %-16s %s ",
+                  dev->bus, dev->device, dev->function,
+                  dev->vendor_id, dev->device_id,
+                  pci_subclass_name(dev->class_code, dev->subclass),
+                  pci_class_name(dev->class_code));
 
-        uint8_t linelen = strlen(line);
-        for (uint8_t j = 0; j < DM_LIST_W - 2 && j < linelen; j++) {
-            video_memory[row * VGA_WIDTH + DM_LIST_X + 1 + j] =
-                (row_color << 8) | line[j];
-        }
-        for (uint8_t j = linelen; j < DM_LIST_W - 2; j++) {
-            video_memory[row * VGA_WIDTH + DM_LIST_X + 1 + j] =
-                (row_color << 8) | ' ';
-        }
+        gfx_draw_text(list_x + 4, row_y + 6, line, row_fg);
     }
 
-    const char *hint = " [\x18\x19] Select  [Enter] Details  [q] Back ";
-    uint8_t hlen = strlen(hint);
-    uint8_t hx = DM_LIST_X + (DM_LIST_W - hlen) / 2;
-    for (uint8_t i = 0; i < hlen && hx + i < VGA_WIDTH - 1; i++) {
-        video_memory[(DM_LIST_Y + DM_LIST_H - 1) * VGA_WIDTH + hx + i] =
-            (0x01 << 8) | hint[i];
-    }
+    gfx_clear_clip();
+
+    gfx_status_bar(0, 744, 1024,
+        " [Up/Down] Select  [Enter] Details  [q] Back ");
+
+    dm_present();
 }
 
+/* ==========================================================================
+ * Draw detail view
+ * ======================================================================= */
 static void dm_draw_detail(pci_device_t *dev) {
-    clear();
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
+    uint32_t bg = gfx_theme_color(GFX_BG_PANEL);
+
+    gfx_desktop();
+
+    gfx_panel(DM_X, DM_Y, DM_W, DM_H, bg);
+    gfx_bevel_in(DM_X, DM_Y, DM_W, DM_H);
 
     char title[64];
     ksnprintf(title, sizeof(title), " %02x:%02x.%x %04x:%04x ",
               dev->bus, dev->device, dev->function,
               dev->vendor_id, dev->device_id);
+    gfx_title_bar(DM_X, DM_Y, DM_W, title);
 
-    draw_box(2, 1, 76, 23, 15, 0);
-    uint8_t tlen = strlen(title);
-    uint8_t tx = DM_LIST_X + (DM_LIST_W - tlen) / 2;
-    for (uint8_t i = 0; i < tlen; i++) {
-        video_memory[(DM_LIST_Y - 1) * VGA_WIDTH + tx + i] = (0x02 << 8) | title[i];
-    }
-
-    uint8_t row = 3;
-    char buf[72];
+    int x = DM_X + 16;
+    int y = DM_Y + 36;
+    char buf[80];
 
     ksnprintf(buf, sizeof(buf), "  Class:     %s (%s)",
               pci_class_name(dev->class_code),
               pci_subclass_name(dev->class_code, dev->subclass));
-    move_cursor(4, row++); puts(buf);
+    gfx_draw_text(x, y, buf, fg); y += 16;
 
     ksnprintf(buf, sizeof(buf), "  Revision:  0x%02x", dev->revision);
-    move_cursor(4, row++); puts(buf);
+    gfx_draw_text(x, y, buf, fg); y += 16;
 
     ksnprintf(buf, sizeof(buf), "  IRQ:       %u", dev->interrupt_line);
-    move_cursor(4, row++); puts(buf);
+    gfx_draw_text(x, y, buf, fg); y += 16;
 
     ksnprintf(buf, sizeof(buf), "  Command:   0x%04x  Status: 0x%04x",
               dev->command, dev->status);
-    move_cursor(4, row++); puts(buf);
+    gfx_draw_text(x, y, buf, fg); y += 24;
 
-    row += 1;
-    move_cursor(4, row++); puts("  Base Address Registers:");
+    gfx_draw_text(x, y, "  Base Address Registers:", fg); y += 16;
 
     for (uint8_t i = 0; i < dev->bar_count; i++) {
         if (dev->bars[i].base == 0 && dev->bars[i].size == 0)
@@ -154,61 +172,54 @@ static void dm_draw_detail(pci_device_t *dev) {
 
         if (dev->bars[i].is_io) {
             ksnprintf(buf, sizeof(buf),
-                "    BAR%d  I/O  0x%08x  size 0x%x",
-                i, dev->bars[i].base, dev->bars[i].size);
+                      "    BAR%d  I/O  0x%08x  size 0x%x",
+                      i, dev->bars[i].base, dev->bars[i].size);
         } else {
             ksnprintf(buf, sizeof(buf),
-                "    BAR%d  MEM  0x%08x  size 0x%x  %s",
-                i, dev->bars[i].base, dev->bars[i].size,
-                dev->bars[i].is_prefetch ? "prefetchable" : "");
+                      "    BAR%d  MEM  0x%08x  size 0x%x  %s",
+                      i, dev->bars[i].base, dev->bars[i].size,
+                      dev->bars[i].is_prefetch ? "prefetchable" : "");
         }
-        move_cursor(4, row++); puts(buf);
+        gfx_draw_text(x, y, buf, fg); y += 16;
     }
 
     if (dev->capabilities) {
-        row += 1;
-        move_cursor(4, row++); puts("  Capabilities:");
+        y += 8;
+        gfx_draw_text(x, y, "  Capabilities:", fg); y += 16;
         pci_capability_t *cap = dev->capabilities;
-        while (cap && row < 22) {
+        while (cap && y < DM_Y + DM_H - 40) {
             ksnprintf(buf, sizeof(buf), "    ID 0x%02x  offset 0x%02x",
                       cap->id, cap->offset);
-            move_cursor(4, row++); puts(buf);
+            gfx_draw_text(x, y, buf, fg); y += 16;
             cap = cap->next_cap;
         }
     }
 
-    const char *hint = " [q] Back ";
-    uint8_t hlen = strlen(hint);
-    uint8_t hx = DM_LIST_X + (DM_LIST_W - hlen) / 2;
-    for (uint8_t i = 0; i < hlen && hx + i < VGA_WIDTH - 1; i++) {
-        video_memory[(DM_LIST_Y + DM_LIST_H + 1) * VGA_WIDTH + hx + i] =
-            (0x01 << 8) | hint[i];
-    }
+    gfx_status_bar(0, 744, 1024, " [q] Back ");
+
+    dm_present();
 }
 
+/* ==========================================================================
+ * Main loop
+ * ======================================================================= */
 void device_manager_run(void) {
-    dm_refresh_devices();
+    dm_refresh();
     dm_selected = 0;
-    int redraw = 1;
+    dm_draw_list();
 
     while (1) {
-        if (redraw) {
-            clear();
-            dm_draw_list();
-            redraw = 0;
-        }
-
         unsigned char c = keyboard_getchar();
 
         if (c == 's' || c == KEY_DOWN) {
             if (dm_selected < dm_device_count - 1) {
                 dm_selected++;
-                redraw = 1;
+                dm_draw_list();
             }
         } else if (c == 'w' || c == KEY_UP) {
             if (dm_selected > 0) {
                 dm_selected--;
-                redraw = 1;
+                dm_draw_list();
             }
         } else if (c == '\n') {
             if (dm_device_count > 0) {
@@ -216,15 +227,13 @@ void device_manager_run(void) {
                 while (1) {
                     unsigned char d = keyboard_getchar();
                     if (d == 'q' || d == KEY_ESC) {
-                        redraw = 1;
+                        dm_draw_list();
                         break;
                     }
                 }
             }
         } else if (c == 'q' || c == KEY_ESC) {
             break;
-        } else {
-            redraw = 1;
         }
     }
 }

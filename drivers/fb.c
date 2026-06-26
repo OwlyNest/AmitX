@@ -24,6 +24,7 @@
 /* --- Includes ---*/
 #include <drivers/fb.h>
 #include <drivers/svga.h>
+#include <drivers/mouse.h>
 #include <screen/printk.h>
 #include <mm/heap.h>
 #include <lib/string.h>
@@ -74,6 +75,7 @@ void fb_present(void) {
         memcpy(fb.front, fb.pixels, (size_t)fb.pitch * fb.height);
     }
     svga_update_full();
+    mouse_refresh_cursor();
 }
 
 /* ==========================================================================

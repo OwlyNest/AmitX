@@ -31,27 +31,11 @@
 
 /* --- Globals ---*/
 gfx_screen_t gscreen = { 0 };
+extern int tick_count;
 
 /* --- Cursor backing store ---*/
-#define CURSOR_W 11
-#define CURSOR_H 11
-static uint32_t cursor_save[CURSOR_W * CURSOR_H];
 static int cursor_sx = -1;
 static int cursor_sy = -1;
-
-static const uint8_t cursor_arrow[CURSOR_H][CURSOR_W] = {
-    {1,0,0,0,0,0,0,0,0,0,0},
-    {1,1,0,0,0,0,0,0,0,0,0},
-    {1,0,1,0,0,0,0,0,0,0,0},
-    {1,0,0,1,0,0,0,0,0,0,0},
-    {1,0,0,0,1,0,0,0,0,0,0},
-    {1,0,0,0,0,1,0,0,0,0,0},
-    {1,0,0,0,0,0,1,0,0,0,0},
-    {1,0,0,0,0,0,0,1,0,0,0},
-    {1,0,0,0,0,0,0,0,1,0,0},
-    {1,1,1,1,1,1,1,1,1,1,0},
-    {1,0,0,0,0,0,0,0,0,0,0},
-};
 
 /* --- Prototypes ---*/
 static int clip_rect(int *x, int *y, int *w, int *h);
@@ -341,79 +325,14 @@ void gfx_desktop(void) {
 }
 
 /* ==========================================================================
- * Mouse cursor
- * ======================================================================= */
-void gfx_draw_cursor(int x, int y) {
-    uint32_t black = gfx_theme_color(GFX_BLACK);
-
-    for (int row = 0; row < CURSOR_H; row++) {
-        for (int col = 0; col < CURSOR_W; col++) {
-            if (cursor_arrow[row][col]) {
-                fb_put_pixel((uint32_t)(x + col),
-                             (uint32_t)(y + row), black);
-            }
-        }
-    }
-}
-
-void gfx_cursor_hide(void) {
-    if (cursor_sx < 0 || fb.pixels == fb.front) return;
-
-    for (int row = 0; row < CURSOR_H; row++) {
-        for (int col = 0; col < CURSOR_W; col++) {
-            int px = cursor_sx + col;
-            int py = cursor_sy + row;
-            if (px >= 0 && px < (int)fb.width &&
-                py >= 0 && py < (int)fb.height) {
-                fb.pixels[py * fb.pitch_px + px] =
-                    cursor_save[row * CURSOR_W + col];
-            }
-        }
-    }
-    cursor_sx = -1;
-    cursor_sy = -1;
-}
-
-void gfx_cursor_show(int x, int y) {
-    if (fb.pixels == fb.front) {
-        /* No backbuffer: just draw, trails are unavoidable */
-        gfx_draw_cursor(x, y);
-        cursor_sx = x;
-        cursor_sy = y;
-        return;
-    }
-
-    gfx_cursor_hide();
-
-    cursor_sx = x;
-    cursor_sy = y;
-
-    for (int row = 0; row < CURSOR_H; row++) {
-        for (int col = 0; col < CURSOR_W; col++) {
-            int px = x + col;
-            int py = y + row;
-            if (px >= 0 && px < (int)fb.width &&
-                py >= 0 && py < (int)fb.height) {
-                cursor_save[row * CURSOR_W + col] =
-                    fb.pixels[py * fb.pitch_px + px];
-            }
-        }
-    }
-
-    gfx_draw_cursor(x, y);
-}
-
-/* ==========================================================================
  * Your Design 2
  * ======================================================================= */
 void gfx_logo_design2(int x, int y) {
     gfx_fill_rect(x, y, 150, 150, gfx_theme_color(GFX_RED));
-    gfx_fill_rect(x + 25, y + 25, 150, 150,
-                  gfx_theme_color(GFX_GREEN));
-    gfx_fill_rect(x + 50, y + 50, 150, 150,
-                  gfx_theme_color(GFX_BLUE));
-    gfx_fill_rect(x + 50, y + 50, 125, 125,
-                  gfx_theme_color(GFX_RED));
+    gfx_fill_rect(x + 25, y + 25, 150, 150, gfx_theme_color(GFX_GREEN));
+    gfx_fill_rect(x + 50, y + 50, 150, 150, gfx_theme_color(GFX_BLUE));
+    gfx_fill_rect(x + 50, y + 50, 125, 125, FB_RGBA(255, 0, 0, 255));
+    gfx_draw_text(x, y-10, "Welcome to AmitX!", gfx_theme_color(GFX_WHITE));
 }
 
 /* ==========================================================================
@@ -432,4 +351,22 @@ void gfx_screen_init(void) {
     cursor_sx = -1;
     cursor_sy = -1;
     printk("[gfx] Screen layer ready (%ux%u)\n", fb.width, fb.height);
+}
+
+void gfx_draw_uptime(void) {
+    if (!fb.initialized) return;
+    
+    int seconds = tick_count / 100;
+    char buf[32];
+    ksnprintf(buf, sizeof(buf), "Uptime: %ds", seconds);
+    
+    /* Draw in top-right corner with a small dark background */
+    int tw = gfx_text_width(buf);
+    int x = (int)fb.width - tw - 8;
+    int y = 8;
+    
+    gfx_fill_rect(x - 4, y - 2, tw + 8, 12, gfx_theme_color(GFX_BG_PANEL));
+    gfx_draw_text(x, y, buf, gfx_theme_color(GFX_FG_TEXT_DIM));
+    
+    /* Only present if we're not in a UI loop that will present anyway */
 }

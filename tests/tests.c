@@ -255,14 +255,8 @@ void test(int testnum) {
             setcolor(15,0);
             break;
     }
-    while (1) {
-        unsigned char c = keyboard_getchar();
-        if (c == 'q') {
-            menu = 1;
+   menu = 1;
             load_cyclone = 0;
             clear();
             draw_start();
-            break;
-        }
-    }
 }

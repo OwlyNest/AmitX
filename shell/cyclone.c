@@ -53,7 +53,7 @@ void cyclone_main(int first) {
     
     /* Init terminal: full screen with margins */
     gfx_term_init(20, 20, 984, 728,  gfx_theme_color(GFX_FG_TEXT), gfx_theme_color(GFX_BG_PANEL));
-    gfx_term_draw_frame(" Cyclone REPL v0.1 ");
+    gfx_term_draw_frame(" Cyclone REPL v0.9");
     
     /* Draw logo in the top-right area of the terminal */
     draw_logo_gfx(version, 700, 60);

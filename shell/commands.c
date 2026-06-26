@@ -62,7 +62,6 @@ void execute_command(const char* input) {
     } else if (starts_with(input, "test ")) {
         const char* num = input + 5;
         int n = atoi(num);
-        load_cyclone = 0;
         test(n);
     } else if (strcmp(input, "coffee") == 0) {
         uint32_t number = 12648430;

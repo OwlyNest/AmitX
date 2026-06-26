@@ -255,8 +255,5 @@ void test(int testnum) {
             setcolor(15,0);
             break;
     }
-   menu = 1;
-            load_cyclone = 0;
-            clear();
-            draw_start();
+    clear();
 }

@@ -22,12 +22,14 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include <hw/rtc.h>
 #include <fs/amfs.h>
 #include <ui/text_editor.h>
 #include <shell/commands.h>
 #include <shell/cyclone.h>
 #include <gfx/gfx_term.h>
 #include <gfx/gfx_screen.h>
+#include <screen/printk.h>
 #include <gfx/fb.h>
 #include <logo/logo.h>
 #include <shell/utils.h>
@@ -72,10 +74,9 @@ void execute_command(const char* input) {
         uint32_t number = 12648430;
         gfx_term_puthex(number);
     } else if (strcmp(input, "time") == 0) {
-        int time = tick_count / 100;
-        gfx_term_puts("Uptime: ");
-        gfx_term_putint(time);
-        gfx_term_puts(" seconds");
+        rtc_time_t t;
+        rtc_read(&t);
+        printk("Date: %d-%d-%d %d:%d:%d", t.year, t.month, t.day, t.hour, t.minute, t.second);
     } else if (strcmp(input, "back") == 0) {
         load_cyclone = 0;
     } else if (starts_with(input, "ls")) {

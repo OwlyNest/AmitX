@@ -94,5 +94,5 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-    menu_run();
+    test_ring3();
 }

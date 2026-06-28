@@ -88,4 +88,5 @@ int amfs_delete(const char *path);
 void amfs_ls(const char *path);
 int amfs_exists(const char *path);
 int amfs_is_mounted(void);
+void amfs_cat(const char *path);
 #endif

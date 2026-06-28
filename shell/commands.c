@@ -23,6 +23,7 @@
 
 /* --- Includes ---*/
 #include <fs/amfs.h>
+#include <ui/text_editor.h>
 #include <shell/commands.h>
 #include <shell/cyclone.h>
 #include <gfx/gfx_term.h>
@@ -44,7 +45,7 @@ extern int version;
 
 /* --- Prototypes ---*/
 void cmd_ls(void);
-
+void run_script(const char *path);
 /* --- Functions ---*/
 
 /* ==========================================================================
@@ -56,6 +57,9 @@ void execute_command(const char* input) {
     if (starts_with(input, "echo ") || starts_with(input, "hoot ")) {
         const char* message = input + 5;
         gfx_term_puts(message);
+    } else if (starts_with(input, "mkdir")) {
+        const char *path = input + 6;
+        amfs_mkdir(path);
     } else if (starts_with(input, "hex ")) {
         const char* num = input + 4;
         uint32_t number = atoi(num);
@@ -77,6 +81,20 @@ void execute_command(const char* input) {
     } else if (starts_with(input, "ls")) {
         const char* dir = input + 3;
         amfs_ls(dir);
+    } else if (starts_with(input, "amity")) {
+        const char *path = input + 6;
+        amity_run(path);
+        /* Redraw terminal after amity exits */
+        gfx_term_clear();
+        gfx_term_draw_frame(" Cyclone REPL v0.9");
+        draw_logo_gfx(version, 700, 60);
+        gfx_term_newline();
+    } else if (starts_with(input, "cat")) {
+        const char *path = input + 4;
+        amfs_cat(path);
+    } else if (starts_with(input, "run")) {
+        const char *path = input + 4;
+        run_script(path);
     } else if (strcmp(input, "switch logo") == 0) {
         version = (version == 1) ? 2 : 1;
         /* Erase old logo area and redraw */
@@ -99,7 +117,7 @@ void execute_command(const char* input) {
         gfx_term_newline();
         gfx_term_puts("  coffee             - Print 0xC0FFEE");
         gfx_term_newline();
-        gfx_term_puts("  ls                 - Print files");
+        gfx_term_puts("  ls <dir>           - Print files");
         gfx_term_newline();
         gfx_term_puts("  switch logo        - Switch Owly art");
     } else if (strcmp(input, "quit") == 0) {
@@ -112,4 +130,26 @@ void execute_command(const char* input) {
         gfx_term_puts("Unknown command");
     }
     gfx_term_newline();
+}
+
+void run_script(const char *path) {
+    char buf[4096];
+    int len = amfs_read(path, buf, sizeof(buf) - 1);
+    if (len <= 0) return;
+    buf[len] = '\0';
+
+    char line[128];
+    int line_pos = 0;
+
+    for (int i = 0; i <= len; i++) {
+        if (buf[i] == '\n' || buf[i] == '\0') {
+            if (line_pos > 0) {
+                line[line_pos] = '\0';
+                execute_command(line);  /* Your existing Cyclone dispatcher */
+                line_pos = 0;
+            }
+        } else if (line_pos < 127) {
+            line[line_pos++] = buf[i];
+        }
+    }
 }

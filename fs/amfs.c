@@ -664,3 +664,14 @@ int amfs_exists(const char *path) {
 int amfs_is_mounted(void) {
     return mounted;
 }
+
+void amfs_cat(const char *path) {
+    char buf[4096];
+    int len;
+
+    len = amfs_read(path, buf, sizeof(buf));
+    if (len > 0) {
+        buf[len] = '\0';
+        printk("[AMFS] Read back on %s:\n\n%s\n", path, buf);
+    }
+}

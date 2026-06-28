@@ -47,6 +47,7 @@ static volatile uint8_t buffer_tail = 0;
 static volatile uint32_t buffer_overflows = 0;
 
 static int shift_down = 0;
+static int ctrl_down = 0;
 static uint8_t expecting_e0 = 0;
 
 /* ------------------------------------------------------------------ */
@@ -213,6 +214,17 @@ static void keyboard_callback(interrupt_frame_t *frame) {
         return;
     }
 
+    /* --- Ctrl modifiers --- */
+    if (scancode == SC_LCTRL) {
+        ctrl_down = 1;
+        return;
+    }
+
+    if (scancode == (SC_LCTRL | SC_RELEASE_BIT)) {
+        ctrl_down = 0;
+        return;
+    }
+
     if (code >= MAX_SCANCODE)
         return;
 
@@ -231,6 +243,13 @@ static void keyboard_callback(interrupt_frame_t *frame) {
         unsigned char c = shift_down
             ? scancode_map_shift[code]
             : scancode_map[code];
+
+        if (ctrl_down) {
+            if (c >= 'a' && c <= 'z')
+                c = c - 'a' + 1;
+            else if (c >= 'A' && c <= 'Z')
+                c = c - 'A' + 1;
+        }
 
         if (!c)
             return;

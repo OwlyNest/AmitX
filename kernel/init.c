@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "shell/commands.h"
 #include <gfx/svga.h>
 #include <screen/screen.h>
 #include <arch/x86/io.h>
@@ -262,10 +263,12 @@ void kernel_setup(void) {
         kscope_log_to_fs();
     }
 
+
     puts("\nPress ENTER to continue...");
     while (keyboard_getchar() != '\n');
 
     clear();
 
     svga_init();
+    execute_command("run /etc/rc");
 }

@@ -94,9 +94,5 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-    amfs_mkdir("/test");
-    amfs_write("/test/foo.txt", "bar", 3);
-    amfs_ls("/");
-    amfs_ls("/test");
     menu_run();
 }

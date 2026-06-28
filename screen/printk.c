@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "gfx/gfx_term.h"
 #include <screen/printk.h>
 #include <screen/screen.h>
 #include <drivers/serial.h>
@@ -259,4 +260,5 @@ void printk(const char *fmt, ...) {
 
     puts(buf);
     serial_puts_default(buf);
+	gfx_term_puts(buf);
 }

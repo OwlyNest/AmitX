@@ -25,6 +25,7 @@
 /* --- Includes ---*/
 #include <mm/paging.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <internal/amitx_consts.h>
 
 /* --- Macros ---*/
@@ -38,8 +39,8 @@
  * These are identity-mapped when paging is off, and offset by KERNEL_VIRT_BASE
  * when paging is on (in higher-half mode).
  * ======================================================================= */
-#define PHYS_TO_VIRT(addr)      ((void *)((uint32_t)(addr) + KERNEL_VIRT_BASE))
-#define VIRT_TO_PHYS(addr)      ((uint32_t)(addr) - KERNEL_VIRT_BASE)
+#define PHYS_TO_VIRT(addr)      ((void *)(((uintptr_t)(addr)) + (uintptr_t)KERNEL_VIRT_BASE))
+#define VIRT_TO_PHYS(addr)      ((uintptr_t)(addr) - (uintptr_t)KERNEL_VIRT_BASE)
 
 /* ==========================================================================
  * Common virtual addresses (physical + KERNEL_VIRT_BASE)
@@ -67,13 +68,13 @@ static inline int paging_enabled(void) {
  *
  * This is a temporary helper until we do a proper higher-half kernel.
  * ======================================================================= */
-static inline void *auto_virt(uint32_t phys_addr) {
+static inline void *auto_virt(uintptr_t phys_addr) {
     if (!paging_enabled()) {
-        return (void *)(uintptr_t)phys_addr;
+        return (void *)phys_addr;
     }
     /* Identity-mapped region: 0 to 8 MB */
     if (phys_addr < paging_get_identity_size()) {
-        return (void *)(uintptr_t)phys_addr;
+        return (void *)phys_addr;
     }
     /* High physical addresses: assume mapped at KERNEL_VIRT_BASE.
      * (Only works if you actually map them there with map_page!) */

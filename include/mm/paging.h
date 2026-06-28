@@ -46,14 +46,15 @@
 
 /* --- Includes ---*/
 #include <stdint.h>
+#include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 void paging_init(void);
-int map_page(uint32_t phys, uint32_t virt, uint32_t flags);
-void unmap_page(uint32_t virt);
-uint32_t virt_to_phys(uint32_t virt);
-uint32_t paging_get_identity_size(void);
+int map_page(uintptr_t phys, uintptr_t virt, uint32_t flags);
+void unmap_page(uintptr_t virt);
+uintptr_t virt_to_phys(uintptr_t virt);
+size_t paging_get_identity_size(void);
 #endif

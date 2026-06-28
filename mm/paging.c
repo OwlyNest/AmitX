@@ -34,8 +34,8 @@
 /* --- Globals ---*/
 /* Physical address of page directory, set during init.
  * After paging is on, use 0xFFFFF000 (recursive mapping) instead. */
-static uint32_t page_directory_phys = 0;
-static uint32_t identity_map_size = 0;
+static uintptr_t page_directory_phys = 0;
+static size_t identity_map_size = 0;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -47,8 +47,8 @@ static uint32_t identity_map_size = 0;
  *   0xFFC00000 + (pd_idx * 4096)  -> page table pd_idx
  *   0xFFFFF000                      -> page directory itself
  * ======================================================================= */
-#define PT_VIRT(pd_idx)         ((uint32_t *)(0xFFC00000 + ((pd_idx) * 4096)))
-#define PD_VIRT                 ((uint32_t *)0xFFFFF000)
+#define PT_VIRT(pd_idx)         ((uint32_t *)(0xFFC00000u + ((pd_idx) * 4096u)))
+#define PD_VIRT                 ((uint32_t *)0xFFFFF000u)
 
 /* ==========================================================================
  * Initialize paging
@@ -69,11 +69,11 @@ void paging_init(void) {
 
     /* Clear all 1024 entries. Zero = not present. */
     memset(pd, 0, PAGE_SIZE);
-    page_directory_phys = (uint32_t)pd;
+    page_directory_phys = (uintptr_t)pd;
 
     /* Identity-map RAM */
-    uint32_t pts_needed = ((uint32_t)(pmm_get_total_ram() >> 22)) + 1;
-    identity_map_size = pts_needed * 4 * 1024 * 1024;
+    size_t pts_needed = ((size_t)(pmm_get_total_ram() >> 22)) + 1;
+    identity_map_size = pts_needed * 4u * 1024u * 1024u;
 
     for (uint32_t pd_idx = 0; pd_idx < pts_needed; pd_idx++) {
         uint32_t *pt = (uint32_t *)pmm_alloc_frame();
@@ -127,35 +127,35 @@ void paging_init(void) {
  * 'flags' is PAGE_WRITABLE and/or PAGE_USER. PAGE_PRESENT is added
  * automatically. Returns 0 on success, -1 on error.
  * ======================================================================= */
-int map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
+int map_page(uintptr_t phys, uintptr_t virt, uint32_t flags) {
     if (phys & PAGE_MASK) {
-        printk("[paging] map_page: phys 0x%x not aligned\n", phys);
+        printk("[paging] map_page: phys 0x%08x not aligned\n", (uint32_t)phys);
         return -1;
     }
     if (virt & PAGE_MASK) {
-        printk("[paging] map_page: virt 0x%x not aligned\n", virt);
+        printk("[paging] map_page: virt 0x%08x not aligned\n", (uint32_t)virt);
         return -1;
     }
 
     /* bits 31-22: page directory index
      * bits 21-12: page table index
      * bits 11-0 : offset within page */
-    uint32_t pd_idx = virt >> 22;
-    uint32_t pt_idx = (virt >> 12) & 0x3FF;
+    uint32_t pd_idx = (uint32_t)(virt >> 22);
+    uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
 
     /* If no page table exists for this PD slot, allocate one */
     if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
-        uint32_t new_pt_phys = (uint32_t)pmm_alloc_frame();
+        uintptr_t new_pt_phys = (uintptr_t)pmm_alloc_frame();
         if (!new_pt_phys) {
             return -1;
         }
 
         /* Point PD entry at the new page table (physical) */
-        PD_VIRT[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
+        PD_VIRT[pd_idx] = (uint32_t)new_pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
 
         /* Flush TLB for the page table's virtual address so we
          * can access it through the recursive mapping */
-        uint32_t pt_virt_addr = 0xFFC00000 + (pd_idx * 4096);
+        uintptr_t pt_virt_addr = 0xFFC00000u + ((uintptr_t)pd_idx * PAGE_SIZE);
         __asm__ __volatile__("invlpg (%0)" : : "r"(pt_virt_addr) : "memory");
 
         /* Now clear the new page table via its virtual address */
@@ -163,8 +163,8 @@ int map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
     }
 
     /* Write the PTE */
-    PT_VIRT(pd_idx)[pt_idx] = (phys & ~PAGE_MASK)
-                              | (flags & 0xFFF) | PAGE_PRESENT;
+    PT_VIRT(pd_idx)[pt_idx] = ((uint32_t)(phys & ~(uintptr_t)PAGE_MASK))
+                              | (flags & 0xFFFu) | PAGE_PRESENT;
 
     /* Flush TLB for the mapped page */
     __asm__ __volatile__("invlpg (%0)"
@@ -176,9 +176,9 @@ int map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
 /* ==========================================================================
  * Unmap a virtual page
  * ======================================================================= */
-void unmap_page(uint32_t virt) {
-    uint32_t pd_idx = virt >> 22;
-    uint32_t pt_idx = (virt >> 12) & 0x3FF;
+void unmap_page(uintptr_t virt) {
+    uint32_t pd_idx = (uint32_t)(virt >> 22);
+    uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
 
     if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
         return;
@@ -193,9 +193,9 @@ void unmap_page(uint32_t virt) {
  * Translate virtual address to physical
  * Returns 0 if not mapped.
  * ======================================================================= */
-uint32_t virt_to_phys(uint32_t virt) {
-    uint32_t pd_idx = virt >> 22;
-    uint32_t pt_idx = (virt >> 12) & 0x3FF;
+uintptr_t virt_to_phys(uintptr_t virt) {
+    uint32_t pd_idx = (uint32_t)(virt >> 22);
+    uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
 
     if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
         return 0;
@@ -205,9 +205,9 @@ uint32_t virt_to_phys(uint32_t virt) {
         return 0;
     }
 
-    return PTE_ADDR(PT_VIRT(pd_idx)[pt_idx]) | (virt & PAGE_MASK);
+    return (uintptr_t)(PTE_ADDR(PT_VIRT(pd_idx)[pt_idx]) | (uint32_t)(virt & PAGE_MASK));
 }
 
-uint32_t paging_get_identity_size(void) {
+size_t paging_get_identity_size(void) {
     return identity_map_size;
 }

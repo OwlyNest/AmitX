@@ -21,8 +21,8 @@
 static pci_device_t* pci_device_list = NULL;
 static int pci_device_count = 0;
 static uint8_t visited_buses[256] = {0};
-static uint32_t pci_io_next = 0xC000;     /* start above legacy ports */
-static uint32_t pci_mem_next = 0xE0000000; /* start high in 32-bit space */
+static uintptr_t pci_io_next = 0xC000u;     /* start above legacy ports */
+static uintptr_t pci_mem_next = 0xE0000000u; /* start high in 32-bit space */
 
 /* ==========================================================================
  * Low-level config space access
@@ -74,7 +74,7 @@ uint8_t pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg
  * BAR parsing
  * ======================================================================= */
 
-uint32_t pci_bar_get_size(pci_device_t* dev, uint8_t bar_idx) {
+size_t pci_bar_get_size(pci_device_t* dev, uint8_t bar_idx) {
     uint8_t reg = PCI_BAR0 + (bar_idx * 4);
     uint32_t original = pci_read_config(dev->bus, dev->device, dev->function, reg);
 
@@ -107,7 +107,7 @@ uint32_t pci_bar_get_size(pci_device_t* dev, uint8_t bar_idx) {
         }
     }
 
-    uint32_t size = probe & mask;
+    size_t size = probe & mask;
     if (size == 0) return 0;
     size = ~size + 1;
     return size;
@@ -160,11 +160,11 @@ void pci_parse_bars(pci_device_t* dev) {
             }
         }
 
-        dev->bars[i].size = pci_bar_get_size(dev, i);
+            dev->bars[i].size = pci_bar_get_size(dev, i);
     }
 }
 
-uint32_t pci_bar_get_base(pci_bar_t* bar) {
+uintptr_t pci_bar_get_base(pci_bar_t* bar) {
     return bar->base;
 }
 
@@ -191,12 +191,12 @@ int pci_assign_bar(pci_device_t *dev, uint8_t bar_index) {
     if (bar->size == 0) return 0; /* Nothing to assign */
     if (bar->base != 0) return 0; /* BIOS already assigned */
 
-    uint32_t align = bar->size;
+    size_t align = bar->size;
 
     if (bar->is_io) {
         /* I/O space: Round up to size alignment */
         pci_io_next = (pci_io_next + align - 1) & ~(align - 1);
-        if (pci_io_next + bar->size > 0x10000) {
+        if (pci_io_next + bar->size > 0x10000u) {
             printk("[pci] Out of I/O space for BAR%d on %02x:%02x.%x\n", bar_index, dev->bus, dev->device, dev->function);
          return -1;
         }

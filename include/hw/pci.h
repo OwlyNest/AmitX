@@ -178,8 +178,8 @@
  * ======================================================================= */
 typedef struct {
     uint32_t raw;
-    uint32_t base;          /* current or assigned base */
-    uint32_t size;
+    uintptr_t base;         /* current or assigned base */
+    size_t   size;
     uint8_t  is_io;
     uint8_t  is_64;
     uint8_t  is_prefetch;
@@ -251,8 +251,8 @@ int         pci_count_devices(void);
 
 /* BAR handling */
 void pci_parse_bars(pci_device_t* dev);
-uint32_t pci_bar_get_base(pci_bar_t* bar);
-uint32_t pci_bar_get_size(pci_device_t* dev, uint8_t bar_idx);
+uintptr_t pci_bar_get_base(pci_bar_t* bar);
+size_t    pci_bar_get_size(pci_device_t* dev, uint8_t bar_idx);
 void pci_bar_enable(pci_device_t* dev, uint8_t bar_idx);
 
 /* Capability handling */

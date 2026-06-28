@@ -22,7 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "internal/amitx_consts.h"
+#include <internal/amitx_consts.h>
+#include <internal/amitx_macros.h>
 #include <arch/x86/idt.h>
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
@@ -257,6 +258,7 @@ static int e1000_init(void) {
         printk("[e1000] No compatible device found\n");
         return 1;
     }
+    ASSERT(pci_dev)
 
     e1000_dev.pci = pci_dev;
     printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",

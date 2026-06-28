@@ -22,6 +22,10 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include <gfx/gfx_screen.h>
+#include <gfx/fb.h>
+#include <internal/kscope.h>
+#include <internal/kscope_nodes.h>
 #include <gfx/svga.h>
 #include <hw/pci.h>
 #include <arch/x86/io.h>
@@ -301,7 +305,20 @@ int svga_init(void) {
     if (svga_fifo_init()                   != 0) return -1;
 
     svga.initialized = 1;
-    printk("[svga] Ready %ux%u VRAM %u KB\n",
-           svga.width, svga.height, svga.vram_size / 1024);
+    printk("[svga] Ready %ux%u VRAM %u KB\n", svga.width, svga.height, svga.vram_size / 1024);
+
+    fb_init();
+    gfx_screen_init();
     return 0;
 }
+
+kscope_node_t svga_node = {
+    .name = "SVGA II",
+    .id = 0x000F,
+    .class = KSCOPE_CLASS_GFX,
+    .subclass = KSCOPE_SUBCLASS_GFX_SVGA,
+    .requires = (kscope_node_t*[]){&pci_node, &pmm_node},
+	.require_count = 1,
+	.provides = (const char *[]){"gfx."},
+	.provide_count = 1,
+};

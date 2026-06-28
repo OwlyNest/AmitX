@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include <gfx/svga.h>
 #include <screen/screen.h>
 #include <arch/x86/io.h>
 #include <fs/amfs.h>
@@ -41,7 +42,6 @@
 #include <arch/x86/idt.h>
 #include <kernel/syscall.h>
 #include <screen/printk.h>
-#include <fs/fs.h>
 #include <drivers/mouse.h>
 #include <kernel/kernel.h>
 #include <internal/amitx_consts.h>
@@ -75,53 +75,52 @@ static int storage_init(void) {
             case 0x01: {  /* IDE */
                 if (found_ide)
                     break;
-    
-                found_ide = 1;
-    
-                /* IDE compatibility mode uses fixed legacy ports */
+            
+                /* QEMU disk is on primary channel */
                 ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
-    
+            
                 uint16_t identify[256];
                 int present_drive = -1;
-    
+            
                 for (int drive = 0; drive < 2; drive++) {
                     if (ide_identify(drive, identify) == 0) {
                         present_drive = drive;
                         break;
                     }
                 }
-    
+            
                 if (present_drive < 0) {
-                    printk("[storage] No IDE drive present\n");
+                    printk("[storage] No drive on primary channel\n");
                     break;
                 }
-    
+            
+                found_ide = 1;
+            
                 /* Try to mount existing filesystem */
                 if (amfs_mount() == 0) {
                     printk("[storage] AmFS mounted from existing image\n");
                     fs_mounted = 1;
                     break;
                 }
-    
+            
                 printk("[storage] No valid AmFS, formatting...\n");
                 if (amfs_mkfs(10 * 2048) != 0) {
                     printk("[storage] amfs_mkfs failed\n");
                     break;
                 }
-    
+            
                 if (amfs_mount() != 0) {
                     printk("[storage] amfs_mount failed after mkfs\n");
                     break;
                 }
-    
-                /* Create default files */
-                if (amfs_write_file("helloworld.txt", "Hello from AmitFS!\n", 19) != 0) {
-                    printk("[storage] Failed to write helloworld.txt\n");
+            
+                if (amfs_write("/helloworld.txt", "Hello from AmitFS!\n", 19) != 0) {
+                    printk("[storage] Failed to write /helloworld.txt\n");
                 }
-                if (amfs_write_file("README", "AmitX Filesystem v0.1\n", 22) != 0) {
-                    printk("[storage] Failed to write README\n");
+                if (amfs_write("/README", "AmitX Filesystem v0.1\n", 22) != 0) {
+                    printk("[storage] Failed to write /README\n");
                 }
-    
+            
                 fs_mounted = 1;
                 break;
             }
@@ -165,18 +164,18 @@ static int storage_init(void) {
     }
 
     if (fs_mounted) {
-        amfs_ls();
+        amfs_ls("/");
 
         char buf[256];
         int len;
 
-        len = amfs_read_file("helloworld.txt", buf, sizeof(buf));
+        len = amfs_read("/helloworld.txt", buf, sizeof(buf));
         if (len > 0) {
             buf[len] = '\0';
             printk("[amfs] Read back: %s", buf);
         }
 
-        len = amfs_read_file("README", buf, sizeof(buf));
+        len = amfs_read("/README", buf, sizeof(buf));
         if (len > 0) {
             buf[len] = '\0';
             printk("[amfs] Read back: %s", buf);
@@ -243,7 +242,7 @@ void pci_log_to_fs(void) {
     pos += ksnprintf(buf + pos, 4096 - pos,
         "=== End of Inventory ===\n");
 
-    amfs_write_file("pci_devices.txt", buf, pos);
+    amfs_write("/pci_devices.txt", buf, pos);
     free(buf);
 }
 
@@ -253,7 +252,6 @@ void kernel_setup(void) {
     paging_init();
     kscope_dump();
 
-    fs_init();
     syscall_init();
 
     pmm_print_map();
@@ -268,4 +266,6 @@ void kernel_setup(void) {
     while (keyboard_getchar() != '\n');
 
     clear();
+
+    svga_init();
 }

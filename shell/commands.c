@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include <fs/amfs.h>
 #include <shell/commands.h>
 #include <shell/cyclone.h>
 #include <gfx/gfx_term.h>
@@ -50,7 +51,7 @@ void cmd_ls(void);
  * Command dispatcher
  * ======================================================================= */
 void execute_command(const char* input) {
-    gfx_term_puts(">> ");
+    gfx_term_puts("[::]:\n");
     
     if (starts_with(input, "echo ") || starts_with(input, "hoot ")) {
         const char* message = input + 5;
@@ -73,8 +74,9 @@ void execute_command(const char* input) {
         gfx_term_puts(" seconds");
     } else if (strcmp(input, "back") == 0) {
         load_cyclone = 0;
-    } else if (strcmp(input, "ls") == 0) {
-        cmd_ls();
+    } else if (starts_with(input, "ls")) {
+        const char* dir = input + 3;
+        amfs_ls(dir);
     } else if (strcmp(input, "switch logo") == 0) {
         version = (version == 1) ? 2 : 1;
         /* Erase old logo area and redraw */
@@ -110,15 +112,4 @@ void execute_command(const char* input) {
         gfx_term_puts("Unknown command");
     }
     gfx_term_newline();
-}
-
-/* ==========================================================================
- * List files
- * ======================================================================= */
-void cmd_ls(void) {
-    gfx_term_puts("hello.txt");
-    gfx_term_newline();
-    gfx_term_puts("log.txt");
-    gfx_term_newline();
-    gfx_term_puts("settings.cfg");
 }

@@ -23,6 +23,7 @@
 
 /* --- Includes ---*/
 /* initialize with KScope delete soon*/
+#include <fs/amfs.h>
 #include <gfx/svga.h>
 #include <gfx/fb.h>
 
@@ -93,8 +94,9 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-
-    svga_init();
-    fb_init();
+    amfs_mkdir("/test");
+    amfs_write("/test/foo.txt", "bar", 3);
+    amfs_ls("/");
+    amfs_ls("/test");
     menu_run();
 }

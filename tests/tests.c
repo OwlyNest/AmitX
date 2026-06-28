@@ -45,7 +45,7 @@ void test_printk() {
 }
 
 void test_fs() {
-    puts("Under construction");
+    printk("Under construction\n");
 }
 
 void test_heap() {

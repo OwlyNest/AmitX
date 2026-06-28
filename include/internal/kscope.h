@@ -42,6 +42,7 @@ typedef enum {
     KSCOPE_CLASS_PROCESS   = 0x08,
     KSCOPE_CLASS_UI        = 0x09,
     KSCOPE_CLASS_POWER     = 0x0A,
+    KSCOPE_CLASS_GFX       = 0x0B,
 } kscope_class_t;
 
 typedef enum {
@@ -81,6 +82,9 @@ typedef enum {
 
     /* Power (0x0Axx) */
     KSCOPE_SUBCLASS_POWER_ACPI = 0x0A00,
+
+    /* GFX (0x0Bxx) */
+    KSCOPE_SUBCLASS_GFX_SVGA = 0x0B00,
 } kscope_subclass_t;
 
 #define KSCOPE_SUBCLASS_CLASS(sub) ((sub) >> 8)

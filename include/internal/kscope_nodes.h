@@ -41,6 +41,7 @@ extern kscope_node_t e1000_node;
 extern kscope_node_t serial_node;
 extern kscope_node_t mouse_node;
 extern kscope_node_t storage_node;
+extern kscope_node_t svga_node;
 
 /* --- Prototypes ---*/
 #endif

@@ -32,7 +32,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "arch/x86/interrupts.h"
+#include <arch/x86/interrupts.h>
 #include <drivers/serial.h>
 #include <arch/x86/io.h>
 #include <internal/amitx_consts.h>

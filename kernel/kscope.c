@@ -300,18 +300,19 @@ const kscope_node_t *kscope_find_by_id(uint32_t id) {
  * ======================================================================= */
 const char *kscope_class_name(kscope_class_t class) {
     switch (class) {
-    case KSCOPE_CLASS_CORE:      return "Core";
-    case KSCOPE_CLASS_MEMORY:    return "Memory";
-    case KSCOPE_CLASS_INTERRUPT: return "Interrupt";
-    case KSCOPE_CLASS_TIME:      return "Time";
-    case KSCOPE_CLASS_DRIVER:    return "Driver";
-    case KSCOPE_CLASS_STORAGE:   return "Storage";
-    case KSCOPE_CLASS_FS:        return "FileSystem";
-    case KSCOPE_CLASS_NETWORK:   return "Network";
-    case KSCOPE_CLASS_PROCESS:   return "Process";
-    case KSCOPE_CLASS_UI:        return "UserInterface";
-    case KSCOPE_CLASS_POWER:     return "Power";
-    default:                     return "Unknown";
+        case KSCOPE_CLASS_CORE:      return "Core";
+        case KSCOPE_CLASS_MEMORY:    return "Memory";
+        case KSCOPE_CLASS_INTERRUPT: return "Interrupt";
+        case KSCOPE_CLASS_TIME:      return "Time";
+        case KSCOPE_CLASS_DRIVER:    return "Driver";
+        case KSCOPE_CLASS_STORAGE:   return "Storage";
+        case KSCOPE_CLASS_FS:        return "FileSystem";
+        case KSCOPE_CLASS_NETWORK:   return "Network";
+        case KSCOPE_CLASS_PROCESS:   return "Process";
+        case KSCOPE_CLASS_UI:        return "UserInterface";
+        case KSCOPE_CLASS_POWER:     return "Power";
+        case KSCOPE_CLASS_GFX:       return "GFX";
+        default:                     return "Unknown";
     }
 }
 
@@ -319,49 +320,51 @@ const char *kscope_subclass_name(uint32_t subclass) {
     uint8_t cls = KSCOPE_SUBCLASS_CLASS(subclass);
 
     switch (subclass) {
-    /* Core (0x00xx) */
-    case KSCOPE_SUBCLASS_CORE_GDT: return "GDT";
-    case KSCOPE_SUBCLASS_CORE_IDT: return "IDT";
-    case KSCOPE_SUBCLASS_CORE_TSS: return "TSS";
-    case KSCOPE_SUBCLASS_CORE_PIC: return "PIC";
-    case KSCOPE_SUBCLASS_CORE_PCI: return "PCI";
+        /* Core (0x00xx) */
+        case KSCOPE_SUBCLASS_CORE_GDT: return "GDT";
+        case KSCOPE_SUBCLASS_CORE_IDT: return "IDT";
+        case KSCOPE_SUBCLASS_CORE_TSS: return "TSS";
+        case KSCOPE_SUBCLASS_CORE_PIC: return "PIC";
+        case KSCOPE_SUBCLASS_CORE_PCI: return "PCI";
 
-    /* Memory (0x01xx) */
-    case KSCOPE_SUBCLASS_MEMORY_PMM:  return "PMM";
-    case KSCOPE_SUBCLASS_MEMORY_HEAP: return "Heap";
+        /* Memory (0x01xx) */
+        case KSCOPE_SUBCLASS_MEMORY_PMM:  return "PMM";
+        case KSCOPE_SUBCLASS_MEMORY_HEAP: return "Heap";
 
-    /* Time (0x03xx) */
-    case KSCOPE_SUBCLASS_TIME_PIT: return "PIT";
+        /* Time (0x03xx) */
+        case KSCOPE_SUBCLASS_TIME_PIT: return "PIT";
 
-    /* Driver (0x04xx) */
-    case KSCOPE_SUBCLASS_DRIVER_KEYBOARD: return "Keyboard";
-    case KSCOPE_SUBCLASS_DRIVER_MOUSE:    return "Mouse";
-    case KSCOPE_SUBCLASS_DRIVER_SERIAL:   return "Serial";
+        /* Driver (0x04xx) */
+        case KSCOPE_SUBCLASS_DRIVER_KEYBOARD: return "Keyboard";
+        case KSCOPE_SUBCLASS_DRIVER_MOUSE:    return "Mouse";
+        case KSCOPE_SUBCLASS_DRIVER_SERIAL:   return "Serial";
 
-    /* Storage (0x05xx) */
-    case KSCOPE_SUBCLASS_STORAGE_CONTROLLER: return "Controller";
-    case KSCOPE_SUBCLASS_STORAGE_IDE:        return "IDE";
+        /* Storage (0x05xx) */
+        case KSCOPE_SUBCLASS_STORAGE_CONTROLLER: return "Controller";
+        case KSCOPE_SUBCLASS_STORAGE_IDE:        return "IDE";
 
-    /* FS (0x06xx) */
-    case KSCOPE_SUBCLASS_FS_VFS:   return "VFS";
-    case KSCOPE_SUBCLASS_FS_AMFS:  return "AMFS";
-    case KSCOPE_SUBCLASS_FS_RAMFS: return "RAMFS";
+        /* FS (0x06xx) */
+        case KSCOPE_SUBCLASS_FS_VFS:   return "VFS";
+        case KSCOPE_SUBCLASS_FS_AMFS:  return "AMFS";
+        case KSCOPE_SUBCLASS_FS_RAMFS: return "RAMFS";
 
-    /* Network (0x07xx) */
-    case KSCOPE_SUBCLASS_NETWORK_E1000: return "E1000";
+        /* Network (0x07xx) */
+        case KSCOPE_SUBCLASS_NETWORK_E1000: return "E1000";
 
-    /* UI (0x09xx) */
-    case KSCOPE_SUBCLASS_UI_SCREEN: return "Screen";
+        /* UI (0x09xx) */
+        case KSCOPE_SUBCLASS_UI_SCREEN: return "Screen";
 
-    /* Power (0x0Axx) */
-    case KSCOPE_SUBCLASS_POWER_ACPI: return "ACPI";
+        /* Power (0x0Axx) */
+        case KSCOPE_SUBCLASS_POWER_ACPI: return "ACPI";
 
-    default: {
-        static char buf[32];
-        ksnprintf(buf, sizeof(buf), "Unknown(0x%02x/0x%04x)",
-                  cls, subclass);
-        return buf;
-    }
+        /* GFX (0x0Bxx) */
+        case KSCOPE_SUBCLASS_GFX_SVGA:   return "SVGA";
+
+        default: {
+            static char buf[32];
+            ksnprintf(buf, sizeof(buf), "Unknown(0x%02x/0x%04x)", cls, subclass);
+            return buf;
+        }
     }
 }
 
@@ -372,11 +375,11 @@ void kscope_dump_node(const kscope_node_t *node) {
     const char *state_str;
 
     switch (node->state) {
-    case KSCOPE_STATE_REGISTERED: state_str = "Registered"; break;
-    case KSCOPE_STATE_PROBING:      state_str = "Probing";    break;
-    case KSCOPE_STATE_OK:           state_str = "OK";         break;
-    case KSCOPE_STATE_FAILED:       state_str = "FAILED";     break;
-    default:                        state_str = "Unknown";    break;
+        case KSCOPE_STATE_REGISTERED: state_str = "Registered"; break;
+        case KSCOPE_STATE_PROBING:      state_str = "Probing";    break;
+        case KSCOPE_STATE_OK:           state_str = "OK";         break;
+        case KSCOPE_STATE_FAILED:       state_str = "FAILED";     break;
+        default:                        state_str = "Unknown";    break;
     }
 
     printk("KScope %s %s, %s (0x%04x)\n",
@@ -471,7 +474,7 @@ void kscope_log_to_fs(void) {
 
     pos += ksnprintf(buf + pos, bufsize - pos, "=== End of Inventory ===\n");
 
-    amfs_write_file("kscope_inventory.txt", buf, pos);
+    amfs_write("/kscope_inventory.txt", buf, pos);
     free(buf);
 }
 

@@ -203,5 +203,5 @@ void gfx_term_move_cursor(int col, int row) {
  * Draw prompt at current cursor position
  * ======================================================================= */
 void gfx_term_draw_prompt(void) {
-    gfx_term_puts("> ");
+    gfx_term_puts("[::]> ");
 }

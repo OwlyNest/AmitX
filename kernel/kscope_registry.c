@@ -50,4 +50,5 @@ void kscope_register_all(void) {
 	kscope_register(&storage_node);
 	kscope_register(&mouse_node);
 	kscope_register(&e1000_node);
+	kscope_register(&svga_node);
 }

@@ -23,46 +23,69 @@
 #ifndef AMFS_H
 #define AMFS_H
 
-#define AMFS_MAGIC        "AMFS"
-#define AMFS_VERSION      1
-#define AMFS_SECTOR_SIZE  512
-#define AMFS_MAX_FILES    64
-#define AMFS_NAME_LEN     32
+#define AMFS_MAGIC             "AMFS"
+#define AMFS_VERSION           2
 
+#define AMFS_SECTOR_SIZE       512
+#define AMFS_MAX_INODES        64
+#define AMFS_INODE_SIZE        64
+#define AMFS_INODES_PER_SECTOR (AMFS_SECTOR_SIZE / AMFS_INODE_SIZE)
+#define AMFS_INODE_SECTORS     (AMFS_MAX_INODES / AMFS_INODES_PER_SECTOR)
+
+#define AMFS_DIRECT_BLOCKS     10
+#define AMFS_NAME_LEN          30
+#define AMFS_DIRENT_SIZE       32
+#define AMFS_DIRENTS_PER_BLOCK (AMFS_SECTOR_SIZE / AMFS_DIRENT_SIZE)
+
+#define AMFS_TYPE_FREE         0
+#define AMFS_TYPE_FILE         1
+#define AMFS_TYPE_DIR          2
+
+#define AMFS_INVALID_INODE UINT32_MAX
 
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 /* Superblock at sector 0 */
-typedef struct __attribute__((packed)) {
+typedef struct {
     char     magic[4];
     uint32_t version;
     uint32_t total_sectors;
-    uint32_t dir_sector;        /* Sector where directory starts */
-    uint32_t data_sector;       /* Sector where data starts */
-    uint32_t max_files;
-    uint32_t sector_size;
-    uint32_t file_count;        /* Currently used entries */
-    uint8_t  reserved[484];
+    uint32_t inode_count;
+    uint32_t data_block_count;
+    uint32_t inode_start;
+    uint32_t data_start;
+    uint32_t block_size;
+    uint32_t root_inode;
 } amfs_superblock_t;
 
 /* Directory entry — one per potential file */
-typedef struct __attribute__((packed)) {
-    char     name[AMFS_NAME_LEN];
-    uint32_t start_sector;
+typedef struct {
+    uint32_t type;
     uint32_t size;
-    uint8_t  used;              /* 0 = free, 1 = used */
-    uint8_t  reserved[475];
+    uint32_t blocks[AMFS_DIRECT_BLOCKS];
+    uint32_t indirect;
+    uint32_t parent;
+    uint32_t reserved[2];
+} amfs_inode_t;
+
+typedef struct {
+    uint32_t inode;
+    char     name[AMFS_NAME_LEN];
 } amfs_dirent_t;
+
+
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-int  amfs_mkfs(uint32_t total_sectors);
-int  amfs_mount(void);
-int  amfs_write_file(const char* name, const char* data, uint32_t size);
-int  amfs_read_file(const char* name, char* buf, uint32_t buf_size);
-int  amfs_delete_file(const char* name);
-void amfs_ls(void);
-int  amfs_exists(const char* name);
-int  amfs_is_mounted(void);
+int amfs_mkfs(uint32_t total_sectors);
+int amfs_mount(void);
+int amfs_mkdir(const char *path);
+int amfs_create(const char *path);
+int amfs_write(const char *path, const char *data, uint32_t size);
+int amfs_read(const char *path, char *buf, uint32_t buf_size);
+int amfs_delete(const char *path);
+void amfs_ls(const char *path);
+int amfs_exists(const char *path);
+int amfs_is_mounted(void);
 #endif

@@ -54,8 +54,8 @@ typedef struct boot_info {
     multiboot_info_t *mb_info;
     uint64_t        total_ram;
     uint32_t        total_frames;
-    uint32_t        kernel_start;
-    uint32_t        kernel_end;
+    uintptr_t       kernel_start;
+    uintptr_t       kernel_end;
     int             valid;
 	framebuffer_info_t fb;
 } boot_info_t;

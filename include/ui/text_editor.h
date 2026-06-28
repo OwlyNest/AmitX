@@ -27,14 +27,15 @@
 #define EDITOR_MARGIN_Y  28
 #define EDITOR_STATUS_H  20
 /* --- Includes ---*/
+#include <stddef.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 typedef struct {
 	char *data;           /* File contents, null-terminated */
-    uint32_t size;        /* Current size in bytes */
-    uint32_t capacity;    /* Allocated size */
-    uint32_t cursor;      /* Byte offset into data */
-    uint32_t scroll_y;    /* First visible line (0-based) */
+    size_t size;         /* Current size in bytes */
+    size_t capacity;     /* Allocated size */
+    size_t cursor;       /* Byte offset into data */
+    uint32_t scroll_y;   /* First visible line (0-based) */
     int cx, cy;           /* Cursor position on screen (chars) */
     int cols, rows;       /* Text area dimensions (chars) */
     char path[128];       /* Filename */

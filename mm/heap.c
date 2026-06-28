@@ -35,7 +35,7 @@ static int heap_init(void) {
         return -1;
     }
 
-    uint32_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
+    uintptr_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
 
     pmm_reserve_region(start, HEAP_SIZE);
 

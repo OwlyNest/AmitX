@@ -45,6 +45,7 @@
 
 /* --- Includes ---*/
 #include <stdint.h>
+#include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
 /* Superblock at sector 0 */
 typedef struct {
@@ -82,8 +83,8 @@ int amfs_mkfs(uint32_t total_sectors);
 int amfs_mount(void);
 int amfs_mkdir(const char *path);
 int amfs_create(const char *path);
-int amfs_write(const char *path, const char *data, uint32_t size);
-int amfs_read(const char *path, char *buf, uint32_t buf_size);
+int amfs_write(const char *path, const char *data, size_t size);
+int amfs_read(const char *path, char *buf, size_t buf_size);
 int amfs_delete(const char *path);
 void amfs_ls(const char *path);
 int amfs_exists(const char *path);

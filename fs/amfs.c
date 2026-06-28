@@ -46,7 +46,7 @@ static void inode_read(uint32_t inum, amfs_inode_t *inode);
 static void inode_write(uint32_t inum, const amfs_inode_t *inode);
 static uint32_t inode_alloc(uint32_t type);
 static void inode_free(uint32_t inum);
-static uint32_t block_for_offset(uint32_t inum, uint32_t offset, int alloc);
+static uint32_t block_for_offset(uint32_t inum, size_t offset, int alloc);
 static int dir_find_entry(uint32_t dir_inum, const char *name, amfs_dirent_t *out, uint32_t *index);
 static int dir_add_entry(uint32_t dir_inum, const char *name, uint32_t inum);
 static int dir_remove_entry(uint32_t dir_inum, const char *name);
@@ -164,10 +164,10 @@ static void inode_free(uint32_t inum) {
 }
 
 /* --- Block mapping --- */
-static uint32_t block_for_offset(uint32_t inum, uint32_t offset, int alloc) {
+static uint32_t block_for_offset(uint32_t inum, size_t offset, int alloc) {
     amfs_inode_t inode;
     inode_read(inum, &inode);
-    uint32_t bidx = offset / AMFS_SECTOR_SIZE;
+    size_t bidx = offset / AMFS_SECTOR_SIZE;
     uint32_t sector = 0;
     int modified = 0;
 
@@ -490,7 +490,7 @@ int amfs_create(const char *path) {
     return 0;
 }
 
-int amfs_write(const char *path, const char *data, uint32_t size) {
+int amfs_write(const char *path, const char *data, size_t size) {
     if (!mounted) return -1;
     if (!path || !data || size == 0) return -1;
 
@@ -523,13 +523,13 @@ int amfs_write(const char *path, const char *data, uint32_t size) {
     inode_write(inum, &inode);
 
     /* Write new data */
-    for (uint32_t offset = 0; offset < size; offset += AMFS_SECTOR_SIZE) {
+    for (size_t offset = 0; offset < size; offset += AMFS_SECTOR_SIZE) {
         uint32_t sector = block_for_offset(inum, offset, 1);
         if (!sector) return -1;
 
         uint8_t buf[AMFS_SECTOR_SIZE];
         memset(buf, 0, AMFS_SECTOR_SIZE);
-        uint32_t to_copy = size - offset;
+        size_t to_copy = size - offset;
         if (to_copy > AMFS_SECTOR_SIZE) to_copy = AMFS_SECTOR_SIZE;
         memcpy(buf, data + offset, to_copy);
         write_sector(sector, buf);
@@ -542,7 +542,7 @@ int amfs_write(const char *path, const char *data, uint32_t size) {
     printk("[AMFS] wrote '%s' (%d bytes)\n", path, size);
     return 0;
 }
-int amfs_read(const char *path, char *buf, uint32_t buf_size) {
+int amfs_read(const char *path, char *buf, size_t buf_size) {
     if (!mounted) return -1;
     if (!path || !buf || buf_size == 0) return -1;
 
@@ -553,17 +553,17 @@ int amfs_read(const char *path, char *buf, uint32_t buf_size) {
     inode_read(inum, &inode);
     if (inode.type != AMFS_TYPE_FILE) return -1;
 
-    uint32_t to_read = inode.size;
+    size_t to_read = inode.size;
     if (to_read > buf_size) to_read = buf_size;
 
-    for (uint32_t offset = 0; offset < to_read; offset += AMFS_SECTOR_SIZE) {
+    for (size_t offset = 0; offset < to_read; offset += AMFS_SECTOR_SIZE) {
         uint32_t sector = block_for_offset(inum, offset, 0);
         if (!sector) return -1;
 
         uint8_t sector_buf[AMFS_SECTOR_SIZE];
         read_sector(sector, sector_buf);
 
-        uint32_t chunk = to_read - offset;
+        size_t chunk = to_read - offset;
         if (chunk > AMFS_SECTOR_SIZE) chunk = AMFS_SECTOR_SIZE;
         memcpy(buf + offset, sector_buf, chunk);
     }

@@ -94,9 +94,9 @@ static void ed_free(void) {
     }
 }
 
-static void ed_grow(uint32_t min_size) {
+static void ed_grow(size_t min_size) {
 	if (min_size <= ed.capacity) return;
-    uint32_t new_cap = ed.capacity * 2;
+    size_t new_cap = ed.capacity * 2;
     while (new_cap < min_size) new_cap *= 2;
     char *new_data = (char *)malloc(new_cap);
     if (!new_data) return;
@@ -147,34 +147,34 @@ static void ed_save(void) {
 
 /* --- Cursor movement --- */
 
-static uint32_t ed_line_start(uint32_t pos) {
+static size_t ed_line_start(size_t pos) {
     while (pos > 0 && ed.data[pos - 1] != '\n') pos--;
     return pos;
 }
 
-static uint32_t ed_line_end(uint32_t pos) {
+static size_t ed_line_end(size_t pos) {
     while (pos < ed.size && ed.data[pos] != '\n') pos++;
     return pos;
 }
 
-static uint32_t ed_prev_line_start(uint32_t pos) {
-    uint32_t start = ed_line_start(pos);
+static size_t ed_prev_line_start(size_t pos) {
+    size_t start = ed_line_start(pos);
     if (start == 0) return 0;
     return ed_line_start(start - 1);
 }
 
-static uint32_t ed_next_line_start(uint32_t pos) {
-    uint32_t end = ed_line_end(pos);
+static size_t ed_next_line_start(size_t pos) {
+    size_t end = ed_line_end(pos);
     if (end >= ed.size) return ed.size;
     return end + 1;
 }
 
 static void ed_update_cx_cy(void) {
     /* Count lines and columns to cursor */
-    uint32_t line_start = ed_line_start(ed.cursor);
+    size_t line_start = ed_line_start(ed.cursor);
     ed.cx = ed.cursor - line_start;
 
-    uint32_t pos = 0;
+    size_t pos = 0;
     ed.cy = 0;
     while (pos < line_start) {
         if (ed.data[pos] == '\n') ed.cy++;
@@ -191,11 +191,11 @@ static void ed_ensure_visible(void) {
 }
 
 static void ed_cursor_up(void) {
-    uint32_t prev = ed_prev_line_start(ed.cursor);
+    size_t prev = ed_prev_line_start(ed.cursor);
     if (prev == ed.cursor) return; /* Already on first line */
 
-    uint32_t prev_end = ed_line_end(prev);
-    uint32_t offset = ed.cursor - ed_line_start(ed.cursor);
+    size_t prev_end = ed_line_end(prev);
+    size_t offset = ed.cursor - ed_line_start(ed.cursor);
     if (offset > prev_end - prev) offset = prev_end - prev;
     ed.cursor = prev + offset;
     ed_update_cx_cy();
@@ -203,11 +203,11 @@ static void ed_cursor_up(void) {
 }
 
 static void ed_cursor_down(void) {
-    uint32_t next = ed_next_line_start(ed.cursor);
+    size_t next = ed_next_line_start(ed.cursor);
     if (next == ed.size && ed.cursor == ed.size) return;
 
-    uint32_t next_end = ed_line_end(next);
-    uint32_t offset = ed.cursor - ed_line_start(ed.cursor);
+    size_t next_end = ed_line_end(next);
+    size_t offset = ed.cursor - ed_line_start(ed.cursor);
     if (offset > next_end - next) offset = next_end - next;
     ed.cursor = next + offset;
     if (ed.cursor > ed.size) ed.cursor = ed.size;
@@ -301,7 +301,7 @@ static void ed_draw(void) {
 
     /* Draw text */
     uint32_t line = 0;
-    uint32_t pos = 0;
+    size_t pos = 0;
     int screen_y = 0;
 
     while (pos <= ed.size && screen_y < ed.rows) {

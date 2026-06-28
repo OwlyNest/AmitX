@@ -114,7 +114,7 @@ static int svga_find_device(void) {
  * ======================================================================= */
 static int svga_map_fb(void) {
     uint32_t fb_offset = svga_read_reg(SVGA_REG_FB_OFFSET);
-    uint32_t fb_phys   = svga.fb_phys + fb_offset;
+    uintptr_t fb_phys   = svga.fb_phys + fb_offset;
 
     /*
      * Map only the visible area for the current mode.
@@ -127,7 +127,7 @@ static int svga_map_fb(void) {
      *
      * Only map pitch * height — the exact bytes the current mode uses.
      */
-    uint32_t fb_size = svga.pitch * svga.height;
+    size_t fb_size = (size_t)svga.pitch * svga.height;
     if (fb_size == 0) {
         printk("[svga] Cannot determine FB size (mode not set?)\n");
         return -1;
@@ -144,13 +144,13 @@ static int svga_map_fb(void) {
         return -1;
     }
 
-    uint32_t pages = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
-    for (uint32_t i = 0; i < pages; i++) {
-        uint32_t phys = fb_phys        + i * PAGE_SIZE;
-        uint32_t virt = SVGA_FB_VIRT   + i * PAGE_SIZE;
+    size_t pages = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t phys = fb_phys        + i * PAGE_SIZE;
+        uintptr_t virt = SVGA_FB_VIRT   + i * PAGE_SIZE;
         if (map_page(phys, virt, PAGE_WRITABLE | PAGE_NOCACHE) != 0) {
             printk("[svga] FB map failed page %u "
-                   "(phys 0x%08x)\n", i, phys);
+                   "(phys 0x%08x)\n", (unsigned)i, (unsigned)phys);
             return -1;
         }
     }
@@ -175,12 +175,12 @@ static int svga_fifo_init(void) {
         return -1;
     }
 
-    uint32_t pages = (fifo_size + PAGE_SIZE - 1) / PAGE_SIZE;
-    for (uint32_t i = 0; i < pages; i++) {
-        uint32_t phys = svga.fifo_phys   + i * PAGE_SIZE;
-        uint32_t virt = SVGA_FIFO_VIRT + i * PAGE_SIZE;
+    size_t pages = (fifo_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t phys = svga.fifo_phys   + i * PAGE_SIZE;
+        uintptr_t virt = SVGA_FIFO_VIRT + i * PAGE_SIZE;
         if (map_page(phys, virt, PAGE_WRITABLE) != 0) {
-            printk("[svga] FIFO map failed page %u\n", i);
+            printk("[svga] FIFO map failed page %u\n", (unsigned)i);
             return -1;
         }
     }

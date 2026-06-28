@@ -98,8 +98,8 @@
 /* --- Typedefs - Structs - Enums ---*/
 typedef struct svga_device {
     uint16_t  io_base;          /* I/O port base (BAR0)             */
-    uint32_t  fb_phys;          /* Framebuffer BAR physical base    */
-    uint32_t  fifo_phys;        /* FIFO BAR physical base           */
+    uintptr_t fb_phys;          /* Framebuffer BAR physical base    */
+    uintptr_t fifo_phys;        /* FIFO BAR physical base           */
     void     *fb_virt;          /* Mapped framebuffer virtual addr  */
     void     *fifo_virt;        /* Mapped FIFO virtual addr         */
     uint32_t  width;

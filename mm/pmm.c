@@ -323,7 +323,7 @@ int pmm_init(void) {
     pmm_reserve_region(0x00000000, 0x00100000);
 
     /* Reserve kernel area: 0x100000 to end of bitmap */
-    uint32_t kernel_end = (uint32_t)bitmap + bitmap_size;
+    uintptr_t kernel_end = (uintptr_t)bitmap + bitmap_size;
     pmm_reserve_region(0x00100000, kernel_end - 0x00100000);
 
     /* Reserve VGA text mode memory */

@@ -1,4 +1,5 @@
 #include <kernel/syscall.h>
+#include <drivers/serial.h>
 #include <screen/screen.h>
 #include <arch/x86/time.h>
 #include <drivers/keyboard.h>
@@ -38,7 +39,7 @@ int syscall(int num, uint32_t arg1, uint32_t arg2, uint32_t arg3) {
 
 static int syscall_write(uint32_t a1, uint32_t a2, uint32_t a3) {
     (void)a2; (void)a3;
-    puts((const char*)a1);
+    serial_puts_default((const char*)a1);
     return 0;
 }
 

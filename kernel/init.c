@@ -269,6 +269,6 @@ void kernel_setup(void) {
 
     clear();
 
-    svga_init();
+    //svga_init();
     execute_command("run /etc/rc");
 }

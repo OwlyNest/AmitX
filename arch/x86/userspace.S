@@ -40,10 +40,11 @@ usermode_jump:
     mov ecx, [esp + 4]       /* user EIP */
 
     /* Build ring 3 stack frame for iret */
-    push 0x23                /* SS = user data | RPL=3 (0x20 | 3) */
+    push 0x23                /* SS */
     push eax                 /* ESP */
-    or dword ptr [esp], 0x200
-    pushf                    /* EFLAGS */
+
+    pushfd
+    or dword ptr [esp], 0x200 
     push 0x1B                /* CS = user code | RPL=3 (0x18 | 3) */
     push ecx                 /* EIP */
 

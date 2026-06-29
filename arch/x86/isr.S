@@ -53,14 +53,7 @@
 isr\num:
     cli
     
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0              # Fake error code
     push \num           # Interrupt number
@@ -71,14 +64,7 @@ isr\num:
 
     add esp, 8
 
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 .endm
@@ -88,14 +74,7 @@ isr\num:
 isr\num:
     cli
 
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     mov eax, [esp + 32]   # error code is ABOVE pusha frame
     push eax              # push error_code
@@ -107,15 +86,7 @@ isr\num:
 
     add esp, 8
 
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
-
+    popad
     add esp, 4            # discard original CPU error code
     iret
 .endm
@@ -181,14 +152,7 @@ isr8:
 # IRQ0 (timer)
 isr32:
     
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0              
     push 32
@@ -199,28 +163,14 @@ isr32:
 
     add esp, 8
     
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 
 # IRQ1 (keyboard)
 isr33:
     
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0
     push 33
@@ -231,28 +181,14 @@ isr33:
 
     add esp, 8
     
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 
 # IRQ4 (serial)
 isr36:
     
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0              
     push 36
@@ -263,27 +199,13 @@ isr36:
 
     add esp, 8
     
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 
 # IRQ10 (E1000)
 isr42:
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0              
     push 42
@@ -294,28 +216,14 @@ isr42:
 
     add esp, 8
     
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 
 # IRQ12 (PS/2 Mouse)
 isr44:
 
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    pushad
 
     push 0
     push 44
@@ -326,28 +234,14 @@ isr44:
     
     add esp, 8
 
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
 
     iret
 
 # Syscall (int 0x80)
 isr128:
-    cli
-    push eax
-    push ecx
-    push edx
-    push ebx
-    push esp
-    push ebp
-    push esi
-    push edi
+    cld
+    pushad
 
     push 0
     push 128
@@ -357,14 +251,7 @@ isr128:
 
     add esp, 8
 
-    pop edi
-    pop esi
-    pop ebp
-    pop esp
-    pop ebx
-    pop edx
-    pop ecx
-    pop eax
+    popad
     
     iret
 

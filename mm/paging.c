@@ -88,17 +88,17 @@ void paging_init(void) {
         /* Fill 1024 entries, mapping 4 MB of physical memory */
         for (int pt_idx = 0; pt_idx < PT_ENTRIES; pt_idx++) {
             uint32_t phys_addr = (pd_idx * PT_ENTRIES + pt_idx) * PAGE_SIZE;
-            pt[pt_idx] = phys_addr | PAGE_PRESENT | PAGE_WRITABLE;
+            pt[pt_idx] = phys_addr | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
         }
 
         /* Point PD entry at this PT. Address must be physical. */
-        pd[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITABLE;
+        pd[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
     }
 
     /* Recursive mapping: last PD entry points to PD itself.
      * After this, we NEVER use 'pd' as a pointer again.
      * We use PD_VIRT (0xFFFFF000) instead. */
-    pd[1023] = page_directory_phys | PAGE_PRESENT | PAGE_WRITABLE;
+    pd[1023] = page_directory_phys | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
 
     /* Load CR3 with physical address of PD */
     printk("PD phys=%08x\n", (uint32_t)pd);
@@ -163,8 +163,7 @@ int map_page(uintptr_t phys, uintptr_t virt, uint32_t flags) {
     }
 
     /* Write the PTE */
-    PT_VIRT(pd_idx)[pt_idx] = ((uint32_t)(phys & ~(uintptr_t)PAGE_MASK))
-                              | (flags & 0xFFFu) | PAGE_PRESENT;
+    PT_VIRT(pd_idx)[pt_idx] = ((uint32_t)(phys & ~(uintptr_t)PAGE_MASK)) | (flags & 0xFFFu) | PAGE_PRESENT;
 
     /* Flush TLB for the mapped page */
     __asm__ __volatile__("invlpg (%0)"

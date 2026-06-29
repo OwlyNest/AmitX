@@ -57,7 +57,7 @@ extern volatile uint32_t tick_count;
 /* --- Functions ---*/
 
 void ring3_hello(void) {
-    syscall(SYSCALL_WRITE, (uint32_t)"Hello from ring 3!\n", 0, 0);
+    syscall(SYS_WRITE, (uint32_t)"Hello from ring 3!\n", 0, 0);
     while (1);
 }
 
@@ -94,5 +94,5 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-    test_ring3();
+    menu_run();
 }

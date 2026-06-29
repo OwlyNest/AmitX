@@ -18,7 +18,8 @@ SRC_DIRS := src \
 	logo \
 	ui \
 	hw \
-	gfx
+	gfx \
+	exec
 
 BUILD_DIR := build
 

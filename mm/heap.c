@@ -203,6 +203,19 @@ void* memmove(void* dest, const void* src, size_t n) {
     return dest;
 }
 
+/* Just blatantly copied from the gcc libiberty */
+void *memchr (register const void *src_void, int c, size_t length) {
+    const unsigned char *src = (const unsigned char *)src_void;
+    
+    while (length-- > 0) {
+        if (*src == c) {
+            return (void *)src;
+        }
+        src++;
+    }
+    return NULL;
+}
+
 void* realloc(void* ptr, size_t new_size) {
     if (!ptr) return malloc(new_size);
     if (new_size == 0) {

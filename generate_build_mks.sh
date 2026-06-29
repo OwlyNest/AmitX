@@ -1,7 +1,7 @@
 #!/bin/bash
 # generate_build_mks.sh
 
-for dir in shell fs boot arch/x86 drivers lib mm kernel screen tests logo ui hw; do
+for dir in shell fs boot arch/x86 drivers lib mm kernel screen tests logo ui hw gfx exec; do
     mk="$dir/build.mk"
     echo "# Auto-generated build.mk for $dir" > "$mk"
     

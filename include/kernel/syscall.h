@@ -5,17 +5,28 @@
 #include <stdint.h>
 #include <arch/x86/interrupts.h>
 
-#define MAX_SYSCALLS 32
+#define MAX_SYSCALLS 256
 
-// Syscall IDs
-#define SYSCALL_WRITE       0
-#define SYSCALL_TIME        1
-#define SYSCALL_CLEAR       2
-#define SYSCALL_CURSOR      3
-#define SYSCALL_DRAW_LOGO   4
-#define SYSCALL_GETCHAR     5
-#define SYSCALL_PUTCHAR     6
-#define SYSCALL_SLEEP       7
+/* v1.0 syscall numbers — DOS 1.0 inspired */
+#define SYS_EXIT        0x00
+#define SYS_GETCHAR     0x01
+#define SYS_PUTCHAR     0x02
+#define SYS_READ        0x03
+#define SYS_WRITE       0x04
+#define SYS_PUTS        0x09
+#define SYS_GETS        0x0A
+#define SYS_RESET_DISK  0x0D
+#define SYS_SET_DRIVE   0x0E
+#define SYS_OPEN        0x0F
+#define SYS_CLOSE       0x10
+#define SYS_UNLINK      0x13
+#define SYS_CREAT       0x16
+#define SYS_SEEK        0x1A
+#define SYS_GETDATE     0x2A
+#define SYS_GETTIME     0x2C
+#define SYS_VERSION     0x30
+#define SYS_MALLOC      0x48
+#define SYS_FREE        0x49
 
 typedef int (*syscall_func_t)(uint32_t, uint32_t, uint32_t);
 

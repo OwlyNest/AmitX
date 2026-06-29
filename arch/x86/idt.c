@@ -83,7 +83,7 @@ static int idt_install() {
     idt_set_gate(36,  (uint32_t)isr36,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     idt_set_gate(42,  (uint32_t)isr42,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     idt_set_gate(44,  (uint32_t)isr44,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_USER  );
+    idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
 
     load_idt((uint32_t)&idt_ptr);
     __asm__ __volatile__("sti");

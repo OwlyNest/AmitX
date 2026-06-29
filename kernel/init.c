@@ -262,6 +262,47 @@ void kernel_setup(void) {
         pci_log_to_fs();
         kscope_log_to_fs();
     }
+    static const uint8_t hello_amx[] = {
+        /* AMX header: 92 bytes */
+        'A', 'M', 'X', '\0',       /* magic */
+        0x01, 0x00,                /* version = 1 */
+        0x00, 0x00,                /* flags = 0 */
+        0x26, 0x00, 0x00, 0x00,    /* image_size = 32 */
+        0x00, 0x00, 0x00, 0x00,    /* entry = 92 (0x5C) */
+        0x00, 0x00, 0x00, 0x00,    /* bss_size = 0 */
+        0x00, 0x10, 0x00, 0x00,    /* stack_size = 4096 */
+        /* program_name[32] */
+        'h', 'e', 'l', 'l', 'o', 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        /* author[32] */
+        'a', 'm', 'i', 't', 'y', 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        /* checksum[4] */
+        0, 0, 0, 0,
+    
+        /* Code at offset 92 (0x5C) */
+        0xB8, 0x09, 0x00, 0x00, 0x00,   /* mov eax, SYS_PUTS (0x09) */
+        0xBB, 0x70, 0x00, 0x00, 0x00,   /* mov ebx, msg_offset (0x70 = 112) */
+        0xCD, 0x80,                      /* int 0x80 */
+        0xB8, 0x00, 0x00, 0x00, 0x00,   /* mov eax, SYS_EXIT (0x00) */
+        0x31, 0xDB,                      /* xor ebx, ebx */
+        0xCD, 0x80,                      /* int 0x80 */
+    
+        /* Message at offset 112 (0x70) */
+        'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ', 'A', 'M', 'X', '!', '\n', 0
+    };
+    
+    /* Then write it to AMFS at boot */
+    for (size_t i = 92; i < sizeof(hello_amx); i++)
+        printk("%02X ", hello_amx[i]);
+    printk("size=%u\n", sizeof(hello_amx));
+    amfs_mkdir("/bin");
+    amfs_delete("/bin/HELLO.AMX");
+    amfs_write("/bin/HELLO.AMX", (const char *)hello_amx, sizeof(hello_amx));
 
 
     puts("\nPress ENTER to continue...");
@@ -269,6 +310,6 @@ void kernel_setup(void) {
 
     clear();
 
-    //svga_init();
+    svga_init();
     execute_command("run /etc/rc");
 }

@@ -83,18 +83,7 @@ void execute_command(const char* input) {
         load_cyclone = 0;
     } else if (starts_with(input, "load")) {
         const char *path = input + 5;
-        exec_context_t ctx;
-        exec_load(path, &ctx);
-        exec_map(&ctx);
-
-        uint32_t msg = (uint32_t)ctx.image_base + 21;
-
-        memcpy(
-            (uint8_t *)ctx.image_base + 6,
-            &msg,
-            sizeof(msg));
-
-        exec_start(&ctx);
+        exec_run(path);
     } else if (starts_with(input, "ls")) {
         const char* dir = input + 3;
         amfs_ls(dir);

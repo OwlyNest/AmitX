@@ -264,13 +264,17 @@ void kernel_setup(void) {
     }
     static const uint8_t hello_amx[] = {
         /* AMX header: 92 bytes */
-        'A', 'M', 'X', '\0',       /* magic */
-        0x01, 0x00,                /* version = 1 */
-        0x00, 0x00,                /* flags = 0 */
+        'A', 'M', 'X', '\0',           /* magic */
+        0x01, 0x00,                            /* version = 1 */
+        0x00, 0x00,                            /* flags = 0 */
+        0x68, 0x00, 0x00, 0x00,      /* Image offset = 104 */
         0x26, 0x00, 0x00, 0x00,    /* image_size = 32 */
-        0x00, 0x00, 0x00, 0x00,    /* entry = 92 (0x5C) */
+        0x00, 0x00, 0x00, 0x00,    /* entry = 0 */
         0x00, 0x00, 0x00, 0x00,    /* bss_size = 0 */
         0x00, 0x10, 0x00, 0x00,    /* stack_size = 4096 */
+        0x8E, 0x00, 0x00, 0x00,    /* Reloc offset = 142 */
+        0x01, 0x00, 0x00, 0x00,    /* Reloc count = 0 */
+
         /* program_name[32] */
         'h', 'e', 'l', 'l', 'o', 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -286,20 +290,21 @@ void kernel_setup(void) {
     
         /* Code at offset 92 (0x5C) */
         0xB8, 0x09, 0x00, 0x00, 0x00,   /* mov eax, SYS_PUTS (0x09) */
-        0xBB, 0x70, 0x00, 0x00, 0x00,   /* mov ebx, msg_offset (0x70 = 112) */
-        0xCD, 0x80,                      /* int 0x80 */
+        0xBB, 0x15, 0x00, 0x00, 0x00,   /* mov ebx, msg_offset (21) */
+        0xCD, 0x80,                                       /* int 0x80 */
         0xB8, 0x00, 0x00, 0x00, 0x00,   /* mov eax, SYS_EXIT (0x00) */
-        0x31, 0xDB,                      /* xor ebx, ebx */
-        0xCD, 0x80,                      /* int 0x80 */
+        0x31, 0xDB,                                       /* xor ebx, ebx */
+        0xCD, 0x80,                                       /* int 0x80 */
     
         /* Message at offset 112 (0x70) */
-        'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ', 'A', 'M', 'X', '!', '\n', 0
+        'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ', 'A', 'M', 'X', '!', '\n', 0,
+        /* Relocation table */
+        0x06, 0x00, 0x00, 0x00,    /* offset = 6 */
+        0x00, 0x00,                /* type = AMX_RELOC_ABS32 */
+        0x00, 0x00                 /* reserved */
     };
     
     /* Then write it to AMFS at boot */
-    for (size_t i = 92; i < sizeof(hello_amx); i++)
-        printk("%02X ", hello_amx[i]);
-    printk("size=%u\n", sizeof(hello_amx));
     amfs_mkdir("/bin");
     amfs_delete("/bin/HELLO.AMX");
     amfs_write("/bin/HELLO.AMX", (const char *)hello_amx, sizeof(hello_amx));

@@ -36,6 +36,7 @@
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
+
 /* ==========================================================================
  *                                                                          *
  * exec_load()                                                              *
@@ -62,14 +63,12 @@ int exec_load(const char *path, exec_context_t *ctx) {
     if (verify_header(&header) != AMX_OK) return -1;
 
     /* Now allocate the right size */
-    uint32_t total = AMX_HEADER_SIZE + header.image_size;
+    uint32_t total = header.image_offset + header.image_size + header.reloc_count * sizeof(amx_reloc_t);
     uint8_t *buf = (uint8_t *)malloc(total);
     if (!buf) return -1;
 
     /* Read the whole file */
     len = amfs_read(path, (char *)buf, total);
-	for (int i = 92; i < 130; i++)
-		printk("%02X ", buf[i]);
     if (len < (int)total) {
         free(buf);
         return -1;
@@ -85,6 +84,8 @@ int exec_load(const char *path, exec_context_t *ctx) {
 
 	return 0;
 }
+
+
 
 /* ==========================================================================
  *                                                                          *
@@ -102,13 +103,7 @@ int exec_map(exec_context_t *ctx) {
 		return -1;
 	}
 
-	memcpy(ctx->image_base, ctx->file_image + AMX_HEADER_SIZE, ctx->header.image_size);
-	printk("right after memcpy:\n");
-	for (size_t i = 0; i < 49; i++) {
-
-		printk("%02X ", ((uint8_t *)ctx->image_base)[i]);
-	}
-	printk("\nDone\n");
+	memcpy(ctx->image_base, ctx->file_image + ctx->header.image_offset, ctx->header.image_size);
 
 	ctx->stack = malloc(ctx->header.stack_size);
 	if (!ctx->stack) {
@@ -116,10 +111,59 @@ int exec_map(exec_context_t *ctx) {
 		ctx->image_base = NULL;
 		return -1;
 	}
-	printk("image_base = %p\n", ctx->image_base);
-	printk("stack      = %p\n", ctx->stack);
 
 	memset( (uint8_t *)ctx->image_base + ctx->header.image_size, 0, ctx->header.bss_size);
+	return 0;
+}
+
+
+
+static inline void *image_ptr(exec_context_t *ctx, uint32_t offset) {
+	return (uint8_t *)ctx->image_base + offset;
+}
+
+/* ==========================================================================
+ *                                                                          *
+ * exec_relocate()                                                          *
+ *                                                                          *
+ * Relocate offset variables                                                *
+ * Reads relocation table                                                   *
+ * Returns 0 on success.                                                    *
+ *                                                                          *
+ ========================================================================== */
+
+int exec_relocate(exec_context_t *ctx) {
+	if (!ctx || !ctx->image_base || !ctx->file_image) {
+		return -1;
+	}
+
+	amx_reloc_t *table = (amx_reloc_t *)(ctx->file_image + ctx->header.reloc_offset);
+
+	for (uint32_t i = 0; i < ctx->header.reloc_count; i++) {
+		amx_reloc_t *r = &table[i];
+		if (r->offset >= ctx->header.image_size) {
+			printk("bad reloc offset: %u\n", r->offset);
+			return -1;
+		}
+
+		if (r->offset + sizeof(uint32_t) > ctx->header.image_size) {
+			return -1;
+		}
+
+		switch (r->type) {
+			case AMX_RELOC_ABS32: {
+				uint32_t *addr = image_ptr(ctx, r->offset);
+
+				*addr += (uint32_t)ctx->image_base;
+
+				break;
+			}
+			default: {
+				return -1;
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -148,8 +192,48 @@ int exec_start(exec_context_t *ctx) {
 	return 0;
 }
 
+/* ==========================================================================
+ *                                                                          *
+ * exec_cleanup()                                                           *
+ *                                                                          *
+ * Clean up execution context                                               *
+ *                                                                          *
+ ========================================================================== */
 void exec_cleanup(exec_context_t *ctx) {
     if (ctx->stack) { free(ctx->stack); ctx->stack = NULL; }
     if (ctx->image_base) { free(ctx->image_base); ctx->image_base = NULL; }
     if (ctx->file_image) { free(ctx->file_image); ctx->file_image = NULL; }
+}
+
+/* ==========================================================================
+ *                                                                          *
+ * exec_run()                                                               *
+ *                                                                          *
+ * Load -> Map -> Relocate -> Start -> Cleanup                              *
+ * Returns 0 on success                                                     *
+ *                                                                          *
+ ========================================================================== */
+int exec_run(const char *path){
+	exec_context_t ctx;
+
+	if (exec_load(path, &ctx) != 0) {
+		return -1;
+	}
+
+	if (exec_map(&ctx) != 0) {
+		goto fail;
+	}
+
+	if (exec_relocate(&ctx) != 0) {
+		goto fail;
+	}
+
+	int ret = exec_start(&ctx);
+
+	exec_cleanup(&ctx);
+	return ret;
+
+fail:
+	exec_cleanup(&ctx);
+	return -1;
 }

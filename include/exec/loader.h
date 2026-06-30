@@ -40,6 +40,8 @@ typedef struct exec_context {
 /* --- Prototypes ---*/
 int exec_load(const char *path, exec_context_t *ctx);
 int exec_map(exec_context_t *ctx);
+int exec_relocate(exec_context_t *ctx);
 int exec_start(exec_context_t *ctx);
 void exec_cleanup(exec_context_t *ctx);
+int exec_run(const char *path);
 #endif

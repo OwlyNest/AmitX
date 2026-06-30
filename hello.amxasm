@@ -1,7 +1,0 @@
-mov eax, 0x09
-mov ebx, msg
-int 0x80
-mov eax, 0x00
-xor ebx, ebx
-int 0x80
-msg: db "Hello AMX!", 10, 0

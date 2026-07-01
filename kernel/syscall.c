@@ -134,7 +134,7 @@ static int _sys_unlink(uint32_t path, uint32_t a2, uint32_t a3) {
     return amfs_delete((const char *)path);
 }
 
-static int _sys_creat(uint32_t path, uint32_t a2, uint32_t a3) {
+static int _sys_create(uint32_t path, uint32_t a2, uint32_t a3) {
     (void)a2; (void)a3;
     return amfs_create((const char *)path);
 }
@@ -180,7 +180,7 @@ void syscall_init(void) {
     register_syscall(SYS_GETS,       _sys_gets);
     register_syscall(SYS_RESET_DISK, _sys_reset_disk);
     register_syscall(SYS_UNLINK,     _sys_unlink);
-    register_syscall(SYS_CREAT,      _sys_creat);
+    register_syscall(SYS_CREAT,      _sys_create);
     register_syscall(SYS_GETDATE,    _sys_getdate);
     register_syscall(SYS_GETTIME,    _sys_gettime);
     register_syscall(SYS_VERSION,    _sys_version);

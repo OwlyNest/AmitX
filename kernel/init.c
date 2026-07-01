@@ -23,7 +23,7 @@
 
 /* --- Includes ---*/
 #include "shell/commands.h"
-#include <gfx/svga.h>
+#include <hw/svga.h>
 #include <screen/screen.h>
 #include <arch/x86/io.h>
 #include <fs/amfs.h>

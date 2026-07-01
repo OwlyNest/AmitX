@@ -26,7 +26,7 @@
 #include <gfx/gfx_screen.h>
 #include <drivers/mouse.h>
 #include <gfx/fb.h>
-#include <gfx/svga.h>
+#include <hw/svga.h>
 #include <arch/x86/io.h>
 #include <arch/x86/interrupts.h>
 #include <internal/amitx_consts.h>

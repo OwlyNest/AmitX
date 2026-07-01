@@ -23,7 +23,7 @@
 
 /* --- Includes ---*/
 #include <gfx/fb.h>
-#include <gfx/svga.h>
+#include <hw/svga.h>
 #include <drivers/mouse.h>
 #include <screen/printk.h>
 #include <mm/heap.h>

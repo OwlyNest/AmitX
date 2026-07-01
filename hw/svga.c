@@ -26,7 +26,7 @@
 #include <gfx/fb.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
-#include <gfx/svga.h>
+#include <hw/svga.h>
 #include <hw/pci.h>
 #include <arch/x86/io.h>
 #include <screen/printk.h>

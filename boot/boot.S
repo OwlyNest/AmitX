@@ -20,7 +20,6 @@ mb2_tag_info:
     .long 6         /* memory map */
     .long 9         /* ELF sections */
 
-/* Address tag — required for non-ELF or if you want explicit load addresses */
 /* Skip for now, GRUB handles ELF kernels fine */
 
 /* Null terminator */

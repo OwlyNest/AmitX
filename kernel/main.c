@@ -24,7 +24,7 @@
 /* --- Includes ---*/
 /* initialize with KScope delete soon*/
 #include <fs/amfs.h>
-#include <gfx/svga.h>
+#include <hw/svga.h>
 #include <gfx/fb.h>
 
 /* these can stay */
@@ -94,5 +94,6 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
+
     menu_run();
 }

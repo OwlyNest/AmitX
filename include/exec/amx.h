@@ -80,6 +80,7 @@ typedef struct {
     uint32_t checksum;
 } amx_header_t;
 #define AMX_HEADER_SIZE      (int)sizeof(amx_header_t)
+#define AMX_HEADER_SIZE_I    104
 
 typedef struct {
     uint32_t offset;

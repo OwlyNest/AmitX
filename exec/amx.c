@@ -27,6 +27,7 @@
 #include <lib/string.h>
 #include <screen/printk.h>
 #include <mm/heap.h>
+#include <internal/amitx_macros.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -78,6 +79,7 @@ static uint32_t get_u32(const uint8_t *buf, size_t offset) {
  *                                                                          *
  * ======================================================================== */
 int read_header(const uint8_t *buf, amx_header_t *header) {
+	ASSERT(AMX_HEADER_SIZE_I == (int)sizeof(amx_header_t));
 	/* Parse fields */
 	memcpy(header->magic, (buf + AMX_OFF_MAGIC), 4);
 	header->version      = get_u16(buf, AMX_OFF_VERSION);

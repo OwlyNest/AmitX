@@ -373,7 +373,7 @@ def resolve_symbols(section):
         )
         
 def build_amx(section, header):
-    image_offset = 104
+    image_offset = defines["AMX_HEADER_SIZE_I"]
 
     reloc_offset = image_offset + len(section.data)
 
@@ -402,7 +402,7 @@ def build_header(section):
     image = build_image(section)
     relocs = build_relocations(section)
 
-    image_offset = 104
+    image_offset = defines["AMX_HEADER_SIZE_I"]
     reloc_offset = image_offset + len(image)
 
     return struct.pack(
@@ -431,9 +431,6 @@ if __name__ == "__main__":
     defines = {}
     defines.update(load_defines("include/exec/amx.h"))
     defines.update(load_defines("include/kernel/syscall.h"))
-
-    print(defines["AMX_RELOC_ABS32"])
-    print(defines["SYS_PUTS"])
     
     input = sys.argv[1]
     

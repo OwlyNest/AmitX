@@ -209,8 +209,9 @@ void panic(const char* msg, uint32_t int_no, uint32_t err) {
     move_cursor(10, 14);
     printk("Halting...");
 
-    for (;;)
+    for (;;) {
         __asm__ volatile ("hlt");
+    }
 }
 
 __attribute__((noreturn))

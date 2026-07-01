@@ -258,7 +258,7 @@ static int e1000_init(void) {
         printk("[e1000] No compatible device found\n");
         return 1;
     }
-    ASSERT(pci_dev)
+    ASSERT(pci_dev);
 
     e1000_dev.pci = pci_dev;
     printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",

@@ -23,11 +23,15 @@
 #ifndef AMITX_MACROS_H
 #define AMITX_MACROS_H
 
-#define ASSERT(cond) \
-    do { if (!(cond)) { \
-        printk("[ASSERT] %s:%d: " #cond "\n", __FILE__, __LINE__); \
-        __asm__ volatile ("hlt"); \
-    } } while (0);
+#define ASSERT(cond)                                  \
+do {                                                  \
+    if (!(cond)) {                                    \
+        printk("[ASSERT] %s:%d: %s\n",                \
+               __FILE__, __LINE__, #cond);            \
+        for (;;)                                      \
+            __asm__ volatile ("cli; hlt");            \
+    }                                                 \
+} while (0)
 
 #define WARN_IF(cond) \
     do { if (cond) { \

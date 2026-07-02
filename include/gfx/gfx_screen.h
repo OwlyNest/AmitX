@@ -76,8 +76,8 @@ void gfx_set_clip(int x, int y, int w, int h);
 void gfx_clear_clip(void);
 
 /* Primitives */
-void gfx_fill_rect(int x, int y, int w, int h, uint32_t color);
-void gfx_draw_rect(int x, int y, int w, int h, uint32_t color);
+void gfx_fill_rect1(int x, int y, int w, int h, uint32_t color);
+void gfx_draw_rect1(int x, int y, int w, int h, uint32_t color);
 void gfx_hline(int x, int y, int w, uint32_t color);
 void gfx_vline(int x, int y, int h, uint32_t color);
 
@@ -91,6 +91,7 @@ void gfx_bevel_in(int x, int y, int w, int h);
 void gfx_bevel_out(int x, int y, int w, int h);
 void gfx_title_bar(int x, int y, int w, const char *title);
 void gfx_button(int x, int y, int w, int h, const char *label, int pressed);
+int ui_button(int x, int y, int w, int h, const char *label);
 void gfx_progress_bar(int x, int y, int w, int h, int percent, uint32_t fill, uint32_t empty);
 void gfx_list(int x, int y, int w, int h, const char **items, int count, int selected);
 void gfx_status_bar(int x, int y, int w, const char *text);
@@ -100,4 +101,6 @@ void gfx_logo_design2(int x, int y);
 void gfx_draw_uptime(void);
 
 void gfx_printk_puts(const char *str);
+
+int point_in_rect(int px, int py, int x, int y, int w, int h);
 #endif

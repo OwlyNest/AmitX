@@ -104,7 +104,7 @@ void execute_command(const char* input) {
     } else if (strcmp(input, "switch logo") == 0) {
         version = (version == 1) ? 2 : 1;
         /* Erase old logo area and redraw */
-        gfx_fill_rect(700, 60, 100, 100, gfx_theme_color(GFX_BG_PANEL));
+        gfx_fill_rect1(700, 60, 100, 100, gfx_theme_color(GFX_BG_PANEL));
         draw_logo_gfx(version, 700, 60);
     } else if (strcmp(input, "help") == 0) {
         gfx_term_puts("Available commands:");

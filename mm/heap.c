@@ -24,9 +24,9 @@ typedef struct Block {
 #define HEAP_INITIAL_PAGES  8
 #define HEAP_ARENA_PAGES    (HEAP_SIZE / FRAME_SIZE)
 
-static uint8_t* heap_base;
-static uint8_t* heap_end;
-static uint8_t* heap_break;
+uint8_t* heap_base;
+uint8_t* heap_end;
+uint8_t* heap_break;
 
 static int heap_init(void) {
     const boot_info_t *info = pmm_get_boot_info();

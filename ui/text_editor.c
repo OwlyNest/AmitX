@@ -65,8 +65,8 @@ static void ed_init(const char *path) {
 	/* Text area inside panel with margins */
 	// int tx = EDITOR_MARGIN_X;
 	// int ty = EDITOR_MARGIN_Y;
-	int tw = (int)fb.width - 16;
-    int th = (int)fb.height - EDITOR_MARGIN_Y - EDITOR_STATUS_H - 8;
+	int tw = (int)fb.back.width - 16;
+    int th = (int)fb.back.height - EDITOR_MARGIN_Y - EDITOR_STATUS_H - 8;
 
 	ed.cols = tw / 8;
 	ed.rows = (th - 4) / 8;
@@ -276,10 +276,10 @@ static void ed_status(const char *msg) {
     /* Drawn at bottom of screen */
     uint32_t bg = gfx_theme_color(GFX_BG_TITLE);
     uint32_t fg = gfx_theme_color(GFX_FG_TEXT_DIM);
-    int y = (int)fb.height - EDITOR_STATUS_H;
+    int y = (int)fb.back.height - EDITOR_STATUS_H;
 
-    gfx_fill_rect(0, y, (int)fb.width, EDITOR_STATUS_H, bg);
-    gfx_bevel_out(0, y, (int)fb.width, EDITOR_STATUS_H);
+    gfx_fill_rect1(0, y, (int)fb.back.width, EDITOR_STATUS_H, bg);
+    gfx_bevel_out(0, y, (int)fb.back.width, EDITOR_STATUS_H);
 
     char buf[128];
     const char *name = ed.path[0] ? ed.path : "[untitled]";
@@ -294,9 +294,9 @@ static void ed_draw(void) {
     uint32_t hi = gfx_theme_color(GFX_BG_HIGHLIGHT);
 
     /* Clear text area */
-    gfx_fill_rect(EDITOR_MARGIN_X, EDITOR_MARGIN_Y,
-                  (int)fb.width - 16,
-                  (int)fb.height - EDITOR_MARGIN_Y - EDITOR_STATUS_H - 8,
+    gfx_fill_rect1(EDITOR_MARGIN_X, EDITOR_MARGIN_Y,
+                  (int)fb.back.width - 16,
+                  (int)fb.back.height - EDITOR_MARGIN_Y - EDITOR_STATUS_H - 8,
                   bg);
 
     /* Draw text */
@@ -330,7 +330,7 @@ static void ed_draw(void) {
                 uint32_t cx_px = (uint32_t)(EDITOR_MARGIN_X + cx * 8);
                 uint32_t cy_px = (uint32_t)draw_y;
                 /* Invert cursor: draw highlight rect */
-                gfx_fill_rect((int)cx_px, (int)cy_px, 8, 8, hi);
+                gfx_fill_rect1((int)cx_px, (int)cy_px, 8, 8, hi);
                 if (ed.cursor < ed.size && ed.data[ed.cursor] != '\n') {
                     fb_draw_char(cx_px, cy_px, ed.data[ed.cursor], bg);
                 }
@@ -366,8 +366,8 @@ void amity_run(const char *path) {
 
     /* Draw initial frame */
     gfx_desktop();
-    gfx_fill_rect(0, 0, (int)fb.width, 20, gfx_theme_color(GFX_BG_TITLE));
-    gfx_bevel_out(0, 0, (int)fb.width, 20);
+    gfx_fill_rect1(0, 0, (int)fb.back.width, 20, gfx_theme_color(GFX_BG_TITLE));
+    gfx_bevel_out(0, 0, (int)fb.back.width, 20);
     char title[128];
     ksnprintf(title, sizeof(title), " amity — %s ", path);
     gfx_draw_text(4, 6, title, gfx_theme_color(GFX_FG_TEXT));

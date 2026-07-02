@@ -1,6 +1,7 @@
 #include <kernel/syscall.h>
 #include <drivers/serial.h>
 #include <screen/screen.h>
+#include <screen/printk.h>
 #include <arch/x86/time.h>
 #include <internal/amitx_info.h>
 #include <drivers/keyboard.h>
@@ -94,8 +95,7 @@ static int _sys_write(uint32_t fd, uint32_t buf, uint32_t a3) {
 static int _sys_puts(uint32_t str, uint32_t a2, uint32_t a3) {
     (void)a2; (void)a3;
     const char *s = (const char *)str;
-    puts(s);
-    serial_puts_default(s);
+    printk(s);
     return strlen(s);
 }
 

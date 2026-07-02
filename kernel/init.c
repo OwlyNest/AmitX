@@ -289,8 +289,7 @@ void kernel_setup(void) {
     puts("\nPress ENTER to continue...");
     while (keyboard_getchar() != '\n');
 
-    clear();
-
     svga_init();
     execute_command("run /etc/rc");
+    clear();
 }

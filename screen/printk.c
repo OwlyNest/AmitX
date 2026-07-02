@@ -260,5 +260,4 @@ void printk(const char *fmt, ...) {
 
     puts(buf);
     serial_puts_default(buf);
-	gfx_term_puts(buf);
 }

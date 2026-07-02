@@ -105,7 +105,7 @@ static void dm_draw_list(void) {
         uint32_t row_bg = (idx == dm_selected) ? hi : bg;
         uint32_t row_fg = (idx == dm_selected) ? hifg : fg;
 
-        gfx_fill_rect(list_x, row_y, list_w, DM_ROW_H, row_bg);
+        gfx_fill_rect1(list_x, row_y, list_w, DM_ROW_H, row_bg);
 
         pci_device_t *dev = dm_devices[idx];
         char line[80];

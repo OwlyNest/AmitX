@@ -27,6 +27,7 @@
 #include <ui/menu.h>
 #include <ui/system_manager.h>
 #include <ui/device_manager.h>
+#include <ui/about.h>
 #include <kernel/kernel.h>
 #include <drivers/keyboard.h>
 #include <gfx/gfx_screen.h>
@@ -47,6 +48,7 @@ const char* main_menu[] = {
     "System Manager",
     "Settings",
     "Cyclone",
+    "About",
     "Reboot",
     "Shutdown"
 };
@@ -106,8 +108,6 @@ void menu_run(void) {
             }
         } else if (c == '\n') {
             menu_select(POINTER);
-        } else if (c == 'q' || c == KEY_ESC) {
-            break;
         }
     }
 }
@@ -123,8 +123,10 @@ void menu_select(int choice) {
         case 1: system_manager_run(); break;
         case 2: break;
         case 3: load_cyclone = 1; cyclone_main(1); break;
-        case 4: system_reboot(); break;
-        case 5: system_shutdown(); break;
+        case 4: about_run(); break;
+        case 5: system_reboot(); break;
+        case 6: system_shutdown(); break;
+        default: break;
     }
 
     menu = 1;

@@ -56,6 +56,34 @@ static const uint8_t cursor_arrow[CURSOR_H][CURSOR_W] = {
     {0,0,0,0,0,0,0,0,0,0,0},
 };
 
+static const uint8_t cursor_left[CURSOR_H][CURSOR_W] = {
+    {1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+};
+
+static const uint8_t cursor_right[CURSOR_H][CURSOR_W] = {
+    {1,1,1,1,1,0,0,0,0,0,0},
+    {1,1,1,1,1,0,0,0,0,0,0},
+    {1,1,1,1,1,0,0,0,0,0,0},
+    {1,1,1,1,1,0,0,0,0,0,0},
+    {1,1,1,1,1,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0},
+};
+
 /* Raw pixel coordinates */
 static volatile int mouse_px_x = 512;
 static volatile int mouse_px_y = 384;
@@ -64,6 +92,7 @@ static volatile int mouse_px_y = 384;
 volatile int mouse_x = 512;
 volatile int mouse_y = 384;
 volatile uint8_t mouse_buttons = 0;
+static uint8_t mouse_buttons_prev = 0;
 
 /* Packet reassembly state */
 static volatile int mouse_cycle = 0;
@@ -84,9 +113,9 @@ static void cursor_erase_front(void) {
         for (int col = 0; col < CURSOR_W; col++) {
             int px = cursor_prev_x + col;
             int py = cursor_prev_y + row;
-            if (px >= 0 && px < (int)fb.width &&
-                py >= 0 && py < (int)fb.height) {
-                fb.front[py * fb.pitch_px + px] =
+            if (px >= 0 && px < (int)fb.back.width &&
+                py >= 0 && py < (int)fb.back.height) {
+                fb.front[py * fb.back.pitch_px + px] =
                     cursor_under[row * CURSOR_W + col];
             }
         }
@@ -105,25 +134,36 @@ static void cursor_draw_front(int x, int y) {
         for (int col = 0; col < CURSOR_W; col++) {
             int px = x + col;
             int py = y + row;
-            if (px >= 0 && px < (int)fb.width &&
-                py >= 0 && py < (int)fb.height) {
+            if (px >= 0 && px < (int)fb.back.width &&
+                py >= 0 && py < (int)fb.back.height) {
                 cursor_under[row * CURSOR_W + col] =
-                    fb.front[py * fb.pitch_px + px];
+                    fb.front[py * fb.back.pitch_px + px];
             }
         }
     }
     
     /* Draw cursor */
-    uint32_t white = FB_RGB(255, 255, 255);
+    const uint8_t (*cursor)[CURSOR_W] = cursor_arrow;
+
+    if (mouse_buttons & 1)
+        cursor = cursor_left;
+    else if (mouse_buttons & 2)
+        cursor = cursor_right;
+
+    uint32_t white = FB_RGB(255,255,255);
+
     for (int row = 0; row < CURSOR_H; row++) {
         for (int col = 0; col < CURSOR_W; col++) {
-            if (cursor_arrow[row][col]) {
-                int px = x + col;
-                int py = y + row;
-                if (px >= 0 && px < (int)fb.width &&
-                    py >= 0 && py < (int)fb.height) {
-                    fb.front[py * fb.pitch_px + px] = white;
-                }
+            if (!cursor[row][col])
+                continue;
+
+            int px = x + col;
+            int py = y + row;
+
+            if (px >= 0 && px < (int)fb.back.width &&
+                py >= 0 && py < (int)fb.back.height)
+            {
+                fb.front[py * fb.back.pitch_px + px] = white;
             }
         }
     }
@@ -236,8 +276,8 @@ static void mouse_handler(interrupt_frame_t *frame) {
         mouse_px_y -= dy;  /* Y is inverted on screen */
 
         /* Clamp to screen bounds */
-        int max_x = fb.initialized ? (int)fb.width  - 1 : 1023;
-        int max_y = fb.initialized ? (int)fb.height - 1 : 767;
+        int max_x = fb.initialized ? (int)fb.back.width  - 1 : 1023;
+        int max_y = fb.initialized ? (int)fb.back.height - 1 : 767;
 
         if (mouse_px_x < 0) mouse_px_x = 0;
         if (mouse_px_y < 0) mouse_px_y = 0;
@@ -248,12 +288,14 @@ static void mouse_handler(interrupt_frame_t *frame) {
         mouse_y = mouse_px_y;
 
         /* Button state: lower 3 bits of first byte */
+        mouse_buttons_prev = mouse_buttons;
         mouse_buttons = mouse_bytes[0] & 0x07;
 
         cursor_erase_front();
         cursor_draw_front(mouse_x, mouse_y);
 
         mouse_cycle = 0;
+
         break;
     }
 }
@@ -343,8 +385,8 @@ void mouse_refresh_cursor(void) {
  * Reset mouse position to center of screen
  * ======================================================================= */
 void reset_mouse_position(void) {
-    int cx = fb.initialized ? (int)fb.width  / 2 : 512;
-    int cy = fb.initialized ? (int)fb.height / 2 : 384;
+    int cx = fb.initialized ? (int)fb.back.width  / 2 : 512;
+    int cy = fb.initialized ? (int)fb.back.height / 2 : 384;
 
     mouse_px_x = cx;
     mouse_px_y = cy;
@@ -354,4 +396,20 @@ void reset_mouse_position(void) {
     mouse_bytes[0] = 0;
     mouse_bytes[1] = 0;
     mouse_bytes[2] = 0;
+}
+
+int mouse_left_down(void) {
+    return mouse_buttons & 1;
+}
+
+int mouse_left_pressed(void) {
+    return !(mouse_buttons_prev & 1) && (mouse_buttons & 1);
+}
+
+int mouse_left_released(void) {
+    return (mouse_buttons_prev & 1) && !(mouse_buttons & 1);
+}
+
+int mouse_right_down(void) {
+    return mouse_buttons & 2;
 }

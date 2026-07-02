@@ -163,6 +163,21 @@ unsigned char keyboard_getchar(void) {
     return buffer_get();
 }
 
+int keyboard_poll(unsigned char *c) {
+    __asm__ __volatile__("cli");
+
+    if (buffer_head == buffer_tail) {
+        __asm__ __volatile__("sti");
+        return 0;
+    }
+
+    *c = key_buffer[buffer_tail];
+    buffer_tail = (buffer_tail + 1) % KEYBOARD_BUFFER_SIZE;
+
+    __asm__ __volatile__("sti");
+    return 1;
+}
+
 /* ==========================================================================
  * IRQ1 handler
  * ======================================================================= */

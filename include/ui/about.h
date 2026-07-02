@@ -1,7 +1,7 @@
 /*
-	* include/drivers/font.h - [Enter description]
+	* include/ui/about.h - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jun 24 00:49:03 2026
+	* Date:     Wed Jul  1 14:20:33 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,14 +20,14 @@
 */
 
 /* --- Macros ---*/
-#ifndef FONT_H
-#define FONT_H
+#ifndef ABOUT_H
+#define ABOUT_H
 /* --- Includes ---*/
-#include <stdint.h>
+
 /* --- Typedefs - Structs - Enums ---*/
-extern const uint8_t font8x8[256][8];   // 8x8 font
+
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-int  fb_get_string_width(const char* str);
+void about_run(void);
 #endif

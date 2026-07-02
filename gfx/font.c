@@ -2827,37 +2827,6 @@ const uint8_t font8x8[256][8] = {
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-
-void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t color) {
-    if (!fb.initialized || x >= fb.width || y >= fb.height) return;
-
-    unsigned char uc = (unsigned char)c;
-    if (uc < 32 || uc >= 128) uc = '?';
-
-    const uint8_t *glyph = font8x8[uc];
-
-    for (int row = 0; row < 8; row++) {
-        if (y + row >= fb.height) break;
-        uint8_t line = glyph[row];
-        for (int col = 0; col < 8; col++) {
-            if (x + col >= fb.width) break;
-            if (line & (1u << (7 - col))) {
-                fb_put_pixel(x + col, y + row, color);
-            }
-        }
-    }
-}
-
-void fb_draw_string(uint32_t x, uint32_t y, const char* str, uint32_t color) {
-    if (!str || !fb.initialized) return;
-
-    uint32_t cx = x;
-    while (*str) {
-        fb_draw_char(cx, y, *str++, color);
-        cx += 8;
-    }
-}
-
 int fb_get_string_width(const char* str) {
     if (!str) return 0;
     int len = 0;

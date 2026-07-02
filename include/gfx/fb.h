@@ -28,24 +28,44 @@
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
+typedef struct gfx_surface {
+    uint32_t *pixels;
+    uint32_t width;
+    uint32_t height;
+	uint32_t pitch;
+    uint32_t pitch_px;
+} gfx_surface_t;
+
 typedef struct fb_surface {
-    uint32_t *pixels;      /* Current back buffer */
-    uint32_t *front;       /* Front buffer (mapped FB) */
-    uint32_t  width;
-    uint32_t  height;
-    uint32_t  pitch;       /* bytes per line */
-    uint32_t  pitch_px;    /* pixels per line (pitch/4) */
-    int       initialized;
+    gfx_surface_t back;
+    uint32_t *front;
+    int initialized;
 } fb_surface_t;
+
 /* --- Globals ---*/
 extern fb_surface_t fb;
 /* --- Prototypes ---*/
 int  fb_init(void);
 void fb_present(void);                    /* Copy backbuffer → screen + update */
+
+/* Generic drawing */
+
+void gfx_clear(gfx_surface_t *surface, uint32_t color);
+void gfx_put_pixel(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t color);
+void gfx_fill_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
+void gfx_draw_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
+void gfx_draw_line(gfx_surface_t *surface, int x0, int y0, int x1, int y1, uint32_t color);
+void gfx_draw_circle(gfx_surface_t *surface, int cx, int cy, int radius, uint32_t color);
+void gfx_draw_char(gfx_surface_t *surface, uint32_t x, uint32_t y, char c, uint32_t color);
+void gfx_draw_string(gfx_surface_t *surface, uint32_t x, uint32_t y, const char *str, uint32_t color);
+
 void fb_clear(uint32_t color);
 void fb_put_pixel(uint32_t x, uint32_t y, uint32_t color);
 void fb_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void fb_draw_line(int x0, int y0, int x1, int y1, uint32_t color);
 void fb_draw_circle(int cx, int cy, int radius, uint32_t color);
 void fb_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color); /* outline */
+void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t color);
+void fb_draw_string(uint32_t x, uint32_t y, const char* str, uint32_t color);
+
 #endif

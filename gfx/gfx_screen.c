@@ -27,6 +27,7 @@
 #include <gfx/font.h>
 #include <screen/printk.h>
 #include <lib/string.h>
+#include <drivers/mouse.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -118,14 +119,14 @@ void gfx_clear_clip(void) {
 /* ==========================================================================
  * Primitive wrappers with clipping
  * ======================================================================= */
-void gfx_fill_rect(int x, int y, int w, int h, uint32_t color) {
+void gfx_fill_rect1(int x, int y, int w, int h, uint32_t color) {
     if (clip_rect(&x, &y, &w, &h)) {
         fb_fill_rect((uint32_t)x, (uint32_t)y,
                      (uint32_t)w, (uint32_t)h, color);
     }
 }
 
-void gfx_draw_rect(int x, int y, int w, int h, uint32_t color) {
+void gfx_draw_rect1(int x, int y, int w, int h, uint32_t color) {
     int x2 = x + w - 1;
     int y2 = y + h - 1;
     fb_draw_line(x, y, x2, y, color);
@@ -189,10 +190,10 @@ int gfx_text_width(const char *str) {
  * Panels and 3D borders
  * ======================================================================= */
 void gfx_panel(int x, int y, int w, int h, uint32_t bg) {
-    gfx_fill_rect(x, y, w, h, bg);
+    gfx_fill_rect1(x, y, w, h, bg);
 }
 
-void gfx_bevel_in(int x, int y, int w, int h) {
+void gfx_bevel_out(int x, int y, int w, int h) {
     uint32_t light = gfx_theme_color(GFX_BORDER_LIGHT);
     uint32_t dark  = gfx_theme_color(GFX_BORDER_DARK);
     gfx_hline(x, y, w, light);
@@ -201,7 +202,7 @@ void gfx_bevel_in(int x, int y, int w, int h) {
     gfx_vline(x + w - 1, y, h, dark);
 }
 
-void gfx_bevel_out(int x, int y, int w, int h) {
+void gfx_bevel_in(int x, int y, int w, int h) {
     uint32_t light = gfx_theme_color(GFX_BORDER_LIGHT);
     uint32_t dark  = gfx_theme_color(GFX_BORDER_DARK);
     gfx_hline(x, y, w, dark);
@@ -217,7 +218,7 @@ void gfx_title_bar(int x, int y, int w, const char *title) {
     uint32_t bg = gfx_theme_color(GFX_BG_TITLE);
     uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
 
-    gfx_fill_rect(x, y, w, 20, bg);
+    gfx_fill_rect1(x, y, w, 20, bg);
     if (title) {
         gfx_draw_text(x + 4, y + 6, title, fg);
     }
@@ -227,15 +228,14 @@ void gfx_title_bar(int x, int y, int w, const char *title) {
 /* ==========================================================================
  * Button
  * ======================================================================= */
-void gfx_button(int x, int y, int w, int h,
-                const char *label, int pressed) {
+void gfx_button(int x, int y, int w, int h, const char *label, int pressed) {
     uint32_t bg = pressed
                   ? gfx_theme_color(GFX_BG_BUTTON_HOVER)
                   : gfx_theme_color(GFX_BG_BUTTON);
     uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
 
-    gfx_fill_rect(x, y, w, h, bg);
-    if (pressed) {
+    gfx_fill_rect1(x, y, w, h, bg);
+    if (pressed == 1) {
         gfx_bevel_in(x, y, w, h);
     } else {
         gfx_bevel_out(x, y, w, h);
@@ -249,17 +249,27 @@ void gfx_button(int x, int y, int w, int h,
     }
 }
 
+int ui_button(int x, int y, int w, int h, const char *label) {
+    int hover = point_in_rect(mouse_x, mouse_y, x, y, w, h);
+
+    int pressed = hover && mouse_left_down();
+
+    gfx_button(x, y, w, h, label, pressed);
+
+    return hover && mouse_left_pressed();
+}
+
 /* ==========================================================================
  * Progress bar
  * ======================================================================= */
 void gfx_progress_bar(int x, int y, int w, int h,
                       int percent, uint32_t fill, uint32_t empty) {
-    gfx_fill_rect(x, y, w, h, empty);
+    gfx_fill_rect1(x, y, w, h, empty);
     gfx_bevel_in(x, y, w, h);
 
     int fill_w = (w - 4) * percent / 100;
     if (fill_w > 0) {
-        gfx_fill_rect(x + 2, y + 2, fill_w, h - 4, fill);
+        gfx_fill_rect1(x + 2, y + 2, fill_w, h - 4, fill);
     }
 }
 
@@ -273,7 +283,7 @@ void gfx_list(int x, int y, int w, int h,
     uint32_t hi = gfx_theme_color(GFX_BG_HIGHLIGHT);
     uint32_t hifg = gfx_theme_color(GFX_FG_ACCENT);
 
-    gfx_fill_rect(x, y, w, h, bg);
+    gfx_fill_rect1(x, y, w, h, bg);
     gfx_bevel_in(x, y, w, h);
 
     int content_x = x + 4;
@@ -296,7 +306,7 @@ void gfx_list(int x, int y, int w, int h,
         uint32_t row_bg = (idx == selected) ? hi : bg;
         uint32_t row_fg = (idx == selected) ? hifg : fg;
 
-        gfx_fill_rect(content_x, row_y, content_w, row_h, row_bg);
+        gfx_fill_rect1(content_x, row_y, content_w, row_h, row_bg);
         gfx_draw_text(content_x + 4, row_y + 6, items[idx], row_fg);
     }
 
@@ -310,7 +320,7 @@ void gfx_status_bar(int x, int y, int w, const char *text) {
     uint32_t bg = gfx_theme_color(GFX_BG_TITLE);
     uint32_t fg = gfx_theme_color(GFX_FG_TEXT_DIM);
 
-    gfx_fill_rect(x, y, w, 24, bg);
+    gfx_fill_rect1(x, y, w, 24, bg);
     gfx_bevel_out(x, y, w, 24);
     if (text) {
         gfx_draw_text(x + 4, y + 8, text, fg);
@@ -328,10 +338,10 @@ void gfx_desktop(void) {
  * Your Design 2
  * ======================================================================= */
 void gfx_logo_design2(int x, int y) {
-    gfx_fill_rect(x, y, 150, 150, gfx_theme_color(GFX_RED));
-    gfx_fill_rect(x + 25, y + 25, 150, 150, gfx_theme_color(GFX_GREEN));
-    gfx_fill_rect(x + 50, y + 50, 150, 150, gfx_theme_color(GFX_BLUE));
-    gfx_fill_rect(x + 50, y + 50, 125, 125, FB_RGBA(255, 0, 0, 255));
+    gfx_fill_rect1(x, y, 150, 150, gfx_theme_color(GFX_RED));
+    gfx_fill_rect1(x + 25, y + 25, 150, 150, gfx_theme_color(GFX_GREEN));
+    gfx_fill_rect1(x + 50, y + 50, 150, 150, gfx_theme_color(GFX_BLUE));
+    gfx_fill_rect1(x + 50, y + 50, 125, 125, FB_RGBA(255, 0, 0, 255));
     gfx_draw_text(x, y-10, "Welcome to AmitX!", gfx_theme_color(GFX_WHITE));
 }
 
@@ -346,11 +356,11 @@ void gfx_screen_init(void) {
     gscreen.clip_enabled = 0;
     gscreen.clip_x = 0;
     gscreen.clip_y = 0;
-    gscreen.clip_w = (int)fb.width;
-    gscreen.clip_h = (int)fb.height;
+    gscreen.clip_w = (int)fb.back.width;
+    gscreen.clip_h = (int)fb.back.height;
     cursor_sx = -1;
     cursor_sy = -1;
-    printk("[gfx] Screen layer ready (%ux%u)\n", fb.width, fb.height);
+    printk("[gfx] Screen layer ready (%ux%u)\n", fb.back.width, fb.back.height);
 }
 
 void gfx_draw_uptime(void) {
@@ -362,11 +372,13 @@ void gfx_draw_uptime(void) {
     
     /* Draw in top-right corner with a small dark background */
     int tw = gfx_text_width(buf);
-    int x = (int)fb.width - tw - 8;
+    int x = (int)fb.back.width - tw - 8;
     int y = 8;
     
-    gfx_fill_rect(x - 4, y - 2, tw + 8, 12, gfx_theme_color(GFX_BG_PANEL));
+    gfx_fill_rect1(x - 4, y - 2, tw + 8, 12, gfx_theme_color(GFX_BG_PANEL));
     gfx_draw_text(x, y, buf, gfx_theme_color(GFX_FG_TEXT_DIM));
-    
-    /* Only present if we're not in a UI loop that will present anyway */
+}
+
+int point_in_rect(int px, int py, int x, int y, int w, int h) {
+    return px >= x && px < x + w && py >= y && py < y + h;
 }

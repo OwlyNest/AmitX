@@ -43,7 +43,6 @@ typedef struct {
 	uint8_t day;
 	uint8_t month;
 	uint16_t year;
-
 } rtc_time_t;
 /* --- Globals ---*/
 

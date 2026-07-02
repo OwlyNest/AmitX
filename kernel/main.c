@@ -42,6 +42,8 @@
 #include <arch/x86/time.h>
 #include <hw/acpi.h>
 #include <hw/e1000.h>
+#include <gfx/window.h>
+#include <gfx/gfx_screen.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
 #include <internal/amitx_consts.h>
@@ -94,6 +96,25 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
+    gfx_desktop();
+    fb_present();
 
+    sleep(2);
+    uint32_t before0 = fb.back.pixels[0];
+    uint32_t before1 = fb.back.pixels[1];
+    uint32_t before2 = fb.back.pixels[1024];  /* first pixel of second row */
+    window_handle_t win = window_create((fb.back.width - 300) / 2, (fb.back.height - 300) / 2, 300, 300, "AmitX", 0); /* gotcha */
+    uint32_t after0 = fb.back.pixels[0];
+    uint32_t after1 = fb.back.pixels[1];
+    uint32_t after2 = fb.back.pixels[1024];
+
+    printk("BACKBUFFER[0] before=%08x after=%08x\n", before0, after0);
+    printk("BACKBUFFER[1] before=%08x after=%08x\n", before1, after1);
+    printk("BACKBUFFER[1024] before=%08x after=%08x\n", before2, after2);
+    window_clear(win, FB_RGB(255, 0, 0));
+    window_present(win); /* doesn't actually call fb present */
+    fb_present();
+    sleep(5);
+    window_destroy(win);
     menu_run();
 }

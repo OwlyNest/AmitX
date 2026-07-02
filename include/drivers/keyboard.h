@@ -37,6 +37,7 @@
 void reset_keyboard_state(void);
 
 unsigned char keyboard_getchar(void);
+int keyboard_poll(unsigned char *c);
 int  keyboard_has_char(void);     /* non-blocking check */
 void keyboard_flush(void);        /* clear buffer */
 

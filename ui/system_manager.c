@@ -102,7 +102,7 @@ static void sm_draw_list(void) {
         uint32_t row_bg = (idx == sm_selected) ? hi : bg;
         uint32_t row_fg = (idx == sm_selected) ? hifg : fg;
 
-        gfx_fill_rect(list_x, row_y, list_w, SM_ROW_H, row_bg);
+        gfx_fill_rect1(list_x, row_y, list_w, SM_ROW_H, row_bg);
 
         const kscope_node_t *node = kscope_get_node(idx);
         char line[80];

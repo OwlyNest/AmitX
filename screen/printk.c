@@ -22,7 +22,6 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "gfx/gfx_term.h"
 #include <screen/printk.h>
 #include <screen/screen.h>
 #include <drivers/serial.h>

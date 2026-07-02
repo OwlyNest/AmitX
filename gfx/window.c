@@ -23,6 +23,7 @@
 
 /* --- Includes ---*/
 #include "gfx/fb.h"
+#include "gfx/gfx_screen.h"
 #include <gfx/window.h>
 #include <gfx/font.h>
 #include <screen/printk.h>
@@ -66,65 +67,52 @@ static int window_find_free(void) {
  * Lifecycle
  * ======================================================================= */
 window_handle_t window_create(int x, int y, int w, int h, const char *title, uint32_t flags) {
-	int handle = window_find_free(); /* Innocent */
-	if (handle == WIN_INVALID) { /* Innocent */
-		printk("[window] No free window slots\n"); /* Innocent */
-		return WIN_INVALID; /* Innocent */
-	} /* Innocent */
+	int handle = window_find_free(); 
+	if (handle == WIN_INVALID) { 
+		printk("[window] No free window slots\n"); 
+		return WIN_INVALID; 
+	} 
 
 	window_t *win = &windows[handle]; /* addr=1160192 (decimal), size=124, no overlap */
 	memset(win, 0, sizeof(window_t)); /*innocent*/
 
 	win->valid = 1;
-	win->x = x; /* innocent */
-	win->y = y; /* innocent */
+	win->x = x; 
+	win->y = y; 
 
-	/* keep them both in, black hole, take one out, doesn't matter which, no black hole, take them both out, no black hole*/
-	win->surface.width = w; /* bingo! Double bingo! */
-	win->surface.height = h; /* bingo! Double bingo! */
-	/* Hold up, no window is created to begin with */
+	win->surface.width = w;
+	win->surface.height = h;
 
-	win->flags = flags; /* innocent */
-	win->fg_color = FB_RGB(255, 255, 255); /* innocent */
-	win->bg_color = FB_RGB(40, 45, 60); /* innocent */
+	win->flags = flags; 
+	win->fg_color = gfx_theme_color(GFX_WHITE); 
+	win->bg_color = gfx_theme_color(GFX_BG_PANEL); 
 
-	if (title) {/* innocent */
-		strncpy(win->title, title, WIN_MAX_TITLE_LEN - 1);/* innocent */
-		win->title[WIN_MAX_TITLE_LEN - 1] = '\0';/* innocent */
-	} /* innocent */
+	if (title) {
+		strncpy(win->title, title, WIN_MAX_TITLE_LEN - 1);
+		win->title[WIN_MAX_TITLE_LEN - 1] = '\0';
+	} 
 
-	window_update_content_rect(win); /* innocent */
+	window_update_content_rect(win); 
 
 	/* Allocate pixel buffer */
-	win->surface.pitch_px = win->surface.width; /* Innocent */
-	win->surface.pitch = w * sizeof(uint32_t); /* Innocent */
+	win->surface.pitch_px = win->surface.width; 
+	win->surface.pitch = w * sizeof(uint32_t); 
 	size_t buf_size = (size_t)win->surface.width * win->surface.height * sizeof(uint32_t); /*innocent*/
-	win->surface.pixels = (uint32_t *)malloc(buf_size); /* no black square, fb_present just copiest back -> front, window_present isn't called so window -> back doesn't happen, which means... the block below runs let's force it to not die... black square appears, innocent */
-	if (!win->surface.pixels) { /* Innocent */
-		win->valid = 0;/* Innocent */
-		return WIN_INVALID;/* Innocent */
-	}/* Innocent */
-
-	/* --- DEBUG: Add these --- */
-	printk("&fb                = %p\n", &fb);
-	printk("&fb.back.pixels    = %p\n", &fb.back.pixels);
-	printk("&fb.back.width     = %p\n", &fb.back.width);
-	printk("&fb.back.height    = %p\n", &fb.back.height);
-	printk("&fb.back.pitch     = %p\n", &fb.back.pitch);
-	printk("&fb.back.pitch_px  = %p\n", &fb.back.pitch_px);
-	printk("&windows[0]        = %p\n", &windows[0]);
-	printk("&windows[0].surface.width = %p\n", &windows[0].surface.width);
-	/* ------------------------ */
+	win->surface.pixels = (uint32_t *)malloc(buf_size);
+	if (!win->surface.pixels) { 
+		win->valid = 0;
+		return WIN_INVALID;
+	}
 
 	/* Clear to background */
-	window_clear(handle, win->bg_color); /* innocent */
+	window_clear(handle, win->bg_color); 
 
 	/* Draw chrome */
-	if (flags & (WIN_FLAG_BORDER | WIN_FLAG_TITLEBAR)) {/* Innocent */
-		window_draw_frame(handle);/* Innocent */
-	}/* Innocent */
+	if (flags & (WIN_FLAG_BORDER | WIN_FLAG_TITLEBAR)) {
+		window_draw_frame(handle);
+	}
 
-	printk("[window] Created window %d: '%s' at (%d,%d) %dx%d\n", handle, win->title, x, y, w, h);/* Innocent */
+	printk("[window] Created window %d: '%s' at (%d,%d) %dx%d\n", handle, win->title, x, y, w, h);
 
 	return handle;
 }
@@ -263,9 +251,9 @@ void window_draw_frame(window_handle_t handle) {
 	window_t *win = window_get(handle);
 	if (!win || !win->surface.pixels) return;
 
-	uint32_t light = FB_RGB(120, 130, 150);
-    uint32_t dark  = FB_RGB(20, 25, 35);
-    uint32_t title_bg = FB_RGB(80, 90, 120);
+	uint32_t light = gfx_theme_color(GFX_BORDER_LIGHT);
+    uint32_t dark  = gfx_theme_color(GFX_BORDER_DARK);
+    uint32_t title_bg = gfx_theme_color(GFX_BG_TITLE);
 
 	int w = win->surface.width;
     int h = win->surface.height;
@@ -295,7 +283,7 @@ void window_draw_frame(window_handle_t handle) {
         int tx = 4;
         int ty = 6;
         for (int i = 0; i < title_len && (tx + i * 8) < w - 8; i++) {
-            gfx_draw_char(&win->surface, tx + i * 8, ty, win->title[i], FB_RGB(255, 255, 255));
+            gfx_draw_char(&win->surface, tx + i * 8, ty, win->title[i], gfx_theme_color(GFX_WHITE));
         }
     }
 }
@@ -316,21 +304,8 @@ void window_set_title(window_handle_t handle, const char *title) {
  * Compositing
  * ======================================================================= */
 void window_present(window_handle_t handle) {
-	printk("[window_present] CALLED for handle %d\n", handle);
-	printk("fb.back.pitch=%u fb.back.width=%u\n",
-		fb.back.pitch, fb.back.width * 4);
     window_t *win = window_get(handle);
     if (!win || !win->valid || !win->surface.pixels) return;
-
-	static int debug_once = 1;
-	if (debug_once) {
-		for (int i = 0; i < 20; i++) {
-			printk("SRC sample %d = %x\n",
-				i,
-				win->surface.pixels[i]);
-		}
-		debug_once = 0;
-	}
     
     int x0 = win->x;
 	int y0 = win->y;
@@ -361,9 +336,7 @@ void window_present(window_handle_t handle) {
 
 void window_present_all(void) {
     /* Clear desktop */
-    gfx_clear(&fb.back, FB_RGB(20, 30, 100));
-    
-    /* For v1: just present all windows, last created on top */
+    gfx_clear(&fb.back, gfx_theme_color(GFX_BG_DESKTOP));
     for (int i = 0; i < WIN_MAX_WINDOWS; i++) {
         if (windows[i].valid) {
             window_present(i);
@@ -371,4 +344,52 @@ void window_present_all(void) {
     }
     
     fb_present();
+}
+
+void window_draw_line(window_handle_t handle, int x0, int y0, int x1, int y1, uint32_t color) {
+    window_t *win = window_get(handle);
+    if (!win || !win->surface.pixels) return;
+    gfx_draw_line(&win->surface, x0, y0, x1, y1, color);
+}
+
+void window_draw_line_thick(window_handle_t handle, int x0, int y0, int x1, int y1, int thickness, uint32_t color) {
+    window_t *win = window_get(handle);
+    if (!win || !win->surface.pixels) return;
+    gfx_draw_line_thick(&win->surface, x0, y0, x1, y1, thickness, color);
+}
+
+void window_draw_vector(window_handle_t handle, int x0, int y0, int angle, int magnitude, int thickness, uint32_t color) {
+	window_t *win = window_get(handle);
+    if (!win || !win->surface.pixels) return;
+	gfx_draw_vector(&win->surface, x0, y0, angle, magnitude, thickness, color);
+}
+
+void window_draw_circle(window_handle_t handle, int cx, int cy, int radius, uint32_t color) {
+	window_t *win = window_get(handle);
+	if (!win || !win->surface.pixels) return;
+	gfx_draw_circle(&win->surface, cx, cy, radius, color);
+}
+
+void window_fill_circle(window_handle_t handle, int cx, int cy, int radius, uint32_t color) {
+	window_t *win = window_get(handle);
+	if (!win || !win->surface.pixels) return;
+	gfx_fill_circle(&win->surface, cx, cy, radius, color);
+}
+
+void window_draw_arc(window_handle_t handle, int cx, int cy, int radius, int start_angle, int end_angle, uint32_t color) {
+	window_t *win = window_get(handle);
+	if (!win || !win->surface.pixels) return;
+	gfx_draw_arc(&win->surface, cx, cy, radius, start_angle, end_angle, color);
+}
+
+void window_fill_sector(window_handle_t handle, int cx, int cy, int radius, int start_angle, int end_angle, uint32_t color) {
+	window_t *win = window_get(handle);
+	if (!win || !win->surface.pixels) return;
+	gfx_fill_sector(&win->surface, cx, cy, radius, start_angle, end_angle, color);
+}
+
+void window_fill_triangle(window_handle_t handle, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color) {
+	window_t *win = window_get(handle);
+	if (!win || !win->surface.pixels) return;
+	gfx_fill_triangle(&win->surface, x0, y0, x1, y1, x2, y2, color);
 }

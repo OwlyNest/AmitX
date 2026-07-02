@@ -99,21 +99,11 @@ void kernel_main(void) {
     gfx_desktop();
     fb_present();
 
-    sleep(2);
-    uint32_t before0 = fb.back.pixels[0];
-    uint32_t before1 = fb.back.pixels[1];
-    uint32_t before2 = fb.back.pixels[1024];  /* first pixel of second row */
-    window_handle_t win = window_create((fb.back.width - 300) / 2, (fb.back.height - 300) / 2, 300, 300, "AmitX", 0); /* gotcha */
-    uint32_t after0 = fb.back.pixels[0];
-    uint32_t after1 = fb.back.pixels[1];
-    uint32_t after2 = fb.back.pixels[1024];
-
-    printk("BACKBUFFER[0] before=%08x after=%08x\n", before0, after0);
-    printk("BACKBUFFER[1] before=%08x after=%08x\n", before1, after1);
-    printk("BACKBUFFER[1024] before=%08x after=%08x\n", before2, after2);
-    window_clear(win, FB_RGB(255, 0, 0));
-    window_present(win); /* doesn't actually call fb present */
-    fb_present();
+    window_handle_t win = window_create((fb.back.width - 300) / 2, (fb.back.height - 300) / 2, 300, 300, "AmitX", 0);
+    window_draw_frame(win);
+    window_fill_circle(win, 150, 150, 50, gfx_theme_color(GFX_WHITE));
+    window_draw_vector(win, 0, 300, 450, 100, 10, gfx_theme_color(GFX_YELLOW));
+    window_present_all();
     sleep(5);
     window_destroy(win);
     menu_run();

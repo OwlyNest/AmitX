@@ -2827,9 +2827,3 @@ const uint8_t font8x8[256][8] = {
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-int fb_get_string_width(const char* str) {
-    if (!str) return 0;
-    int len = 0;
-    while (str[len]) len++;
-    return len * 8;
-}

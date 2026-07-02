@@ -44,32 +44,6 @@ static int clip_rect(int *x, int *y, int *w, int *h);
 /* --- Functions ---*/
 
 /* ==========================================================================
- * Color helpers
- * ======================================================================= */
-uint32_t gfx_theme_color(gfx_theme_color_t c) {
-    switch (c) {
-        case GFX_BG_DESKTOP:    return FB_RGB(20, 30, 100);
-        case GFX_BG_PANEL:      return FB_RGB(40, 45, 60);
-        case GFX_BG_TITLE:      return FB_RGB(80, 90, 120);
-        case GFX_BG_HIGHLIGHT:  return FB_RGB(100, 120, 160);
-        case GFX_BG_BUTTON:     return FB_RGB(60, 70, 90);
-        case GFX_BG_BUTTON_HOVER: return FB_RGB(80, 95, 120);
-        case GFX_FG_TEXT:       return FB_RGB(255, 255, 255);
-        case GFX_FG_TEXT_DIM:   return FB_RGB(180, 180, 200);
-        case GFX_FG_ACCENT:     return FB_RGB(100, 200, 255);
-        case GFX_BORDER_LIGHT:  return FB_RGB(120, 130, 150);
-        case GFX_BORDER_DARK:   return FB_RGB(20, 25, 35);
-        case GFX_RED:           return FB_RGB(255, 0, 0);
-        case GFX_GREEN:         return FB_RGB(0, 255, 0);
-        case GFX_BLUE:          return FB_RGB(0, 0, 255);
-        case GFX_YELLOW:        return FB_RGB(255, 255, 0);
-        case GFX_WHITE:         return FB_RGB(255, 255, 255);
-        case GFX_BLACK:         return FB_RGB(0, 0, 0);
-        default:                return FB_RGB(255, 255, 255);
-    }
-}
-
-/* ==========================================================================
  * Clipping
  * ======================================================================= */
 static int clip_rect(int *x, int *y, int *w, int *h) {
@@ -183,7 +157,7 @@ void gfx_draw_text(int x, int y, const char *str, uint32_t color) {
 }
 
 int gfx_text_width(const char *str) {
-    return fb_get_string_width(str);
+    return gfx_get_string_width(str);
 }
 
 /* ==========================================================================
@@ -341,7 +315,7 @@ void gfx_logo_design2(int x, int y) {
     gfx_fill_rect1(x, y, 150, 150, gfx_theme_color(GFX_RED));
     gfx_fill_rect1(x + 25, y + 25, 150, 150, gfx_theme_color(GFX_GREEN));
     gfx_fill_rect1(x + 50, y + 50, 150, 150, gfx_theme_color(GFX_BLUE));
-    gfx_fill_rect1(x + 50, y + 50, 125, 125, FB_RGBA(255, 0, 0, 255));
+    gfx_fill_rect1(x + 50, y + 50, 125, 125, gfx_theme_color(GFX_RED));
     gfx_draw_text(x, y-10, "Welcome to AmitX!", gfx_theme_color(GFX_WHITE));
 }
 

@@ -97,4 +97,13 @@ void window_set_title(window_handle_t handle, const char *title);
 void window_present(window_handle_t handle);  /* Composite this window to framebuffer */
 void window_present_all(void);                /* Composite all windows */
 
+void window_draw_line(window_handle_t handle, int x0, int y0, int x1, int y1, uint32_t color);
+void window_draw_line_thick(window_handle_t handle, int x0, int y0, int x1, int y1, int thickness, uint32_t color);
+void window_draw_vector(window_handle_t handle, int x0, int y0, int angle, int magnitude, int thickness, uint32_t color);
+void window_draw_circle(window_handle_t handle, int cx, int cy, int radius, uint32_t color);
+void window_fill_circle(window_handle_t handle, int cx, int cy, int radius, uint32_t color);
+void window_draw_arc(window_handle_t handle, int cx, int cy, int radius, int start_angle, int end_angle, uint32_t color);
+void window_fill_sector(window_handle_t handle, int cx, int cy, int radius, int start_angle, int end_angle, uint32_t color);
+void window_fill_triangle(window_handle_t handle, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color);
+
 #endif

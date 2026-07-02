@@ -150,7 +150,7 @@ static void cursor_draw_front(int x, int y) {
     else if (mouse_buttons & 2)
         cursor = cursor_right;
 
-    uint32_t white = FB_RGB(255,255,255);
+    uint32_t white = gfx_theme_color(GFX_WHITE);
 
     for (int row = 0; row < CURSOR_H; row++) {
         for (int col = 0; col < CURSOR_W; col++) {

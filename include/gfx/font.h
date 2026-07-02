@@ -29,5 +29,4 @@ extern const uint8_t font8x8[256][8];   // 8x8 font
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-int  fb_get_string_width(const char* str);
 #endif

@@ -27,10 +27,12 @@ run "bear -- make clean"
 
 echo -e "\e[33m[x] Building kernel...\e[0m"
 run "bear -- make"
-i686-elf-objdump -h kernel.bin
+make size
+make readelf
+make sections
 echo -e "\e[33m[x] Preparing ISO directory...\e[0m"
 run "mkdir -p isodir/boot/grub"
-run "cp kernel.bin isodir/boot/kernel.bin"
+run "cp kernel.elf isodir/boot/kernel.elf"
 
 echo -e "\e[33m[x] Creating GRUB config...\e[0m"
 cat > isodir/boot/grub/grub.cfg <<EOF
@@ -38,7 +40,7 @@ set timeout=0
 set default=0
 
 menuentry \"AmitX Kernel\" {
-    multiboot2 /boot/kernel.bin
+    multiboot2 /boot/kernel.elf
     boot
 }
 EOF
@@ -59,7 +61,7 @@ GDK_BACKEND=x11 qemu-system-i386 \
     -monitor none \
     -machine pc \
     -device vmware-svga \
-    -display gtk \
+    -display gtk,full-screen=on,zoom-to-fit=on \
     -rtc base=localtime \
     #-d int,cpu_reset
     

@@ -1,6 +1,6 @@
 # Toolchain
 CC := i686-elf-gcc
-LD := i686-elf-ld
+LD := $(CC)
 
 # Directories
 SRC_DIRS := src \
@@ -24,25 +24,32 @@ SRC_DIRS := src \
 BUILD_DIR := build
 
 # Output
-TARGET := kernel.bin
+TARGET := kernel.elf
 
 # Flags
 CFLAGS := \
-	-m32 \
-	-ffreestanding \
-	-O2 \
-	-Wall \
-	-Wextra \
-	-Werror \
-	-MMD \
-	-MP \
-	-Iinclude \
+    -m32 \
+    -ffreestanding \
+    -fno-stack-protector \
+	-fno-asynchronous-unwind-tables \
+	-fno-unwind-tables \
+    -fno-pic \
+    -fno-pie \
+    -O2 \
+    -Wall \
+    -Wextra \
+    -Werror \
+    -MMD \
+    -MP \
+    -Iinclude
 
 CFLAGS += -DAMITX_BUILD_DATE="\"$(shell date +%Y-%m-%d)\""
 
 LDFLAGS := \
 	-T boot/linker.ld \
 	-nostdlib
+
+LIBS := -lgcc
 
 # --------------------------------------------------------------------
 # Source discovery
@@ -65,7 +72,7 @@ DEPS := $(OBJS:.o=.d)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # --------------------------------------------------------------------
 # C compilation
@@ -95,3 +102,17 @@ clean:
 # --------------------------------------------------------------------
 
 -include $(DEPS)
+
+.PHONY: size sections symbols
+
+size: kernel.elf
+	i686-elf-size kernel.elf
+
+sections: kernel.elf
+	i686-elf-objdump -h kernel.elf
+
+symbols: kernel.elf
+	i686-elf-nm -n kernel.elf | less
+
+readelf: kernel.elf
+	i686-elf-readelf -l kernel.elf

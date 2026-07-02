@@ -35,25 +35,7 @@
 #include <stdint.h>
 #include <gfx/fb.h>
 /* --- Typedefs - Structs - Enums ---*/
-typedef enum {
-	GFX_BG_DESKTOP,
-    GFX_BG_PANEL,
-    GFX_BG_TITLE,
-    GFX_BG_HIGHLIGHT,
-    GFX_BG_BUTTON,
-    GFX_BG_BUTTON_HOVER,
-    GFX_FG_TEXT,
-    GFX_FG_TEXT_DIM,
-    GFX_FG_ACCENT,
-    GFX_BORDER_LIGHT,
-    GFX_BORDER_DARK,
-    GFX_RED,
-    GFX_GREEN,
-    GFX_BLUE,
-    GFX_YELLOW,
-    GFX_WHITE,
-    GFX_BLACK,
-} gfx_theme_color_t;
+
 
 /* --- Screen context ---*/
 typedef struct gfx_screen {

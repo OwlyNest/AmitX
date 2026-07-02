@@ -68,19 +68,22 @@ void gfx_menu_draw(void) {
     gfx_desktop();
     gfx_logo_design2(100, 60);
 
-    int mx = 312, my = 260, mw = 400, mh = 280;
+    int menu_width = 400;
+    int menu_height = 280;
+    int menu_x = (fb.back.width - menu_width) / 2;
+    int menu_y = (fb.back.height - menu_height) / 2;
 
-    gfx_panel(mx, my, mw, mh, gfx_theme_color(GFX_BG_PANEL));
-    gfx_bevel_in(mx, my, mw, mh);
-    gfx_title_bar(mx, my, mw, " AmitX Main Menu ");
+    gfx_panel(menu_x, menu_y, menu_width, menu_height, gfx_theme_color(GFX_BG_PANEL));
+    gfx_bevel_in(menu_x, menu_y, menu_width, menu_height);
+    gfx_title_bar(menu_x, menu_y, menu_width, " AmitX Main Menu ");
 
-    gfx_list(mx + 4, my + 28, mw - 8, mh - 32, main_menu, main_menu_count, POINTER);
+    gfx_list(menu_x + 4, menu_y + 28, menu_width - 8, menu_height - 32, main_menu, main_menu_count, POINTER);
 
     char text[64];
     const char *version = AMITX_VERSION;
     const char *date = AMITX_BUILD_DATE;
     ksnprintf(text, sizeof(text), "AmitX OS v%s (%s)", version, date);
-    gfx_status_bar(0, 744, 1024, text);
+    gfx_status_bar(0, fb.back.height - 24, fb.back.width, text);
 
     fb_present();
 }

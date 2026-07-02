@@ -89,8 +89,8 @@
  * There is a 0-byte gap between them which is fine because the
  * FB window ends exactly where the FIFO window starts.
  */
-#define SVGA_FB_VIRT                0xFF000000u
-#define SVGA_FIFO_VIRT              0xFF800000u
+#define SVGA_FB_VIRT                0xFE000000u
+#define SVGA_FIFO_VIRT              0xFE800000u
 
 /* --- Includes ---*/
 #include <stdint.h>
@@ -104,6 +104,9 @@ typedef struct svga_device {
     void     *fifo_virt;        /* Mapped FIFO virtual addr         */
     uint32_t  width;
     uint32_t  height;
+	uint32_t red_mask;
+    uint32_t green_mask;
+    uint32_t blue_mask;
     uint32_t  bpp;
     uint32_t  pitch;            /* bytes per scanline               */
     uint32_t  vram_size;

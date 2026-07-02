@@ -139,8 +139,7 @@ static int svga_map_fb(void) {
      * If this fires, lower SVGA_FB_VIRT or reduce the resolution.
      */
     if (SVGA_FB_VIRT + fb_size > 0xFFC00000u) {
-        printk("[svga] FB mapping 0x%08x+%u would hit recursive "
-               "region — aborting\n", SVGA_FB_VIRT, fb_size);
+        printk("[svga] FB mapping 0x%08x+%u would hit recursive region, aborting\n", SVGA_FB_VIRT, fb_size);
         return -1;
     }
 
@@ -268,8 +267,12 @@ int svga_set_resolution(uint32_t width, uint32_t height, uint32_t bpp) {
     svga.bpp    = svga_read_reg(SVGA_REG_BPP);
     svga.pitch  = svga_read_reg(SVGA_REG_BYTES_PER_LINE);
 
-    printk("[svga] %ux%u @ %ubpp pitch=%u\n",
-           svga.width, svga.height, svga.bpp, svga.pitch);
+    /* Also query the mask registers to know the pixel format */
+    svga.red_mask   = svga_read_reg(SVGA_REG_RED_MASK);
+    svga.green_mask = svga_read_reg(SVGA_REG_GREEN_MASK);
+    svga.blue_mask  = svga_read_reg(SVGA_REG_BLUE_MASK);
+
+    printk("[svga] Actual mode: %ux%u @ %ubpp pitch=%u\n[svga] Masks: R=%08x G=%08x B=%08x\n", svga.width, svga.height, svga.bpp, svga.pitch, svga.red_mask, svga.green_mask, svga.blue_mask);
 
     if (svga.width == 0 || svga.height == 0) {
         printk("[svga] Resolution rejected by device\n");
@@ -300,12 +303,29 @@ int svga_init(void) {
     svga.vram_size = svga_read_reg(SVGA_REG_VRAM_SIZE);
 
     /* Set mode, map FB, init FIFO — in that order */
-    if (svga_set_resolution(1024, 768, 32) != 0) return -1;
+
+    uint32_t max_w = svga_read_reg(SVGA_REG_MAX_WIDTH);
+    uint32_t max_h = svga_read_reg(SVGA_REG_MAX_HEIGHT);
+    uint32_t max_bpp = svga_read_reg(SVGA_REG_DEPTH); /* not actually max apparently, 32 works just fine in Oracle */
+
+    printk("[svga] Device max: %ux%u @ %ubpp\n", max_w, max_h, max_bpp);
+
+    /* Pick a resolution: try native first, then fall back */
+    uint32_t target_w = 1920;
+    uint32_t target_h = 1080;
+
+    if (target_w > max_w || target_h > max_h) {
+        target_w = max_w;
+        target_h = max_h;
+        printk("[svga] Clamped to device max\n");
+    }
+
+    if (svga_set_resolution(target_w, target_h, 32) != 0) return -1;
     if (svga_map_fb()                      != 0) return -1;
     if (svga_fifo_init()                   != 0) return -1;
 
     svga.initialized = 1;
-    printk("[svga] Ready %ux%u VRAM %u KB\n", svga.width, svga.height, svga.vram_size / 1024);
+    printk("[svga] Mode set: %ux%u pitch=%u bpp=%u VRAM %u KB\n", svga.width, svga.height, svga.pitch, svga.bpp, svga.vram_size / 1024);
 
     fb_init();
     gfx_screen_init();

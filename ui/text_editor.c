@@ -28,6 +28,7 @@
 
 /* --- Includes ---*/
 #include <ui/text_editor.h>
+#include <gfx/compositor.h>
 #include <fs/amfs.h>
 #include <gfx/window.h>
 #include <gfx/gfx_term.h>
@@ -397,7 +398,7 @@ void amity_run(const char *path) {
     window_draw_text(editor, 4, 6, title, gfx_theme_color(GFX_FG_TEXT));
 
     ed_draw();
-    window_present_all();
+    compositor_render();
 
     while (1) {
         unsigned char c = keyboard_getchar();
@@ -405,36 +406,36 @@ void amity_run(const char *path) {
         if (c == KEY_UP) {
             ed_cursor_up();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == KEY_DOWN) {
             ed_cursor_down();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == KEY_LEFT) {
             ed_cursor_left();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == KEY_RIGHT) {
             ed_cursor_right();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == '\b') {
             ed_delete();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == '\n') {
             ed_insert('\n');
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == 0x13) {  /* Ctrl+S */
             ed_save();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == 0x11) {  /* Ctrl+Q */
             if (ed.dirty) {
                 ed_status("Unsaved changes! Ctrl+Q again to quit");
                 ed_draw();
-                window_present_all();
+                compositor_render();
                 /* Wait for second Ctrl+Q */
                 unsigned char confirm = keyboard_getchar();
                 if (confirm == 0x11) {
@@ -442,7 +443,7 @@ void amity_run(const char *path) {
                 } else {
                     ed_status(NULL);
                     ed_draw();
-                    window_present_all();
+                    compositor_render();
                 }
             } else {
                 break;
@@ -450,15 +451,15 @@ void amity_run(const char *path) {
         } else if (c == 0x01) {  /* Ctrl+A — home */
             ed_cursor_home();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c == 0x05) {  /* Ctrl+E — end */
             ed_cursor_end();
             ed_draw();
-            window_present_all();
+            compositor_render();
         } else if (c >= 32 && c < 128) {
             ed_insert((char)c);
             ed_draw();
-            window_present_all();
+            compositor_render();
         }
     }
 

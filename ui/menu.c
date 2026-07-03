@@ -27,6 +27,7 @@
 #include <internal/amitx_info.h>
 #include <screen/printk.h>
 #include <ui/menu.h>
+#include <gfx/compositor.h>
 #include <ui/system_manager.h>
 #include <ui/device_manager.h>
 #include <ui/about.h>
@@ -74,24 +75,17 @@ void gfx_menu_draw(void) {
     /* Clear window to desktop color */
     gfx_desktop(&win->surface);
 
-    /* Logo in upper area of window */
-    gfx_logo_design2(&win->surface, 0, 0);
-
     /* Menu panel centered in window */
     int panel_x = 20;
-    int panel_y = 80;
+    int panel_y = 20;
     int panel_w = MENU_W - 40;
     int panel_h = MENU_H - 110;
 
-    gfx_panel(&win->surface, panel_x, panel_y, panel_w, panel_h,
-              gfx_theme_color(GFX_BG_PANEL));
+    gfx_panel(&win->surface, panel_x, panel_y, panel_w, panel_h, gfx_theme_color(GFX_BG_PANEL));
     gfx_bevel_in(&win->surface, panel_x, panel_y, panel_w, panel_h);
-    gfx_title_bar(&win->surface, panel_x, panel_y, panel_w,
-                  " AmitX Main Menu ");
+    gfx_title_bar(&win->surface, panel_x, panel_y, panel_w, " AmitX Main Menu ");
 
-    gfx_list(&win->surface, panel_x + 4, panel_y + 24,
-             panel_w - 8, panel_h - 28,
-             main_menu, main_menu_count, POINTER);
+    gfx_list(&win->surface, panel_x + 4, panel_y + 24, panel_w - 8, panel_h - 28, main_menu, main_menu_count, POINTER);
 
     /* Status bar at bottom of window */
     char text[64];
@@ -124,7 +118,7 @@ void menu_run(void) {
     POINTER = 0;
 
     gfx_menu_draw();
-    window_present_all();
+    compositor_render();
 
     while (1) {
         unsigned char c = keyboard_getchar();
@@ -133,19 +127,19 @@ void menu_run(void) {
             if (POINTER < main_menu_count - 1) {
                 POINTER++;
                 gfx_menu_draw();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == 'w' || c == KEY_UP) {
             if (POINTER > 0) {
                 POINTER--;
                 gfx_menu_draw();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == '\n') {
             menu_select(POINTER);
             /* After submenu returns, redraw and present */
             gfx_menu_draw();
-            window_present_all();
+            compositor_render();
         }
     }
 

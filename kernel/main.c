@@ -33,6 +33,7 @@
 #include <drivers/mouse.h>
 #include <kernel/kernel.h>
 #include <mm/heap.h>
+#include <gfx/compositor.h>
 #include <drivers/serial.h>
 #include <screen/printk.h>
 #include <arch/x86/io.h>
@@ -102,8 +103,11 @@ void kernel_main(void) {
     window_draw_frame(win);
     window_fill_circle(win, 150, 150, 50, gfx_theme_color(GFX_WHITE));
     window_draw_vector(win, 0, 300, 450, 100, 10, gfx_theme_color(GFX_YELLOW));
-    window_present_all();
+    window_handle_t win2 = window_create((fb.back.width - 300) / 2, (fb.back.height - 500) / 2, 300, 300, "AmitX", 0);
+    window_draw_frame(win2);
+    window_fill_circle(win2, 150, 150, 50, gfx_theme_color(GFX_WHITE));
+    window_draw_vector(win2, 0, 0, 3600 - 450, 100, 10, gfx_theme_color(GFX_YELLOW));
+    compositor_render();
     sleep(5);
-    window_destroy(win);
     menu_run();
 }

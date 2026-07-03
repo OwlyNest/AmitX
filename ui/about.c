@@ -27,6 +27,7 @@
 #include <ui/about.h>
 #include <gfx/window.h>
 #include <gfx/fb.h>
+#include <gfx/compositor.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <hw/pci.h>
@@ -156,7 +157,7 @@ void about_run(void) {
     int showing_authors = 0;
 
     about_draw();
-    window_present_all();
+    compositor_render();
 
     while (running != 0) {
         /* Check OK button — draw + test click each frame */
@@ -172,7 +173,7 @@ void about_run(void) {
                 if (showing_authors) {
                     showing_authors = 0;
                     about_draw();
-                    window_present_all();
+                    compositor_render();
                 } else {
                     running = 0;
                 }
@@ -182,7 +183,7 @@ void about_run(void) {
                 if (!showing_authors) {
                     showing_authors = 1;
                     about_draw_authors();
-                    window_present_all();
+                    compositor_render();
                 }
                 break;
             }
@@ -194,7 +195,7 @@ void about_run(void) {
             if (ui_button(&win->surface, (ABOUT_W - 100) / 2, ABOUT_H - 50, 100, 22, "OK")) {
                 running = 0;
             }
-            window_present_all();
+            compositor_render();
         }
     }
 

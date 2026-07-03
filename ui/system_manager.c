@@ -28,6 +28,7 @@
 #include <ui/system_manager.h>
 #include <internal/kscope.h>
 #include <gfx/window.h>
+#include <gfx/compositor.h>
 #include <gfx/fb.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -193,7 +194,7 @@ void system_manager_run(void) {
 
     sm_selected = 0;
     sm_draw_list();
-    window_present_all();
+    compositor_render();
 
     while (1) {
         unsigned char c = keyboard_getchar();
@@ -202,26 +203,26 @@ void system_manager_run(void) {
             if (sm_selected < (int)kscope_get_count() - 1) {
                 sm_selected++;
                 sm_draw_list();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == 'w' || c == KEY_UP) {
             if (sm_selected > 0) {
                 sm_selected--;
                 sm_draw_list();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == '\n') {
             if (kscope_get_count() > 0) {
                 const kscope_node_t *node =
                     kscope_get_node(sm_selected);
                 sm_draw_detail(node);
-                window_present_all();
+                compositor_render();
 
                 while (1) {
                     unsigned char d = keyboard_getchar();
                     if (d == 'q' || d == KEY_ESC) {
                         sm_draw_list();
-                        window_present_all();
+                        compositor_render();
                         break;
                     }
                 }

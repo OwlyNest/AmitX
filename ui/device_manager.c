@@ -28,6 +28,7 @@
 /* --- Includes ---*/
 #include <ui/device_manager.h>
 #include <gfx/window.h>
+#include <gfx/compositor.h>
 #include <gfx/fb.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -206,7 +207,7 @@ void device_manager_run(void) {
     dm_refresh();
     dm_selected = 0;
     dm_draw_list();
-    window_present_all();
+    compositor_render();
 
     while (1) {
         unsigned char c = keyboard_getchar();
@@ -215,24 +216,24 @@ void device_manager_run(void) {
             if (dm_selected < dm_device_count - 1) {
                 dm_selected++;
                 dm_draw_list();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == 'w' || c == KEY_UP) {
             if (dm_selected > 0) {
                 dm_selected--;
                 dm_draw_list();
-                window_present_all();
+                compositor_render();
             }
         } else if (c == '\n') {
             if (dm_device_count > 0) {
                 dm_draw_detail(dm_devices[dm_selected]);
-                window_present_all();
+                compositor_render();
 
                 while (1) {
                     unsigned char d = keyboard_getchar();
                     if (d == 'q' || d == KEY_ESC) {
                         dm_draw_list();
-                        window_present_all();
+                        compositor_render();
                         break;
                     }
                 }

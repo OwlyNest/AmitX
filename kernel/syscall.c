@@ -1,5 +1,6 @@
-#include "drivers/mouse.h"
-#include "gfx/window.h"
+#include <drivers/mouse.h>
+#include <gfx/window.h>
+#include <gfx/compositor.h>
 #include <kernel/syscall.h>
 #include <drivers/serial.h>
 #include <screen/screen.h>
@@ -286,7 +287,7 @@ static int _win_clear(window_handle_t handle, uint32_t color, uint32_t a3) {
 static int _win_present(window_handle_t handle, uint32_t a2, uint32_t a3) {
     (void)a2; (void)a3;
 
-    window_present(handle);
+    compositor_blit_window(window_get(handle));
 
     return 0;
 }

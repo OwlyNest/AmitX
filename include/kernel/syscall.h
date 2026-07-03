@@ -28,6 +28,21 @@
 #define SYS_MALLOC      0x48
 #define SYS_FREE        0x49
 
+#define WIN_CREATE      0x50
+#define WIN_DESTROY     0x51
+#define WIN_SHOW        0x52
+#define WIN_HIDE        0x53
+#define WIN_SET_TITLE   0x54
+#define WIN_SET_ACTIVE  0x55
+#define WIN_GET_ACTIVE  0x56
+#define WIN_GET_SURFACE 0x57
+#define WIN_GET_PITCH   0x58
+#define WIN_GET_DIMS    0x59
+#define WIN_CLEAR       0x5A
+#define WIN_PRESENT     0x5B
+#define MOUSE_POS       0x5C
+#define MOUSE_BUTTONS   0x5D
+
 typedef int (*syscall_func_t)(uint32_t, uint32_t, uint32_t);
 
 void syscall_dispatch(interrupt_frame_t *frame);               // Called from isr128

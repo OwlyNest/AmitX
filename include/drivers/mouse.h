@@ -26,13 +26,14 @@
 #include <stdint.h>
 
 extern volatile int mouse_x;
-extern volatile int mouse_y;\
+extern volatile int mouse_y;
 
 /* --- Prototypes ---*/
 void get_mouse_position(int *x, int *y);
 void reset_mouse_position(void);
 void mouse_refresh_cursor(void);
 
+int mouse_button_state(void);
 int mouse_left_down(void);
 int mouse_left_pressed(void);
 int mouse_left_released(void);

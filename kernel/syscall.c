@@ -1,3 +1,5 @@
+#include "drivers/mouse.h"
+#include "gfx/window.h"
 #include <kernel/syscall.h>
 #include <drivers/serial.h>
 #include <screen/screen.h>
@@ -9,6 +11,7 @@
 #include <hw/rtc.h>
 #include <mm/heap.h>
 #include <lib/string.h>
+#include <stdint.h>
 
 static syscall_func_t syscall_table[MAX_SYSCALLS] = { 0 };
 
@@ -169,6 +172,146 @@ static int _sys_free(uint32_t ptr, uint32_t a2, uint32_t a3) {
     return 0;
 }
 
+static int _win_create(uint32_t w, uint32_t h, uint32_t flags) {
+    int x = ((int)fb.back.width - (int)w) / 2;
+    int y = ((int)fb.back.height - (int)h) / 2;
+    return window_create(x, y, w, h, "", flags);
+}
+
+static int _win_destroy(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+    window_destroy(handle);
+    return 0;
+}
+
+static int _win_show(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    win->state |= WIN_STATE_VISIBLE;
+
+    return 0;
+}
+
+static int _win_hide(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    win->state &= ~WIN_STATE_VISIBLE;
+    return 0;
+}
+
+static int _win_set_title(window_handle_t handle, uint32_t ptr, uint32_t a3) {
+    (void)a3;
+    const char *title = (char *)ptr;
+
+    window_set_title(handle, title);
+    return 0;
+}
+
+static int _win_set_active(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    for (int i = 0; i < WIN_MAX_WINDOWS; i++) {
+        window_t *w = window_get(i);
+        if (!w) continue;
+        w->state &= ~WIN_STATE_FOCUSED;
+    }
+
+    win->state |= WIN_STATE_FOCUSED;
+
+    return 0;
+}
+
+static int _win_get_active(uint32_t a1, uint32_t a2, uint32_t a3) {
+    (void)a1; (void)a2; (void)a3;
+
+    for (int i = 0; i < WIN_MAX_WINDOWS; i++) {
+        window_t *win = window_get(i);
+        if (!win) continue;
+        if (win->state & WIN_STATE_FOCUSED) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int _win_get_surface(uint32_t handle, uint32_t out_ptr, uint32_t a3) {
+    (void)a3;
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    uint32_t *out = (uint32_t *)out_ptr;
+    *out = (uint32_t)(uintptr_t)win->surface.pixels;
+    return 0;
+}
+
+static int _win_get_pitch(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    return (int)win->surface.pitch;
+}
+
+static int _win_get_dims(uint32_t handle, uint32_t w_ptr, uint32_t h_ptr) {
+    window_t *win = window_get(handle);
+    if (!win) return -1;
+
+    uint32_t *w = (uint32_t *)w_ptr;
+    uint32_t *h = (uint32_t *)h_ptr;
+
+    if (w) *w = win->surface.width;
+    if (h) *h = win->surface.height;
+
+    return 0;
+}
+
+static int _win_clear(window_handle_t handle, uint32_t color, uint32_t a3) {
+    (void)a3;
+
+    window_clear(handle, color);
+
+    return 0;
+}
+
+static int _win_present(window_handle_t handle, uint32_t a2, uint32_t a3) {
+    (void)a2; (void)a3;
+
+    window_present(handle);
+
+    return 0;
+}
+
+static int _mouse_pos(uint32_t x_ptr, uint32_t y_ptr, uint32_t a3) {
+    (void)a3;
+
+    uint32_t *x = (uint32_t *)x_ptr;
+    uint32_t *y = (uint32_t *)y_ptr;
+
+    int tx, ty;
+
+    get_mouse_position(&tx, &ty);
+
+    *x = (uint32_t)tx;
+    *y = (uint32_t)ty;
+
+    return 0;
+}
+
+static int _mouse_buttons(uint32_t a1, uint32_t a2, uint32_t a3) {
+    (void)a1; (void)a2; (void)a3;
+    return mouse_button_state();
+}
+
 void syscall_init(void) {
     memset(syscall_table, 0, sizeof(syscall_table));
     register_syscall(SYS_EXIT,       _sys_exit);
@@ -186,4 +329,19 @@ void syscall_init(void) {
     register_syscall(SYS_VERSION,    _sys_version);
     register_syscall(SYS_MALLOC,     _sys_malloc);
     register_syscall(SYS_FREE,       _sys_free);
+
+    register_syscall(WIN_CREATE, _win_create);
+    register_syscall(WIN_DESTROY, _win_destroy);
+    register_syscall(WIN_SHOW, _win_show);
+    register_syscall(WIN_HIDE, _win_hide);
+    register_syscall(WIN_SET_TITLE, _win_set_title);
+    register_syscall(WIN_SET_ACTIVE, _win_set_active);
+    register_syscall(WIN_GET_ACTIVE, _win_get_active);
+    register_syscall(WIN_GET_SURFACE, _win_get_surface);
+    register_syscall(WIN_GET_PITCH, _win_get_pitch);
+    register_syscall(WIN_GET_DIMS, _win_get_dims);
+    register_syscall(WIN_CLEAR, _win_clear);
+    register_syscall(WIN_PRESENT, _win_present);
+    register_syscall(MOUSE_POS, _mouse_pos);
+    register_syscall(MOUSE_BUTTONS, _mouse_buttons);
 }

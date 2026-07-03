@@ -403,6 +403,10 @@ void reset_mouse_position(void) {
     mouse_bytes[2] = 0;
 }
 
+int mouse_button_state(void) {
+    return mouse_buttons;
+}
+
 int mouse_left_down(void) {
     return mouse_buttons & 1;
 }

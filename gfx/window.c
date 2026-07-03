@@ -85,6 +85,7 @@ window_handle_t window_create(int x, int y, int w, int h, const char *title, uin
 	win->flags = flags; 
 	win->fg_color = gfx_theme_color(GFX_WHITE); 
 	win->bg_color = gfx_theme_color(GFX_BG_PANEL); 
+	win->state = WIN_STATE_VISIBLE;
 
 	if (title) {
 		strncpy(win->title, title, WIN_MAX_TITLE_LEN - 1);
@@ -341,7 +342,7 @@ void window_present_all(void) {
     /* Clear desktop */
     gfx_clear(&fb.back, gfx_theme_color(GFX_BG_DESKTOP));
     for (int i = 0; i < WIN_MAX_WINDOWS; i++) {
-        if (windows[i].valid) {
+        if (windows[i].valid && (windows[i].state & WIN_STATE_VISIBLE)) {
             window_present(i);
         }
     }

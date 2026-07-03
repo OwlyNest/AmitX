@@ -28,7 +28,6 @@
 #include <shell/commands.h>
 #include <shell/cyclone.h>
 #include <gfx/gfx_term.h>
-#include <gfx/gfx_screen.h>
 #include <screen/printk.h>
 #include <gfx/fb.h>
 #include <logo/logo.h>
@@ -93,7 +92,7 @@ void execute_command(const char* input) {
         /* Redraw terminal after amity exits */
         gfx_term_clear();
         gfx_term_draw_frame(" Cyclone REPL v0.9");
-        draw_logo_gfx(version, 700, 60);
+        draw_logo_gfx(&fb.back, version, 700, 60);
         gfx_term_newline();
     } else if (starts_with(input, "cat")) {
         const char *path = input + 4;
@@ -104,8 +103,8 @@ void execute_command(const char* input) {
     } else if (strcmp(input, "switch logo") == 0) {
         version = (version == 1) ? 2 : 1;
         /* Erase old logo area and redraw */
-        gfx_fill_rect1(700, 60, 100, 100, gfx_theme_color(GFX_BG_PANEL));
-        draw_logo_gfx(version, 700, 60);
+        gfx_fill_rect(&fb.back, 700, 60, 100, 100, gfx_theme_color(GFX_BG_PANEL));
+        draw_logo_gfx(&fb.back, version, 700, 60);
     } else if (strcmp(input, "help") == 0) {
         gfx_term_puts("Available commands:");
         gfx_term_newline();
@@ -131,7 +130,7 @@ void execute_command(const char* input) {
         system_reboot();
     } else if (strcmp(input, "clear") == 0) {
         gfx_term_clear();
-        draw_logo_gfx(version, 700, 60);
+        draw_logo_gfx(&fb.back, version, 700, 60);
     } else {
         gfx_term_puts("Unknown command");
     }

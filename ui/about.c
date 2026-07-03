@@ -1,5 +1,5 @@
 /*
-	* ui/about.c - [Enter description]
+	* ui/about.c - About dialog (windowed)
 	* Author:   amity
 	* Date:     Wed Jul  1 14:20:28 2026
 	* Copyright © 2026 OwlyNest
@@ -22,11 +22,10 @@
 /* --- Macros ---*/
 #define ABOUT_W        400
 #define ABOUT_H        350
-#define ABOUT_X        (fb.back.width-ABOUT_W)/2
-#define ABOUT_Y        (fb.back.height-ABOUT_H)/2
+
 /* --- Includes ---*/
 #include <ui/about.h>
-#include <gfx/gfx_screen.h>
+#include <gfx/window.h>
 #include <gfx/fb.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -36,122 +35,168 @@
 #include <internal/amitx_info.h>
 #include <mm/pmm.h>
 #include <logo/logo.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
+window_handle_t about;
+static window_t *win;
 
 /* --- Prototypes ---*/
+static void about_draw(void);
+static void about_draw_authors(void);
 
 /* --- Functions ---*/
 
+/* ==========================================================================
+ * Draw main about view
+ * ======================================================================= */
 static void about_draw(void) {
-    uint32_t bg = gfx_theme_color(GFX_BG_PANEL);
+    gfx_desktop(&win->surface);
 
-    gfx_desktop();
+    /* Beveled frame inside window */
+	gfx_panel(&win->surface, 8, 8, ABOUT_W - 16, ABOUT_H - 16, gfx_theme_color(GFX_BG_PANEL));
+    gfx_bevel_in(&win->surface, 8, 8, ABOUT_W - 16, ABOUT_H - 16);
+    gfx_title_bar(&win->surface, 8, 8, ABOUT_W - 16, " About ");
 
-    gfx_panel(ABOUT_X, ABOUT_Y, ABOUT_W, ABOUT_H, bg);
-    gfx_bevel_in(ABOUT_X, ABOUT_Y, ABOUT_W, ABOUT_H);
-    gfx_title_bar(ABOUT_X, ABOUT_Y, ABOUT_W, " About ");
-	draw_logo_gfx(1, ((fb.back.width + ABOUT_W)/2)-75 - 5, (fb.back.height - ABOUT_H)/2 + 20 + 5);
+    /* Logo centered in upper area */
+    int logo_x = (ABOUT_W - 85);
+    int logo_y = 25;
+    draw_logo_gfx(&win->surface, 1, logo_x, logo_y);
 
-	char str[256]; /* Just reuse this one */
-	int i = 0;
-	int free_lines = 3;
+    char str[256];
+    int i = 0;
+    int line_y = 50;
+    int line_spacing = 24;
 
-	ksnprintf(str, sizeof(str), "AmitX v%s (%s)", AMITX_VERSION, AMITX_CODENAME);
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "AmitX v%s (%s)", AMITX_VERSION, AMITX_CODENAME);
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	ksnprintf(str, sizeof(str), "Ram: %dB", pmm_get_total_ram());
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Ram: %dB", pmm_get_total_ram());
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	ksnprintf(str, sizeof(str), "Build: %s", AMITX_BUILD_DATE);
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
-	
-	/* Un hardcode these later */
-	ksnprintf(str, sizeof(str), "Arch: x86");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Build: %s", AMITX_BUILD_DATE);
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	ksnprintf(str, sizeof(str), "Kernel: Monolithic");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Arch: x86");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	ksnprintf(str, sizeof(str), "Executable: AMX v1");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Kernel: Monolithic");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	ksnprintf(str, sizeof(str), "File system: AmFS");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8 * free_lines * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Executable: AMX v1");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-	const char *tip = " [q/esc] Back ";
-    gfx_draw_text((fb.back.width - gfx_text_width(tip))/2, ABOUT_Y + ABOUT_H - 12, tip, gfx_theme_color(GFX_FG_TEXT));
+    ksnprintf(str, sizeof(str), "File system: AmFS");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
+    i++;
 
-    fb_present();
+    /* OK button */
+    gfx_button(&win->surface, (ABOUT_W - 100) / 2, ABOUT_H - 50, 100, 22, "OK", 0);
+
+    const char *tip = " [q/esc] Back  [A] Authors ";
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(tip)) / 2, ABOUT_H - 24, tip, gfx_theme_color(GFX_FG_TEXT));
 }
 
+/* ==========================================================================
+ * Draw authors view
+ * ======================================================================= */
 static void about_draw_authors(void) {
     uint32_t bg = gfx_theme_color(GFX_BG_PANEL);
 
-    gfx_desktop();
+    gfx_desktop(&win->surface);
 
-    gfx_panel(ABOUT_X, ABOUT_Y, ABOUT_W, ABOUT_H, bg);
-    gfx_bevel_in(ABOUT_X, ABOUT_Y, ABOUT_W, ABOUT_H);
-    gfx_title_bar(ABOUT_X, ABOUT_Y, ABOUT_W, " About ");
+    gfx_panel(&win->surface, 8, 8, ABOUT_W - 16, ABOUT_H - 16, bg);
+    gfx_bevel_in(&win->surface, 8, 8, ABOUT_W - 16, ABOUT_H - 16);
+    gfx_title_bar(&win->surface, 8, 8, ABOUT_W - 16, " About ");
 
-	char str[256];
-	int i = 1;
+    char str[256];
 
-	ksnprintf(str, sizeof(str), "Authors:");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 8, str, gfx_theme_color(GFX_FG_TEXT));
+    ksnprintf(str, sizeof(str), "Authors:");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, 40, str, gfx_theme_color(GFX_FG_TEXT));
 
-	
-	ksnprintf(str, sizeof(str), "Amity");
-	gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 32 + 8 * i, str, gfx_theme_color(GFX_FG_TEXT));
-	i++;
+    ksnprintf(str, sizeof(str), "Amity");
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, 80, str, gfx_theme_color(GFX_FG_TEXT));
+
 	/* Some day people can add their entries here
 	 * ksnprintf(str, sizeof(str), "Amity");
-	 * gfx_draw_text((fb.back.width - gfx_text_width(str))/2, ABOUT_Y + 24 + 32 + 8 * i, str, gfx_theme_color(GFX_FG_TEXT));
-	 * i++;
+	 * window_draw_text(about, (fb.back.width - gfx_get_string_width(str))/2, 80 + 16 * i, str, gfx_theme_color(GFX_FG_TEXT));
 	*/
 
     const char *tip = " [q/esc] Back ";
-    gfx_draw_text((fb.back.width - gfx_text_width(tip))/2, ABOUT_Y + ABOUT_H - 12, tip, gfx_theme_color(GFX_FG_TEXT));
-
-    fb_present();
+    window_draw_text(about, (ABOUT_W - gfx_get_string_width(tip)) / 2, ABOUT_H - 24, tip, gfx_theme_color(GFX_FG_TEXT));
 }
 
 /* ==========================================================================
  * Main loop
  * ======================================================================= */
 void about_run(void) {
-	about_draw();
-	int running = 1;
-	gfx_button(ABOUT_X + 150, ABOUT_Y + 300, 100, 22, "OK", 0);
-	fb_present(); /* Just draw the button, don't check, presenting every loop makes the mouse have an epeleptic attack */
+    int win_x = (fb.back.width - ABOUT_W) / 2;
+    int win_y = (fb.back.height - ABOUT_H) / 2;
+
+    about = window_create(win_x, win_y, ABOUT_W, ABOUT_H, "About", WIN_FLAG_TITLEBAR);
+    if ((int)about == WIN_INVALID) {
+        printk("[about] Failed to create window\n");
+        return;
+    }
+
+    win = window_get(about);
+    if (!win) {
+        printk("[about] Failed to get window\n");
+        return;
+    }
+
+    int running = 1;
+    int showing_authors = 0;
+
+    about_draw();
+    window_present_all();
 
     while (running != 0) {
-		if (ui_button(ABOUT_X + 150, ABOUT_Y + 300, 100, 22, "OK")) {
-			running = 0;
-		}
-		unsigned char c;
+        /* Check OK button — draw + test click each frame */
+        if (ui_button(&win->surface, (ABOUT_W - 100) / 2, ABOUT_H - 50, 100, 22, "OK")) {
+            running = 0;
+        }
 
-		if (keyboard_poll(&c)) {
+        unsigned char c;
+        if (keyboard_poll(&c)) {
+            switch (c) {
+            case 'q':
+            case KEY_ESC:
+                if (showing_authors) {
+                    showing_authors = 0;
+                    about_draw();
+                    window_present_all();
+                } else {
+                    running = 0;
+                }
+                break;
 
-			switch (c) {
+            case 'A':
+                if (!showing_authors) {
+                    showing_authors = 1;
+                    about_draw_authors();
+                    window_present_all();
+                }
+                break;
+            }
+        }
 
-			case 'q':
-			case KEY_ESC:
-				running = 0;
-				break;
-
-			case 'A':
-				about_draw_authors();
-				break;
-			}
-		}
+        /* Re-present each frame for button hover/press feedback */
+        if (!showing_authors) {
+            about_draw();
+            if (ui_button(&win->surface, (ABOUT_W - 100) / 2, ABOUT_H - 50, 100, 22, "OK")) {
+                running = 0;
+            }
+            window_present_all();
+        }
     }
+
+    window_destroy(about);
 }

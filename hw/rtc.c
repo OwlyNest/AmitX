@@ -23,6 +23,8 @@
 
 /* --- Includes ---*/
 #include <hw/rtc.h>
+#include <hw/acpi.h>
+#include <screen/printk.h>
 #include <arch/x86/io.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
@@ -44,6 +46,7 @@ static uint8_t bcd_to_bin(uint8_t bcd) {
 void rtc_read(rtc_time_t *t) {
 	uint8_t status_b = rtc_read_reg(RTC_STATUS_B);
 	int bcd = !(status_b & 0x04); /* Bit 2 = binary mode */
+	acpi_fadt_t *fadt = acpi_get_fadt();
 
 	t->second = rtc_read_reg(RTC_SECOND);
 	t->minute = rtc_read_reg(RTC_MINUTE);
@@ -60,5 +63,15 @@ void rtc_read(rtc_time_t *t) {
 		t->month  = bcd_to_bin(t->month);
 		t->year   = bcd_to_bin(t->year);
 	}
-	t->year += 2000;
+	if (fadt->century != 0) {
+		uint8_t century = rtc_read_reg(fadt->century);
+
+		if (bcd)
+			century = bcd_to_bin(century);
+
+		t->year += century * 100;
+	} else {
+		printk("[rtc] FADT has no century");
+		t->year += 2000;
+	}
 }

@@ -22,8 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "gfx/fb.h"
-#include "gfx/gfx_screen.h"
+#include <gfx/fb.h>
 #include <gfx/window.h>
 #include <gfx/font.h>
 #include <screen/printk.h>
@@ -167,6 +166,10 @@ void window_resize(window_handle_t handle, int w, int h) {
     
     window_update_content_rect(win);
     window_clear(handle, win->bg_color);
+
+	if (win->flags & (WIN_FLAG_BORDER | WIN_FLAG_TITLEBAR)) {
+		window_draw_frame(handle);
+	}
 }
 
 /* ==========================================================================

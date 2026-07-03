@@ -23,7 +23,6 @@
 #define CURSOR_W 11
 #define CURSOR_H 11
 /* --- Includes ---*/
-#include <gfx/gfx_screen.h>
 #include <drivers/mouse.h>
 #include <gfx/fb.h>
 #include <hw/svga.h>
@@ -45,13 +44,13 @@ static int cursor_prev_y = -1;
 static const uint8_t cursor_arrow[CURSOR_H][CURSOR_W] = {
     {1,0,0,0,0,0,0,0,0,0,0},
     {1,1,0,0,0,0,0,0,0,0,0},
-    {1,0,1,0,0,0,0,0,0,0,0},
-    {1,0,0,1,0,0,0,0,0,0,0},
-    {1,0,0,0,1,0,0,0,0,0,0},
-    {1,0,0,0,0,1,0,0,0,0,0},
-    {1,0,0,0,0,0,1,0,0,0,0},
-    {1,0,0,0,0,0,0,1,0,0,0},
-    {1,0,0,0,0,0,0,0,1,0,0},
+    {1,2,1,0,0,0,0,0,0,0,0},
+    {1,2,2,1,0,0,0,0,0,0,0},
+    {1,2,2,2,1,0,0,0,0,0,0},
+    {1,2,2,2,2,1,0,0,0,0,0},
+    {1,2,2,2,2,2,1,0,0,0,0},
+    {1,2,2,2,2,2,2,1,0,0,0},
+    {1,2,2,2,2,2,2,2,1,0,0},
     {1,1,1,1,1,1,1,1,1,1,0},
     {0,0,0,0,0,0,0,0,0,0,0},
 };
@@ -151,19 +150,25 @@ static void cursor_draw_front(int x, int y) {
         cursor = cursor_right;
 
     uint32_t white = gfx_theme_color(GFX_WHITE);
+    uint32_t black = gfx_theme_color(GFX_BLACK);
+    uint32_t color = white;
 
     for (int row = 0; row < CURSOR_H; row++) {
         for (int col = 0; col < CURSOR_W; col++) {
             if (!cursor[row][col])
                 continue;
 
+            if (cursor[row][col] == 1) {
+                color = white;
+            } else if (cursor[row][col] == 2) {
+                color = black;
+            }
+
             int px = x + col;
             int py = y + row;
 
-            if (px >= 0 && px < (int)fb.back.width &&
-                py >= 0 && py < (int)fb.back.height)
-            {
-                fb.front[py * fb.back.pitch_px + px] = white;
+            if (px >= 0 && px < (int)fb.back.width && py >= 0 && py < (int)fb.back.height) {
+                fb.front[py * fb.back.pitch_px + px] = color;
             }
         }
     }

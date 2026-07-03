@@ -22,9 +22,6 @@ kernel.bin
 *.iso
 *.img
 
-# If you intentionally version these, uncomment instead:
-# !release/*.iso
-
 # -----------------------------------------------------------------------------
 # Generated directories
 # -----------------------------------------------------------------------------

@@ -22,7 +22,6 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <gfx/gfx_screen.h>
 #include <gfx/fb.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
@@ -236,6 +235,7 @@ static void svga_sync(void) {
  * Update commands
  * ======================================================================= */
 void svga_update_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    svga_sync();    
     svga_fifo_write(SVGA_CMD_UPDATE);
     svga_fifo_write(x);
     svga_fifo_write(y);
@@ -306,9 +306,8 @@ int svga_init(void) {
 
     uint32_t max_w = svga_read_reg(SVGA_REG_MAX_WIDTH);
     uint32_t max_h = svga_read_reg(SVGA_REG_MAX_HEIGHT);
-    uint32_t max_bpp = svga_read_reg(SVGA_REG_DEPTH); /* not actually max apparently, 32 works just fine in Oracle */
 
-    printk("[svga] Device max: %ux%u @ %ubpp\n", max_w, max_h, max_bpp);
+    printk("[svga] Device max: %ux%u @ %ubpp\n", max_w, max_h, 32);
 
     /* Pick a resolution: try native first, then fall back */
     uint32_t target_w = 1920;
@@ -326,9 +325,14 @@ int svga_init(void) {
 
     svga.initialized = 1;
     printk("[svga] Mode set: %ux%u pitch=%u bpp=%u VRAM %u KB\n", svga.width, svga.height, svga.pitch, svga.bpp, svga.vram_size / 1024);
+    printk("[svga] Oracle debug: pitch=%u width=%u bpp=%u\n"
+        "[svga] pitch / width = %u (expected 3 for 24bpp, 4 for 32bpp)\n"
+        "[svga] pitch %% width = %u\n",
+        svga.pitch, svga.width, svga.bpp,
+        svga.pitch / svga.width,
+        svga.pitch % svga.width);
 
     fb_init();
-    gfx_screen_init();
     return 0;
 }
 

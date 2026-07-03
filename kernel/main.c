@@ -43,7 +43,6 @@
 #include <hw/acpi.h>
 #include <hw/e1000.h>
 #include <gfx/window.h>
-#include <gfx/gfx_screen.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
 #include <internal/amitx_consts.h>
@@ -96,7 +95,7 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-    gfx_desktop();
+    gfx_desktop(&fb.back);
     fb_present();
 
     window_handle_t win = window_create((fb.back.width - 300) / 2, (fb.back.height - 300) / 2, 300, 300, "AmitX", 0);

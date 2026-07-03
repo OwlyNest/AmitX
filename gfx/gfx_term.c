@@ -21,7 +21,6 @@
 
 /* --- Macros ---*/
 #include <gfx/gfx_term.h>
-#include <gfx/gfx_screen.h>
 #include <gfx/fb.h>
 #include <gfx/font.h>
 #include <lib/string.h>
@@ -70,18 +69,18 @@ void gfx_term_init(int x, int y, int w, int h,
  * Draw frame: panel, border, title bar
  * ======================================================================= */
 void gfx_term_draw_frame(const char *title) {
-    gfx_desktop();
+    gfx_desktop(&fb.back);
     
     /* Panel background */
-    gfx_fill_rect1(term_px, term_py, term_pw, term_ph,
+    fb_fill_rect(term_px, term_py, term_pw, term_ph,
                   gfx_theme_color(GFX_BG_PANEL));
-    gfx_bevel_in(term_px, term_py, term_pw, term_ph);
+    gfx_bevel_in(&fb.back, term_px, term_py, term_pw, term_ph);
     
     /* Title bar */
-    gfx_title_bar(term_px, term_py, term_pw, title);
+    gfx_title_bar(&fb.back, term_px, term_py, term_pw, title);
     
     /* Clear text area */
-    gfx_fill_rect1(term_tx, term_ty, term_tw, term_th, term_bg);
+    fb_fill_rect(term_tx, term_ty, term_tw, term_th, term_bg);
     
     term_cx = 0;
     term_cy = 0;
@@ -91,7 +90,7 @@ void gfx_term_draw_frame(const char *title) {
  * Clear text area only
  * ======================================================================= */
 void gfx_term_clear(void) {
-    gfx_fill_rect1(term_tx, term_ty, term_tw, term_th, term_bg);
+    fb_fill_rect(term_tx, term_ty, term_tw, term_th, term_bg);
     term_cx = 0;
     term_cy = 0;
 }

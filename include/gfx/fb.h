@@ -83,10 +83,24 @@ void gfx_put_pixel(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t colo
 void gfx_fill_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void gfx_draw_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void gfx_draw_line(gfx_surface_t *surface, int x0, int y0, int x1, int y1, uint32_t color);
+void gfx_hline(gfx_surface_t *surface, int x, int y, int w, uint32_t color);
+void gfx_vline(gfx_surface_t *surface, int x, int y, int h, uint32_t color);
 void gfx_draw_circle(gfx_surface_t *surface, int cx, int cy, int radius, uint32_t color);
 void gfx_draw_char(gfx_surface_t *surface, uint32_t x, uint32_t y, char c, uint32_t color);
 void gfx_draw_string(gfx_surface_t *surface, uint32_t x, uint32_t y, const char *str, uint32_t color);
 int gfx_get_string_width(const char *str);
+
+void gfx_panel(gfx_surface_t *surface, int x, int y, int w, int h, uint32_t bg);
+void gfx_bevel_in(gfx_surface_t *surface, int x, int y, int w, int h);
+void gfx_bevel_out(gfx_surface_t *surface, int x, int y, int w, int h);
+void gfx_title_bar(gfx_surface_t *surface, int x, int y, int w, const char *title);
+void gfx_button(gfx_surface_t *surface, int x, int y, int w, int h, const char *label, int pressed);
+int ui_button(gfx_surface_t *surface, int x, int y, int w, int h, const char *label);
+void gfx_progress_bar(gfx_surface_t *surface, int x, int y, int w, int h, int percent, uint32_t fill, uint32_t empty);
+void gfx_list(gfx_surface_t *surface, int x, int y, int w, int h, const char **items, int count, int selected);
+void gfx_desktop(gfx_surface_t *surface);
+void gfx_status_bar(gfx_surface_t *surface, int x, int y, int w, const char *text);
+void gfx_logo_design2(gfx_surface_t *surface, int x, int y);
 
 void fb_fill_circle(int cx, int cy, int radius, uint32_t color);
 void fb_draw_line_thick(int x0, int y0, int x1, int y1, int thickness, uint32_t color);
@@ -103,5 +117,6 @@ void fb_draw_circle(int cx, int cy, int radius, uint32_t color);
 void fb_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color); /* outline */
 void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t color);
 void fb_draw_string(uint32_t x, uint32_t y, const char* str, uint32_t color);
+int point_in_rect(int px, int py, int x, int y, int w, int h);
 
 #endif

@@ -1,5 +1,5 @@
 /*
-	* ui/menu.c - Main menu
+	* ui/menu.c - Main menu (windowed)
 	* Author:   amity
 	* Date:     Wed Jun 10 12:20:47 2026
 	* Copyright © 2026 OwlyNest
@@ -20,6 +20,8 @@
 */
 
 /* --- Macros ---*/
+#define MENU_W      400
+#define MENU_H      280
 
 /* --- Includes ---*/
 #include <internal/amitx_info.h>
@@ -30,7 +32,7 @@
 #include <ui/about.h>
 #include <kernel/kernel.h>
 #include <drivers/keyboard.h>
-#include <gfx/gfx_screen.h>
+#include <gfx/window.h>
 #include <gfx/fb.h>
 #include <drivers/mouse.h>
 #include <internal/amitx_consts.h>
@@ -42,6 +44,9 @@
 int POINTER = 0;
 int load_cyclone = 0;
 int menu = 0;
+
+window_handle_t men;
+static window_t *win;
 
 const char* main_menu[] = {
     "Device Manager",
@@ -62,57 +67,89 @@ void gfx_menu_draw(void);
 /* --- Functions ---*/
 
 /* ==========================================================================
- * Draw the main menu screen
+ * Draw the main menu into the window surface
+ * All coordinates are window-local (0,0 = top-left of window)
  * ======================================================================= */
 void gfx_menu_draw(void) {
-    gfx_desktop();
-    gfx_logo_design2(100, 60);
+    /* Clear window to desktop color */
+    gfx_desktop(&win->surface);
 
-    int menu_width = 400;
-    int menu_height = 280;
-    int menu_x = (fb.back.width - menu_width) / 2;
-    int menu_y = (fb.back.height - menu_height) / 2;
+    /* Logo in upper area of window */
+    gfx_logo_design2(&win->surface, 0, 0);
 
-    gfx_panel(menu_x, menu_y, menu_width, menu_height, gfx_theme_color(GFX_BG_PANEL));
-    gfx_bevel_in(menu_x, menu_y, menu_width, menu_height);
-    gfx_title_bar(menu_x, menu_y, menu_width, " AmitX Main Menu ");
+    /* Menu panel centered in window */
+    int panel_x = 20;
+    int panel_y = 80;
+    int panel_w = MENU_W - 40;
+    int panel_h = MENU_H - 110;
 
-    gfx_list(menu_x + 4, menu_y + 28, menu_width - 8, menu_height - 32, main_menu, main_menu_count, POINTER);
+    gfx_panel(&win->surface, panel_x, panel_y, panel_w, panel_h,
+              gfx_theme_color(GFX_BG_PANEL));
+    gfx_bevel_in(&win->surface, panel_x, panel_y, panel_w, panel_h);
+    gfx_title_bar(&win->surface, panel_x, panel_y, panel_w,
+                  " AmitX Main Menu ");
 
+    gfx_list(&win->surface, panel_x + 4, panel_y + 24,
+             panel_w - 8, panel_h - 28,
+             main_menu, main_menu_count, POINTER);
+
+    /* Status bar at bottom of window */
     char text[64];
     const char *version = AMITX_VERSION;
     const char *date = AMITX_BUILD_DATE;
     ksnprintf(text, sizeof(text), "AmitX OS v%s (%s)", version, date);
-    gfx_status_bar(0, fb.back.height - 24, fb.back.width, text);
-
-    fb_present();
+    gfx_status_bar(&win->surface, 0, MENU_H - 24, MENU_W, text);
 }
 
 /* ==========================================================================
  * Main menu loop
  * ======================================================================= */
 void menu_run(void) {
+    int win_x = (fb.back.width - MENU_W) / 2;
+    int win_y = (fb.back.height - MENU_H) / 2;
+
+    men = window_create(win_x, win_y, MENU_W, MENU_H, "AmitX Main Menu", WIN_FLAG_BORDER | WIN_FLAG_TITLEBAR);
+    if ((int)men == WIN_INVALID) {
+        printk("[menu] Failed to create window\n");
+        return;
+    }
+
+    win = window_get(men);
+    if (!win) {
+        printk("[menu] Failed to get window\n");
+        return;
+    }
+
     menu = 1;
     POINTER = 0;
-    gfx_menu_draw();
 
-    while (menu) {
+    gfx_menu_draw();
+    window_present_all();
+
+    while (1) {
         unsigned char c = keyboard_getchar();
 
         if (c == 's' || c == KEY_DOWN) {
             if (POINTER < main_menu_count - 1) {
                 POINTER++;
                 gfx_menu_draw();
+                window_present_all();
             }
         } else if (c == 'w' || c == KEY_UP) {
             if (POINTER > 0) {
                 POINTER--;
                 gfx_menu_draw();
+                window_present_all();
             }
         } else if (c == '\n') {
             menu_select(POINTER);
+            /* After submenu returns, redraw and present */
+            gfx_menu_draw();
+            window_present_all();
         }
     }
+
+    window_destroy(men);
 }
 
 /* ==========================================================================
@@ -133,6 +170,4 @@ void menu_select(int choice) {
     }
 
     menu = 1;
-    gfx_desktop();
-    gfx_menu_draw();
 }

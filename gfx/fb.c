@@ -1,5 +1,5 @@
 /*
-	* gfx/fb.c - [Enter description]
+	* gfx/fb.c - framebuffer and 2d graphics
 	* Author:   amity
 	* Date:     Tue Jun 23 13:13:14 2026
 	* Copyright © 2026 OwlyNest
@@ -89,14 +89,13 @@ fb_surface_t fb = { 0 };
                 uint8_t b = color & 0xFF;
 
                 if (svga.bpp == 24) {
-                    dst_row[x * 3 + 0] = b;  /* or r, depending on device order */
+                    dst_row[x * 3 + 0] = b;
                     dst_row[x * 3 + 1] = g;
                     dst_row[x * 3 + 2] = r;
                 } else if (svga.bpp == 16) {
                     uint16_t *dst16 = (uint16_t *)dst_row;
                     dst16[x] = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
                 }
-                /* etc */
             }
         }
     }
@@ -204,7 +203,7 @@ void fb_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color
 void gfx_fill_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
     if (x + w > surface->width)  w = surface->width - x;
     if (y + h > surface->height) h = surface->height - y;
-    if (x >= surface->width || y >= surface->height || w == 0 || h == 0) return;
+    if (x >= surface->width || y >= surface->height) return;
 
     for (uint32_t row = y; row < y + h; row++) {
         uint32_t *dest = surface->pixels + row * surface->pitch_px + x;
@@ -228,7 +227,7 @@ void gfx_draw_rect(gfx_surface_t *surface, uint32_t x, uint32_t y, uint32_t w, u
 /* ==========================================================================
  * Bresenham's Line Algorithm
  * ======================================================================= */
-int abs(int x){
+static inline int abs(int x){
     return x < 0 ? -x : x;
 }
 
@@ -249,6 +248,16 @@ void gfx_draw_line(gfx_surface_t *surface, int x0, int y0, int x1, int y1, uint3
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
     }
+}
+
+void gfx_hline(gfx_surface_t *surface, int x, int y, int w, uint32_t color) {
+    int h = 1;
+    gfx_fill_rect(surface ,(uint32_t)x, (uint32_t)y, (uint32_t)w, h, color);
+}
+
+void gfx_vline(gfx_surface_t *surface, int x, int y, int h, uint32_t color) {
+    int w = 1;
+    gfx_fill_rect(surface ,(uint32_t)x, (uint32_t)y, w, (uint32_t)h, color);
 }
 
 /* ==========================================================================
@@ -306,7 +315,7 @@ void gfx_draw_char(gfx_surface_t *surface, uint32_t x, uint32_t y, char c, uint3
         if (y + row >= surface->height) break;
         uint8_t line = glyph[row];
         for (int col = 0; col < 8; col++) {
-            if (x + col >= fb.back.width) break;
+            if (x + col >= surface->width) break;
             if (line & (1u << (7 - col))) {
                 gfx_put_pixel(surface, x + col, y + row, color);
             }
@@ -583,4 +592,161 @@ int gfx_get_string_width(const char *str) {
     int len = 0;
     while (*str++) len++;
     return len * 8;
+}
+
+/* ==========================================================================
+ * Panels and 3D borders
+ * ======================================================================= */
+void gfx_panel(gfx_surface_t *surface, int x, int y, int w, int h, uint32_t bg) {
+    gfx_fill_rect(surface, x, y, w, h, bg);
+}
+
+void gfx_bevel_out(gfx_surface_t *surface, int x, int y, int w, int h) {
+    uint32_t light = gfx_theme_color(GFX_BORDER_LIGHT);
+    uint32_t dark  = gfx_theme_color(GFX_BORDER_DARK);
+    gfx_hline(surface, x, y, w, light);
+    gfx_vline(surface, x, y, h, light);
+    gfx_hline(surface, x, y + h - 1, w, dark);
+    gfx_vline(surface, x + w - 1, y, h, dark);
+}
+
+void gfx_bevel_in(gfx_surface_t *surface, int x, int y, int w, int h) {
+    uint32_t light = gfx_theme_color(GFX_BORDER_LIGHT);
+    uint32_t dark  = gfx_theme_color(GFX_BORDER_DARK);
+    gfx_hline(surface, x, y, w, dark);
+    gfx_vline(surface, x, y, h, dark);
+    gfx_hline(surface, x, y + h - 1, w, light);
+    gfx_vline(surface, x + w - 1, y, h, light);
+}
+
+/* ==========================================================================
+ * Title bar
+ * ======================================================================= */
+void gfx_title_bar(gfx_surface_t *surface, int x, int y, int w, const char *title) {
+    uint32_t bg = gfx_theme_color(GFX_BG_TITLE);
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
+
+    gfx_fill_rect(surface, x, y, w, 20, bg);
+    if (title) {
+        gfx_draw_string(surface, x + 4, y + 6, title, fg);
+    }
+    gfx_bevel_out(surface, x, y, w, 20);
+}
+
+/* ==========================================================================
+ * Button
+ * ======================================================================= */
+void gfx_button(gfx_surface_t *surface, int x, int y, int w, int h, const char *label, int pressed) {
+    uint32_t bg = pressed
+                  ? gfx_theme_color(GFX_BG_BUTTON_HOVER)
+                  : gfx_theme_color(GFX_BG_BUTTON);
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
+
+    gfx_fill_rect(surface, x, y, w, h, bg);
+    if (pressed == 1) {
+        gfx_bevel_in(surface, x, y, w, h);
+    } else {
+        gfx_bevel_out(surface, x, y, w, h);
+    }
+
+    if (label) {
+        int tw = gfx_get_string_width(label);
+        int tx = x + (w - tw) / 2;
+        int ty = y + (h - 8) / 2;
+        gfx_draw_string(surface, tx, ty, label, fg);
+    }
+}
+
+int ui_button(gfx_surface_t *surface, int x, int y, int w, int h, const char *label) {
+    int hover = point_in_rect(mouse_x, mouse_y, x, y, w, h);
+
+    int pressed = hover && mouse_left_down();
+
+    gfx_button(surface, x, y, w, h, label, pressed);
+
+    return hover && mouse_left_pressed();
+}
+
+/* ==========================================================================
+ * Progress bar
+ * ======================================================================= */
+void gfx_progress_bar(gfx_surface_t *surface, int x, int y, int w, int h, int percent, uint32_t fill, uint32_t empty) {
+    gfx_fill_rect(surface, x, y, w, h, empty);
+    gfx_bevel_in(surface, x, y, w, h);
+
+    int fill_w = (w - 4) * percent / 100;
+    if (fill_w > 0) {
+        gfx_fill_rect(surface, x + 2, y + 2, fill_w, h - 4, fill);
+    }
+}
+
+/* ==========================================================================
+ * List box
+ * ======================================================================= */
+void gfx_list(gfx_surface_t *surface, int x, int y, int w, int h, const char **items, int count, int selected) {
+    uint32_t bg = gfx_theme_color(GFX_BG_PANEL);
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT);
+    uint32_t hi = gfx_theme_color(GFX_BG_HIGHLIGHT);
+    uint32_t hifg = gfx_theme_color(GFX_FG_ACCENT);
+
+    gfx_fill_rect(surface, x, y, w, h, bg);
+    gfx_bevel_in(surface, x, y, w, h);
+
+    int content_x = x + 4;
+    int content_y = y + 4;
+    int content_w = w - 8;
+    int content_h = h - 8;
+
+    int row_h = 20;
+    int visible = content_h / row_h;
+    int start = 0;
+    if (selected >= visible) {
+        start = selected - visible + 1;
+    }
+
+    for (int i = 0; i < visible && (start + i) < count; i++) {
+        int idx = start + i;
+        int row_y = content_y + i * row_h;
+        uint32_t row_bg = (idx == selected) ? hi : bg;
+        uint32_t row_fg = (idx == selected) ? hifg : fg;
+
+        gfx_fill_rect(surface, content_x, row_y, content_w, row_h, row_bg);
+        gfx_draw_string(surface, content_x + 4, row_y + 6, items[idx], row_fg);
+    }
+}
+
+/* ==========================================================================
+ * Status / task bar
+ * ======================================================================= */
+void gfx_status_bar(gfx_surface_t *surface, int x, int y, int w, const char *text) {
+    uint32_t bg = gfx_theme_color(GFX_BG_TITLE);
+    uint32_t fg = gfx_theme_color(GFX_FG_TEXT_DIM);
+
+    gfx_fill_rect(surface, x, y, w, 24, bg);
+    gfx_bevel_out(surface, x, y, w, 24);
+    if (text) {
+        gfx_draw_string(surface, x + 4, y + 8, text, fg);
+    }
+}
+
+/* ==========================================================================
+ * Desktop background
+ * ======================================================================= */
+void gfx_desktop(gfx_surface_t *surface) {
+    gfx_clear(surface, gfx_theme_color(GFX_BG_DESKTOP));
+}
+
+/* ==========================================================================
+ * Design 2
+ * ======================================================================= */
+void gfx_logo_design2(gfx_surface_t *surface, int x, int y) {
+    gfx_fill_rect(surface, x, y, 150, 150, gfx_theme_color(GFX_RED));
+    gfx_fill_rect(surface, x + 25, y + 25, 150, 150, gfx_theme_color(GFX_GREEN));
+    gfx_fill_rect(surface, x + 50, y + 50, 150, 150, gfx_theme_color(GFX_BLUE));
+    gfx_fill_rect(surface, x + 50, y + 50, 125, 125, gfx_theme_color(GFX_RED));
+    gfx_draw_string(surface, x, y-10, "Welcome to AmitX!", gfx_theme_color(GFX_WHITE));
+}
+
+int point_in_rect(int px, int py, int x, int y, int w, int h) {
+    return px >= x && px < x + w && py >= y && py < y + h;
 }

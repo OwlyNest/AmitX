@@ -25,7 +25,6 @@
 #include <shell/cyclone.h>
 #include <shell/commands.h>
 #include <gfx/gfx_term.h>
-#include <gfx/gfx_screen.h>
 #include <gfx/fb.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
@@ -56,7 +55,7 @@ void cyclone_main(int first) {
     gfx_term_draw_frame(" Cyclone REPL v0.9");
     
     /* Draw logo in the top-right area of the terminal */
-    draw_logo_gfx(version, 700, 60);
+    draw_logo_gfx(&fb.back, version, 700, 60);
     
     gfx_term_newline();
     gfx_term_puts("Type 'help' for commands");

@@ -2,6 +2,8 @@
 obj-y += arch/x86/idt.o
 obj-y += arch/x86/interrupts.o
 obj-y += arch/x86/io.o
+obj-y += arch/x86/scheduler.o
+obj-y += arch/x86/task.o
 obj-y += arch/x86/time.o
 obj-y += arch/x86/timer.o
 obj-y += arch/x86/tss.o

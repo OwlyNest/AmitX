@@ -1,7 +1,7 @@
 /*
-	* kernel/kscope_registry.c - [Enter description]
+	* include/arch/x86/scheduler.h - [Enter description]
 	* Author:   amity
-	* Date:     Tue Jun 16 13:54:20 2026
+	* Date:     Sat Jul  4 13:00:32 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,36 +20,20 @@
 */
 
 /* --- Macros ---*/
-
+#ifndef __SCHEDULER__
+#define __SCHEDULER__
 /* --- Includes ---*/
-#include <internal/kscope.h>
-#include <internal/kscope_nodes.h>
-
-#include <mm/paging.h>
-#include <screen/printk.h>
-#include <mm/pmm.h>
+#include <arch/x86/task.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 
-/* -- Functions ---*/
-void kscope_register_all(void) {
-	kscope_register(&x86_gdt_node);
-	kscope_register(&x86_pic_node);
-	kscope_register(&x86_idt_node);
-	kscope_register(&serial_node);
-	kscope_register(&pit_timer_node);
-	kscope_register(&scheduler_node);
-	kscope_register(&keyboard_node);
-	kscope_register(&screen_node);
-	kscope_register(&pmm_node);
-	kscope_register(&heap_node);
-	kscope_register(&pci_node);
-	kscope_register(&acpi_node);
-	kscope_register(&storage_node);
-	kscope_register(&mouse_node);
-	kscope_register(&e1000_node);
-	kscope_register(&svga_node);
-}
+/* --- Functions ---*/
+void scheduler_add(task_t *task);
+void scheduler_remove(task_t *task);
+
+task_t *scheduler_next(void);
+void scheduler_tick(void);
+#endif

@@ -76,8 +76,7 @@ void init_timer(uint32_t frequency) {
     timer_handler = timer_callback;
     register_interrupt_handler(VECTOR_IRQ0, timer_callback_wrapper);
 
-    printk("[timer] PIT initialized at %u Hz (divisor %u)\n",
-           PIT_BASE_HZ / divisor, divisor);
+    printk("[timer] PIT initialized at %u Hz (divisor %u)\n", PIT_BASE_HZ / divisor, divisor);
 
     __asm__ __volatile__("sti");
     pic_unmask_irq(0);

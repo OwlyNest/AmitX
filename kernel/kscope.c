@@ -37,10 +37,8 @@ static size_t registry_count = 0;
 
 /* --- Prototypes ---*/
 static int kscope_check_deps(const kscope_node_t *node);
-static int kscope_topo_sort(kscope_node_t **out_order,
-                            size_t *out_count);
-static void kscope_mark_failed(kscope_node_t *node,
-                                const char *reason);
+static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count);
+static void kscope_mark_failed(kscope_node_t *node, const char *reason);
 
 /* --- Functions ---*/
 
@@ -332,7 +330,8 @@ const char *kscope_subclass_name(uint32_t subclass) {
         case KSCOPE_SUBCLASS_MEMORY_HEAP: return "Heap";
 
         /* Time (0x03xx) */
-        case KSCOPE_SUBCLASS_TIME_PIT: return "PIT";
+        case KSCOPE_SUBCLASS_TIME_PIT:   return "PIT";
+        case KSCOPE_SUBCLASS_TIME_SCHED: return "SCHEDULER";
 
         /* Driver (0x04xx) */
         case KSCOPE_SUBCLASS_DRIVER_KEYBOARD: return "Keyboard";

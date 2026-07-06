@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __CTYPE__
-#define __CTYPE__
+#ifndef __LIB_CTYPE_H__
+#define __LIB_CTYPE_H__
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

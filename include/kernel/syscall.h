@@ -1,6 +1,6 @@
 
-#ifndef SYSCALL_H
-#define SYSCALL_H
+#ifndef __KERNEL_SYSCALL_H__
+#define __KERNEL_SYSCALL_H__
 
 #include <stdint.h>
 #include <arch/x86/interrupts.h>

@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef PMM_H
-#define PMM_H
+#ifndef __MM_PMM_H__
+#define __MM_PMM_H__
 
 #include <stdint.h>
 #include <stddef.h>

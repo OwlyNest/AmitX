@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef FB_H
-#define FB_H
+#ifndef __GFX_FB_H__
+#define __GFX_FB_H__
 
 /* --- Includes ---*/
 #include <stdint.h>

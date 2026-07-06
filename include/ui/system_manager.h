@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef SYSTEM_MANAGER_H
-#define SYSTEM_MANAGER_H
+#ifndef __UI_SYSTEM_MANAGER_H__
+#define __UI_SYSTEM_MANAGER_H__
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

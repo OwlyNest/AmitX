@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef DEVICE_MANAGER_H
-#define DEVICE_MANAGER_H
+#ifndef __UI_DEVICE_MANAGER_H__
+#define __UI_DEVICE_MANAGER_H__
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

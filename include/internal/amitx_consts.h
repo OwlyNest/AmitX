@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef AMITX_CONSTS_H
-#define AMITX_CONSTS_H
+#ifndef __INTERNAL_AMITX_CONSTS_H__
+#define __INTERNAL_AMITX_CONSTS_H__
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Macros ---*/

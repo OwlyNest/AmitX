@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef PMM_TEST_H
-#define PMM_TEST_H
+#ifndef __TESTS_PMM_TEST_H__
+#define __TESTS_PMM_TEST_H__
 
 void pmm_run_tests(void);
 

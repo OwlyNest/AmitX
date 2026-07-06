@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef TIME_H
-#define TIME_H
+#ifndef __ARCH_X86_TIME_H__
+#define __ARCH_X86_TIME_H__
 
 /* --- Includes ---*/
 #include <stdint.h>

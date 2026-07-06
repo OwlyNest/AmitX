@@ -5,8 +5,8 @@
  * Copyright © 2026 OwlyNest
  */
 
-#ifndef PCI_H
-#define PCI_H
+#ifndef __HW_PCI_H__
+#define __HW_PCI_H__
 
 #include <stdint.h>
 #include <stddef.h>

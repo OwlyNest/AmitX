@@ -1,6 +1,6 @@
 
-#ifndef CYCLONE_H
-#define CYCLONE_H
+#ifndef __SHELL_CYCLONE_H__
+#define __SHELL_CYCLONE_H__
 
 void cyclone_main(int first); // Entry point for REPL
 

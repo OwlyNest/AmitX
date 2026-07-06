@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __MUTEX__
-#define __MUTEX__
+#ifndef __SYNC_MUTEX_H__
+#define __SYNC_MUTEX_H__
 
 #define MUTEX_NO_TIMEOUT 0
 #define MUTEX_WAIT_FOREVER 0xFFFFFFff

@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef AMX_H
-#define AMX_H
+#ifndef __EXEC_AMX_H__
+#define __EXEC_AMX_H__
 
 #define AMX_VERSION          1
 

@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef MULTIBOOT_H
-#define MULTIBOOT_H
+#ifndef __INTERNAL_MULTIBOOT_H__
+#define __INTERNAL_MULTIBOOT_H__
 
 /* --- Includes ---*/
 #include <stdint.h>

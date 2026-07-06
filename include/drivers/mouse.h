@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef MOUSE_H
-#define MOUSE_H
+#ifndef __DRIVERS_MOUSE_H__
+#define __DRIVERS_MOUSE_H__
 
 /* --- Includes ---*/
 #include <stdint.h>

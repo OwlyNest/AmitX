@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __SPINLOCK__
-#define __SPINLOCK__
+#ifndef __SYNC_SPINLOCK_H__
+#define __SYNC_SPINLOCK_H__
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/

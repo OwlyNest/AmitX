@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef LOADER_H
-#define LOADER_H
+#ifndef __EXEC_LOADER_H__
+#define __EXEC_LOADER_H__
 /* --- Includes ---*/
 #include <exec/amx.h>
 #include <stdint.h>

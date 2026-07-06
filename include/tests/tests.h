@@ -1,6 +1,6 @@
 
-#ifndef TESTS_H
-#define TESTS_H
+#ifndef __TESTS_TESTS_H__
+#define __TESTS_TESTS_H__
 
 void test(int testnum);
 void test_fs();

@@ -1,6 +1,6 @@
 
-#ifndef KERNEL_H
-#define KERNEL_H
+#ifndef __KERNEL_KERNEL_H__
+#define __KERNEL_KERNEL_H__
 
 #ifdef __cplusplus
 extern "C" {

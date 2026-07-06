@@ -20,8 +20,9 @@
 */
 
 /* --- Macros ---*/
-#ifndef KSCOPE_H
-#define KSCOPE_H
+#ifndef __INTERNAL_KSCOPE_H__
+#define __INTERNAL_KSCOPE_H__
+
 #define KSCOPE_MAX_NODES 32
 /* --- Includes ---*/
 #include <stdint.h>

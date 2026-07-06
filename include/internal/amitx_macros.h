@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef AMITX_MACROS_H
-#define AMITX_MACROS_H
+#ifndef __INTERNAL_AMITX_MACROS_H__
+#define __INTERNAL_AMITX_MACROS_H__
 
 #define ASSERT(cond)                                  \
 do {                                                  \

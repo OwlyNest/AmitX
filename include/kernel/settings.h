@@ -1,6 +1,6 @@
 
-#ifndef SETTINGS_H
-#define SETTINGS_H
+#ifndef __KERNEL_SETTINGS_H__
+#define __KERNEL_SETTINGS_H__
 
 void settings_load();
 const char* settings_get(const char* key);

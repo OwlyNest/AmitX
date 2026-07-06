@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef RTC_H
-#define RTC_H
+#ifndef __HW_RTC_H__
+#define __HW_RTC_H__
 
 #define RTC_INDEX    0x70
 #define RTC_DATA     0x71

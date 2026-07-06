@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef __DRIVERS_SERIAL_H__
+#define __DRIVERS_SERIAL_H__
 #define SERIAL_RX_BUFSZ 256
 /* --- Includes ---*/
 

@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef GFX_TERM_H
-#define GFX_TERM_H
+#ifndef __GFX_TERM_H__
+#define __GFX_TERM_H__
 
 #define TERM_FG_DEFAULT 0xFFFFFFFFu
 #define TERM_BG_DEFAULT 0xFF282838u  /* dark panel */

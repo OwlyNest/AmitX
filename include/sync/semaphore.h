@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __SEMAPHORE__
-#define __SEMAPHORE__
+#ifndef __SYNC_SEMAPHORE_H__
+#define __SYNC_SEMAPHORE_H__
 
 #define SEM_NO_TIMEOUT 0
 #define SEM_WAIT_FOREVER 0xFFFFFFFF

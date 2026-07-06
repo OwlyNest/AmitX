@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef AMFS_H
-#define AMFS_H
+#ifndef __FS_AMFS_H__
+#define __FS_AMFS_H__
 
 #define AMFS_MAGIC             "AMFS"
 #define AMFS_VERSION           2

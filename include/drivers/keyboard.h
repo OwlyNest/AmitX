@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
+#ifndef __DRIVERS_KEYBOARD_H__
+#define __DRIVERS_KEYBOARD_H__
 
 /* --- Includes ---*/
 #include <stdint.h>

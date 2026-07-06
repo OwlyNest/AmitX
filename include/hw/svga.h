@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef SVGA_H
-#define SVGA_H
+#ifndef __HW_SVGA_H__
+#define __HW_SVGA_H__
 
 /* --- PCI identity ---*/
 #define SVGA_PCI_VENDOR_VMWARE      0x15AD

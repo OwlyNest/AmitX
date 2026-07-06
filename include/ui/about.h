@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef _ABOUT_H
-#define _ABOUT_H
+#ifndef __UI_ABOUT_H__
+#define __UI_ABOUT_H__
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

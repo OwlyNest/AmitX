@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef E1000_H
-#define E1000_H
+#ifndef __HW_E1000_H__
+#define __HW_E1000_H__
 
 #define E1000_REG_CTRL      0x00000
 #define E1000_REG_STATUS    0x00008

@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef VIRTMEM_H
-#define VIRTMEM_H
+#ifndef __INTERNAL_VIRTMEM_H__
+#define __INTERNAL_VIRTMEM_H__
 
 /* --- Includes ---*/
 #include <mm/paging.h>

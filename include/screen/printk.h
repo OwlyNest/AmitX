@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef PRINTK_H
-#define PRINTK_H
+#ifndef __SCREEN_PRINTK_H__
+#define __SCREEN_PRINTK_H__
 /* --- Includes ---*/
 #include <stdarg.h>
 #include <stddef.h>

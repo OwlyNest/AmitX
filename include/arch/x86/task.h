@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __TASK__
-#define __TASK__
+#ifndef __ARCH_X86_TASK_H__
+#define __ARCH_X86_TASK_H__
 
 #define TASK_NAME_LEN        32
 #define TASK_STACK_SIZE      4096

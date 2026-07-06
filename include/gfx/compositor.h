@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef _COMPOSITOR_H
-#define _COMPOSITOR_H
+#ifndef __GFX_COMPOSITOR_H__
+#define __GFX_COMPOSITOR_H__
 /* --- Includes ---*/
 #include <stdint.h>
 #include <gfx/window.h>

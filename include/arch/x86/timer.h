@@ -1,6 +1,6 @@
 
-#ifndef TIMER_H
-#define TIMER_H
+#ifndef __ARCH_X86_TIMER_H__
+#define __ARCH_X86_TIMER_H__
 
 #include <arch/x86/interrupts.h>
 #include <stdint.h>

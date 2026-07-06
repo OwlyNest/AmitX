@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef KSCOPE_NODES_H
-#define KSCOPE_NODES_H
+#ifndef __INTERNAL_KSCOPE_NODES_H__
+#define __INTERNAL_KSCOPE_NODES_H__
 /* --- Includes ---*/
 #include <internal/kscope.h>
 /* --- Typedefs - Structs - Enums ---*/

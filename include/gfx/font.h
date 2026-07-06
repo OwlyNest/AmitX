@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef FONT_H
-#define FONT_H
+#ifndef __GFX_FONT_H__
+#define __GFX_FONT_H__
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/

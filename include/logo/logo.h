@@ -1,6 +1,6 @@
 
-#ifndef LOGO_H
-#define LOGO_H
+#ifndef __LOGO_LOGO_H__
+#define __LOGO_LOGO_H__
 
 #include "gfx/fb.h"
 void draw_logo(int version);

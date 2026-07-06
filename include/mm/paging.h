@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef PAGING_H
-#define PAGING_H
+#ifndef __MM_PAGING_H__
+#define __MM_PAGING_H__
 
 #define PAGE_SIZE 		 4096
 #define PAGE_SHIFT 		 12

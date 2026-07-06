@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __SCHEDULER__
-#define __SCHEDULER__
+#ifndef __ARCH_X86_SCHEDULER_H__
+#define __ARCH_X86_SCHEDULER_H__
 
 /* --- Includes ---*/
 #include <arch/x86/task.h>

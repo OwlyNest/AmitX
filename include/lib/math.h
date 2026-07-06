@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef MATH_H
-#define MATH_H
+#ifndef __LIB_MATH_H__
+#define __LIB_MATH_H__
 
 #define CORDIC_ITERATIONS   16
 #define CORDIC_K_INV        107829

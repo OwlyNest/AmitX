@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef TEXT_EDITOR_H
-#define TEXT_EDITOR_H
+#ifndef __UI_TEXT_EDITOR_H__
+#define __UI_TEXT_EDITOR_H__
 
 #define EDITOR_MARGIN_X  8
 #define EDITOR_MARGIN_Y  28

@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef IDE_H
-#define IDE_H
+#ifndef __HW_IDE_H__
+#define __HW_IDE_H__
 /* --- Includes ---*/
 #include <stdint.h>
 

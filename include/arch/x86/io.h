@@ -1,6 +1,6 @@
 
-#ifndef IO_H
-#define IO_H
+#ifndef __ARCH_X86_IO_H__
+#define __ARCH_X86_IO_H__
 
 #include <stdint.h>
 

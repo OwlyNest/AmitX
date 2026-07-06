@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef MENU_H
-#define MENU_H
+#ifndef __UI_MENU_H__
+#define __UI_MENU_H__
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

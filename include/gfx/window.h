@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef WINDOW_H
-#define WINDOW_H
+#ifndef __GFX_WINDOW_H__
+#define __GFX_WINDOW_H__
 
 /* --- Window properties --- */
 #define WIN_MAX_TITLE_LEN   64

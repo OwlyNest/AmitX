@@ -1,5 +1,5 @@
-#ifndef AMITX_INFO_H
-#define AMITX_INFO_H
+#ifndef __INTERNAL_AMITX_INFO_H__
+#define __INTERNAL_AMITX_INFO_H__
 
 // Core OS variables
 #define AMITX_NAME           "AmitX OS"

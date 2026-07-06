@@ -74,7 +74,6 @@ void  AcpiOsFree(void *Memory) {
 }
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length) {
-    (void)Length;
     return vmm_map_physical((uintptr_t)PhysicalAddress, (size_t)Length, PAGE_WRITABLE);
 }
 

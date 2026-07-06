@@ -67,7 +67,7 @@ GDK_BACKEND=x11 qemu-system-i386 \
     -device vmware-svga \
     -display gtk,full-screen=on,zoom-to-fit=on \
     -rtc base=localtime \
-    #-d int,cpu_exit
+    #-d int,cpu_exit # reveal your secrets
 
 QEMU_EXIT=$?
 run "make clean"

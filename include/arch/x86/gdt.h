@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef GDT_H
-#define GDT_H
+#ifndef __ARCH_X86_GDT_H__
+#define __ARCH_X86_GDT_H__
 
 #define SEL_KCODE   0x08
 #define SEL_KDATA   0x10

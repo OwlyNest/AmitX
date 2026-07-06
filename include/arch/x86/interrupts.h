@@ -1,6 +1,6 @@
 
-#ifndef INTERRUPTS_H
-#define INTERRUPTS_H
+#ifndef __ARCH_X86_INTERRUPTS_H__
+#define __ARCH_X86_INTERRUPTS_H__
 
 #include <stdint.h>
 

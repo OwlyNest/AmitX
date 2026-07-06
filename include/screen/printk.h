@@ -26,7 +26,30 @@
 #include <stdarg.h>
 #include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
+typedef enum {
+	LEN_NONE,
+	LEN_HH,
+	LEN_H,
+	LEN_L,
+	LEN_LL,
+	LEN_Z,
+	LEN_T
+} LengthModifier;
 
+typedef struct {
+    int left;
+    int zero;
+    int alternate;
+    int plus;
+    int space;
+
+    int width;
+    int precision;      // -1 means "not specified"
+
+	LengthModifier length;    
+
+    char specifier;
+} FormatSpec;
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/

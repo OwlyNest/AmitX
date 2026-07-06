@@ -1,6 +1,6 @@
 
-#ifndef IDT_H
-#define IDT_H
+#ifndef __ARCH_X86_IDT_H__
+#define __ARCH_X86_IDT_H__
 #include <stdint.h>
 
 void idt_set_gate(int num, uint32_t base, uint16_t sel, uint8_t flags);

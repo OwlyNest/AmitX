@@ -39,17 +39,6 @@ static size_t identity_map_size = 0;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-
-/* ==========================================================================
- * Recursive mapping virtual addresses
- *
- * PD[1023] = physical_addr_of_PD. This means:
- *   0xFFC00000 + (pd_idx * 4096)  -> page table pd_idx
- *   0xFFFFF000                      -> page directory itself
- * ======================================================================= */
-#define PT_VIRT(pd_idx)         ((uint32_t *)(0xFFC00000u + ((pd_idx) * 4096u)))
-#define PD_VIRT                 ((uint32_t *)0xFFFFF000u)
-
 /* ==========================================================================
  * Initialize paging
  *

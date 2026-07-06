@@ -44,6 +44,7 @@ extern kscope_node_t storage_node;
 extern kscope_node_t svga_node;
 
 extern kscope_node_t scheduler_node;
+extern kscope_node_t vmm_node;
 
 /* --- Prototypes ---*/
 #endif

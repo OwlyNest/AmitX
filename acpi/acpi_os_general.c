@@ -27,6 +27,8 @@
 #include <arch/x86/io.h>
 #include <internal/virtmem.h>
 #include <screen/printk.h>
+#include <mm/vmm.h>
+#include <mm/paging.h>
 #include <stdarg.h>
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -73,45 +75,48 @@ void  AcpiOsFree(void *Memory) {
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length) {
     (void)Length;
-    /* TODO: page-align + map Length bytes properly once ACPI needs
-       ranges outside what auto_virt already covers (early boot
-       identity-ish mapping). Fine for table access under 1MB. */
-    return (void *)auto_virt((uint32_t)PhysicalAddress);
+    return vmm_map_physical((uintptr_t)PhysicalAddress, (size_t)Length, PAGE_WRITABLE);
 }
 
 void AcpiOsUnmapMemory(void *where, ACPI_SIZE length) {
-    (void)where;
-    (void)length;
-    /* No-op until AcpiOsMapMemory does real page allocation */
+    vmm_unmap_physical(where, (size_t)length);
 }
 
 ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value, UINT32 Width) {
-    void *v = (void *)auto_virt((uint32_t)Address);
+    size_t width_bytes = Width / 8;
+    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, PAGE_WRITABLE);
+    if (!v) return AE_NO_MEMORY;
+
     switch (Width) {
-    case 8:  *Value = *(volatile uint8_t *)v;  break;
-    case 16: *Value = *(volatile uint16_t *)v; break;
-    case 32: *Value = *(volatile uint32_t *)v; break;
-    case 64: *Value = *(volatile uint64_t *)v; break;
-    default: return AE_BAD_PARAMETER;
+        case 8:  *Value = *(volatile uint8_t *)v;  break;
+        case 16: *Value = *(volatile uint16_t *)v; break;
+        case 32: *Value = *(volatile uint32_t *)v; break;
+        case 64: *Value = *(volatile uint64_t *)v; break;
+        default: vmm_unmap_physical(v, width_bytes); return AE_BAD_PARAMETER;
     }
+
+    vmm_unmap_physical(v, width_bytes);
     return AE_OK;
 }
 
-ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address,
-                               UINT64 Value, UINT32 Width) {
-    void *v = (void *)auto_virt((uint32_t)Address);
+ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value, UINT32 Width) {
+    size_t width_bytes = Width / 8;
+    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, PAGE_WRITABLE);
+    if (!v) return AE_NO_MEMORY;
+
     switch (Width) {
-    case 8:  *(volatile uint8_t *)v  = (uint8_t)Value;  break;
-    case 16: *(volatile uint16_t *)v = (uint16_t)Value; break;
-    case 32: *(volatile uint32_t *)v = (uint32_t)Value; break;
-    case 64: *(volatile uint64_t *)v = Value;           break;
-    default: return AE_BAD_PARAMETER;
+        case 8:  *(volatile uint8_t *)v = Value;  break;
+        case 16: *(volatile uint16_t *)v = Value; break;
+        case 32: *(volatile uint32_t *)v = Value; break;
+        case 64: *(volatile uint64_t *)v = Value; break;
+        default: vmm_unmap_physical(v, width_bytes); return AE_BAD_PARAMETER;
     }
+
+    vmm_unmap_physical(v, width_bytes);
     return AE_OK;
 }
 
-ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address,
-                            UINT32 *Value, UINT32 Width) {
+ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width) {
     switch (Width) {
     case 8:  *Value = inb((uint16_t)Address);  break;
     case 16: *Value = inw((uint16_t)Address);  break;
@@ -121,8 +126,7 @@ ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address,
     return AE_OK;
 }
 
-ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS Address,
-                             UINT32 Value, UINT32 Width) {
+ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS Address, UINT32 Value, UINT32 Width) {
     switch (Width) {
     case 8:  outb((uint16_t)Address, (uint8_t)Value);  break;
     case 16: outw((uint16_t)Address, (uint16_t)Value); break;

@@ -44,6 +44,9 @@
 #include <hw/acpi.h>
 #include <hw/e1000.h>
 #include <gfx/window.h>
+#include <mm/vmm.h>
+#include <mm/paging.h>
+#include <internal/virtmem.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
 #include <internal/amitx_consts.h>
@@ -96,18 +99,10 @@ void draw_start(void) {
 
 void kernel_main(void) {
     kernel_setup();
-    gfx_desktop(&fb.back);
-    fb_present();
 
-    window_handle_t win = window_create((fb.back.width - 300) / 2, (fb.back.height - 300) / 2, 300, 300, "AmitX", 0);
-    window_draw_frame(win);
-    window_fill_circle(win, 150, 150, 50, gfx_theme_color(GFX_WHITE));
-    window_draw_vector(win, 0, 300, 450, 100, 10, gfx_theme_color(GFX_YELLOW));
-    window_handle_t win2 = window_create((fb.back.width - 300) / 2, (fb.back.height - 500) / 2, 300, 300, "AmitX", 0);
-    window_draw_frame(win2);
-    window_fill_circle(win2, 150, 150, 50, gfx_theme_color(GFX_WHITE));
-    window_draw_vector(win2, 0, 0, 3600 - 450, 100, 10, gfx_theme_color(GFX_YELLOW));
-    compositor_render();
-    sleep(5);
+    void *v = vmm_map_physical(0x000B8000, 16, PAGE_WRITABLE);
+    printk("[test] vmm@0xB8000: %02x %02x %02x %02x\n",((uint8_t*)v)[0], ((uint8_t*)v)[1], ((uint8_t*)v)[2], ((uint8_t*)v)[3]);
+    printk("[test] PD[1016]=0x%08x PT[0]=0x%08x\n", PD_VIRT[1016], PT_VIRT(1016)[0]);
+
     menu_run();
 }

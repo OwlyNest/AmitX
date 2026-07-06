@@ -1,7 +1,7 @@
 /*
-	* kernel/kscope_registry.c - [Enter description]
+	* include/mm/vmm.h - On-demand physical-to-virtual mapping window
 	* Author:   amity
-	* Date:     Tue Jun 16 13:54:20 2026
+	* Date:     Mon Jul  6 15:39:41 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -20,37 +20,16 @@
 */
 
 /* --- Macros ---*/
-
+#ifndef __MM_VMM_H__
+#define __MM_VMM_H__
 /* --- Includes ---*/
-#include <internal/kscope.h>
-#include <internal/kscope_nodes.h>
-
-#include <mm/paging.h>
-#include <screen/printk.h>
-#include <mm/pmm.h>
+#include <stdint.h>
+#include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-
-/* -- Functions ---*/
-void kscope_register_all(void) {
-	kscope_register(&x86_gdt_node);
-	kscope_register(&x86_pic_node);
-	kscope_register(&x86_idt_node);
-	kscope_register(&serial_node);
-	kscope_register(&pit_timer_node);
-	kscope_register(&keyboard_node);
-	kscope_register(&screen_node);
-	kscope_register(&pmm_node);
-	kscope_register(&vmm_node);
-	kscope_register(&heap_node);
-	kscope_register(&scheduler_node);
-	kscope_register(&pci_node);
-	kscope_register(&acpi_node);
-	kscope_register(&storage_node);
-	kscope_register(&mouse_node);
-	kscope_register(&e1000_node);
-	kscope_register(&svga_node);
-}
+void *vmm_map_physical(uintptr_t phys, size_t length, uint32_t flags);
+void vmm_unmap_physical(void *virt, size_t length);
+#endif

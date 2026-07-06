@@ -44,6 +44,15 @@
 #define PTE_ADDR(entry)  ((entry) & ~0xFFF)
 #define PTE_FLAGS(entry) ((entry) & 0xFFF)
 
+/* ==========================================================================
+ * Recursive mapping virtual addresses
+ *
+ * PD[1023] = physical_addr_of_PD. This means:
+ *   0xFFC00000 + (pd_idx * 4096)  -> page table pd_idx
+ *   0xFFFFF000                      -> page directory itself
+ * ======================================================================= */
+#define PT_VIRT(pd_idx)         ((uint32_t *)(0xFFC00000u + ((pd_idx) * 4096u)))
+#define PD_VIRT                 ((uint32_t *)0xFFFFF000u)
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>

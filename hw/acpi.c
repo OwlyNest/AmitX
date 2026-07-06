@@ -163,6 +163,12 @@ int acpi_is_initialized(void) {
  * ======================================================================= */
 void acpi_print_info(void) {
     acpi_fadt_t *fadt = acpi_get_fadt();
+    if (fadt) {
+        printk("[acpi] fadt ptr=0x%p len=%u sig=%02x %02x %02x %02x\n",
+               fadt, fadt->header.length,
+               ((uint8_t *)fadt)[0], ((uint8_t *)fadt)[1],
+               ((uint8_t *)fadt)[2], ((uint8_t *)fadt)[3]);
+    }
     acpi_madt_t *madt = acpi_get_madt();
 
     if (!fadt) {
@@ -171,19 +177,25 @@ void acpi_print_info(void) {
     }
 
     printk("\n=== ACPI Information (via ACPICA) ===\n");
-    printk("FADT at:     0x%08x\n", (uint32_t)fadt);
-    printk("  Signature: %4.4s rev %u\n",
-           fadt->header.signature, fadt->header.revision);
+    printk("FADT at:     0x%08x (length %u, rev %u)\n",
+           (uint32_t)fadt, fadt->header.length, fadt->header.revision);
+    printk("  Signature: %4.4s\n", fadt->header.signature);
     printk("  DSDT:      0x%08x\n", fadt->dsdt);
     printk("  SMI_CMD:   0x%04x\n", fadt->smi_cmd);
     printk("  PM1a_CNT:  0x%04x\n", fadt->pm1a_cnt_blk);
     printk("  PM1b_CNT:  0x%04x\n", fadt->pm1b_cnt_blk);
     printk("  ACPI_EN:   0x%02x\n", fadt->acpi_enable);
     printk("  ACPI_DIS:  0x%02x\n", fadt->acpi_disable);
-    printk("  Reset reg: space=%u addr=0x%016llx val=0x%02x\n",
-           fadt->reset_reg.address_space_id,
-           (unsigned long long)fadt->reset_reg.address,
-           fadt->reset_value);
+
+    if (fadt->header.length >= offsetof(acpi_fadt_t, reset_value) +
+                                sizeof(fadt->reset_value)) {
+        printk("  Reset reg: space=%u addr=0x%016llx val=0x%02x\n",
+               fadt->reset_reg.address_space_id,
+               (unsigned long long)fadt->reset_reg.address,
+               fadt->reset_value);
+    } else {
+        printk("  Reset reg: not present (ACPI 1.0 table)\n");
+    }
 
     if (madt) {
         printk("MADT at:     0x%08x\n", (uint32_t)madt);

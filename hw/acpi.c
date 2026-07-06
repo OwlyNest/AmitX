@@ -27,6 +27,7 @@
 #include <internal/kscope_nodes.h>
 #include <hw/acpi.h>
 #include <arch/x86/io.h>
+#include <lib/string.h>
 #include <screen/screen.h>
 #include <mm/heap.h>
 #include <screen/printk.h>
@@ -294,7 +295,7 @@ static int acpi_init(void) {
     return 0;
 }
 
-kscope_node_t acpi_node = {
+kscope_node_t acpi_node2 = {
     .name = "acpi",
     .id = 0x000A,
     .class = KSCOPE_CLASS_POWER,

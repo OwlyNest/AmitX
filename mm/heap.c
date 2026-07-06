@@ -155,67 +155,6 @@ void* calloc(size_t num, size_t size) {
     return ptr;
 }
 
-void *memset(void *dest, int val, size_t len) {
-    unsigned char *ptr = dest;
-    while (len-- > 0)
-        *ptr++ = (unsigned char)val;
-    return dest;
-}
-
-void *memcpy(void *dest, const void *src, size_t len) {
-    unsigned char *d = dest;
-    const unsigned char *s = src;
-    while (len--) 
-        *d++ = *s++;
-    return dest;
-}
-
-int memcmp(const void* s1, const void* s2, size_t n) {
-    const unsigned char* a = s1;
-    const unsigned char* b = s2;
-
-    for (size_t i = 0; i < n; i++) {
-        if (a[i] != b[i]) {
-            return a[i] - b[i];
-        }
-    }
-    return 0;
-}
-
-void* memmove(void* dest, const void* src, size_t n) {
-    unsigned char* d = dest;
-    const unsigned char* s = src;
-
-    if (d == s) {
-        return dest;
-    }
-
-    if (d < s) {
-        for (size_t i = 0; i < n; i++) {
-            d[i] = s[i];
-        }
-    } else {
-        for (size_t i = n; i > 0; i--) {
-            d[i - 1] = s[i - 1];
-        }
-    }
-
-    return dest;
-}
-
-/* Just blatantly copied from the gcc libiberty */
-void *memchr (register const void *src_void, int c, size_t length) {
-    const unsigned char *src = (const unsigned char *)src_void;
-    
-    while (length-- > 0) {
-        if (*src == c) {
-            return (void *)src;
-        }
-        src++;
-    }
-    return NULL;
-}
-
 void* realloc(void* ptr, size_t new_size) {
     if (!ptr) return malloc(new_size);
     if (new_size == 0) {

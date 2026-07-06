@@ -7,6 +7,7 @@ obj-y += arch/x86/task.o
 obj-y += arch/x86/time.o
 obj-y += arch/x86/timer.o
 obj-y += arch/x86/tss.o
+obj-y += arch/x86/context_switch.o
 obj-y += arch/x86/gdt.o
 obj-y += arch/x86/isr.o
 obj-y += arch/x86/userspace.o

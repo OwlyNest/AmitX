@@ -27,12 +27,15 @@
 #include <arch/x86/timer.h>
 #include <stdint.h>
 
+#include <arch/x86/scheduler.h>
+#include <arch/x86/task.h>
+#include <screen/printk.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 volatile uint32_t tick_count = 0;
 extern int menu;
-
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -40,11 +43,12 @@ extern int menu;
 /* ==========================================================================
  * PIT IRQ0 handler — increments global tick counter
  * ======================================================================= */
- void timer_callback(interrupt_frame_t *frame) {
+
+void timer_callback(interrupt_frame_t *frame) {
     (void)frame;
     tick_count++;
-    /* NOTHING ELSE.  The timer is not a render loop. */
 }
+
 
 /* ==========================================================================
  * Sleep for N seconds

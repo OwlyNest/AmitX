@@ -1,5 +1,5 @@
 /*
-	* include/arch/x86/scheduler.h - [Enter description]
+	* include/arch/x86/scheduler.h - Scheduler
 	* Author:   amity
 	* Date:     Sat Jul  4 13:00:32 2026
 	* Copyright © 2026 OwlyNest
@@ -22,18 +22,26 @@
 /* --- Macros ---*/
 #ifndef __SCHEDULER__
 #define __SCHEDULER__
+
 /* --- Includes ---*/
 #include <arch/x86/task.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 
-/* --- Functions ---*/
+/* ==========================================================================
+ * Task queue management
+ * ======================================================================= */
 void scheduler_add(task_t *task);
 void scheduler_remove(task_t *task);
 
+/* ==========================================================================
+ * Scheduling
+ * ======================================================================= */
 task_t *scheduler_next(void);
 void scheduler_tick(void);
+
 #endif

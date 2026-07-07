@@ -61,7 +61,9 @@ typedef struct boot_info {
 } boot_info_t;
 
 int pmm_init(void);
+void pmm_set_kernel_end(uintptr_t end);
 void *pmm_alloc_frame(void);
+int is_physical_address_mmio(uintptr_t phys_addr);
 void pmm_free_frame(void *frame);
 void *pmm_alloc_frames(uint32_t count);
 void pmm_free_frames(void *frame, uint32_t count);

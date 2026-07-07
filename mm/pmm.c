@@ -41,6 +41,7 @@ static uint32_t total_frames = 0;
 static uint32_t used_frames = 0;
 static uint32_t bitmap_size = 0;
 static uint64_t total_ram = 0;
+static mb2_tag_mmap_t *g_mmap_tag = NULL;
 
 /* --- Prototypes ---*/
 static inline void bitmap_set(uint32_t frame);
@@ -174,6 +175,8 @@ int kernel_early_init(uint32_t magic, void *mb_info) {
         switch (tag->type) {
             case MB2_TAG_MMAP: {
                 mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+                g_mmap_tag = mmap; // Save the tag pointer for later VMM lookups!
+                
                 uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
                 mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
 
@@ -240,6 +243,26 @@ int kernel_early_init(uint32_t magic, void *mb_info) {
     return 0;
 }
 
+int is_physical_address_mmio(uintptr_t phys_addr) {
+    if (!g_mmap_tag) {
+        return 1;
+    }
+
+    uint32_t num_entries = (g_mmap_tag->tag.size - 16) / g_mmap_tag->entry_size;
+    mb2_mmap_entry_t *entries = (mb2_mmap_entry_t *)(g_mmap_tag + 1);
+
+    for (uint32_t i = 0; i < num_entries; i++) {
+        mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entries + i * g_mmap_tag->entry_size);
+        
+        if (phys_addr >= e->base_addr && phys_addr < (e->base_addr + e->length)) {
+            return 0; 
+        }
+    }
+
+    return 1; 
+}
+
+
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)
  * ======================================================================= */
@@ -276,6 +299,7 @@ int pmm_init(void) {
     }
 
     bitmap = (uint8_t *)placement;
+
     printk("_end       = 0x%08x\n", (uint32_t)_end);
     printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
     printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
@@ -350,6 +374,10 @@ kscope_node_t pmm_node = {
     .provides = (const char *[]){"mem.physical", "mem.pages"},
     .provide_count = 2
 };
+
+void pmm_set_kernel_end(uintptr_t end) {
+    boot_info.kernel_end = end;
+}
 
 /* ==========================================================================
  * Allocate a single physical frame

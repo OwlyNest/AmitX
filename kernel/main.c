@@ -46,6 +46,7 @@
 #include <gfx/window.h>
 #include <mm/vmm.h>
 #include <mm/paging.h>
+#include <internal/multiboot.h>
 #include <internal/virtmem.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
@@ -97,12 +98,9 @@ void draw_start(void) {
     draw_mouse_cursor();
 }
 
+extern uint32_t multiboot_info_ptr;
 void kernel_main(void) {
     kernel_setup();
-
-    void *v = vmm_map_physical(0x000B8000, 16, PAGE_WRITABLE);
-    printk("[test] vmm@0xB8000: %02x %02x %02x %02x\n",((uint8_t*)v)[0], ((uint8_t*)v)[1], ((uint8_t*)v)[2], ((uint8_t*)v)[3]);
-    printk("[test] PD[1016]=0x%08x PT[0]=0x%08x\n", PD_VIRT[1016], PT_VIRT(1016)[0]);
 
     menu_run();
 }

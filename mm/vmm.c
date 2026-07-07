@@ -1,5 +1,5 @@
 /*
-	* mm/vmm.c - [Enter description]
+	* mm/vmm.c - On-demand physical-to-virtual mapping window
 	* Author:   amity
 	* Date:     Mon Jul  6 15:39:35 2026
 	* Copyright © 2026 OwlyNest
@@ -21,8 +21,17 @@
 
 /* --- Macros ---*/
 #include "internal/kscope.h"
-#define VMM_WINDOW_BASE     0xFE000000u
-#define VMM_WINDOW_SIZE     0x01C00000u        /* 28 MB, ends at 0xFFC00000 */
+
+/*
+ * IMPORTANT: this window must NOT overlap real hardware MMIO. On
+ * QEMU/VirtualBox, PCI BARs commonly live in 0xF0000000-0xFFFFFFFF
+ * (see your own SVGA/e1000 BAR addresses: 0xfd000000, 0xfe000000,
+ * 0xfeb80000). 0xE0000000 sits clear of that range, clear of
+ * KERNEL_VIRT_BASE (0xC0000000), and clear of the recursive mapping
+ * (0xFFC00000+).
+ */
+#define VMM_WINDOW_BASE     0xE0000000u
+#define VMM_WINDOW_SIZE     0x01C00000u        /* 28 MB */
 #define VMM_WINDOW_PAGES    (VMM_WINDOW_SIZE / PAGE_SIZE)
 /* --- Includes ---*/
 #include <mm/vmm.h>
@@ -30,6 +39,7 @@
 #include <screen/printk.h>
 #include <lib/string.h>
 #include <internal/kscope.h>
+#include <sync/spinlock.h>
 #include <internal/kscope_nodes.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -37,6 +47,7 @@
 
 /* --- Globals ---*/
 static uint8_t window_bitmap[(VMM_WINDOW_PAGES + 7) / 8];
+static spinlock_t vmm_lock;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -80,10 +91,13 @@ static uint32_t find_free_run(uint32_t count) {
  * Initialization                                                           *
  *                                                                          *
  * =======================================================================  */
-static int vmm_init(void) {
-	memset(window_bitmap, 0, sizeof(window_bitmap));
-	printk("[vmm] Mapping window: 0x%08x - 0x%08x (%u MB)\n", VMM_WINDOW_BASE, VMM_WINDOW_BASE + VMM_WINDOW_SIZE, VMM_WINDOW_SIZE >> 20);
-	return 0;
+ static int vmm_init(void) {
+    memset(window_bitmap, 0, sizeof(window_bitmap));
+    spinlock_init(&vmm_lock);
+    printk("[vmm] Mapping window: 0x%08x - 0x%08x (%u MB)\n",
+           VMM_WINDOW_BASE, VMM_WINDOW_BASE + VMM_WINDOW_SIZE,
+           VMM_WINDOW_SIZE >> 20);
+    return 0;
 }
 
 kscope_node_t vmm_node = {
@@ -91,8 +105,8 @@ kscope_node_t vmm_node = {
     .id = 0x0012,
     .class = KSCOPE_CLASS_MEMORY,
     .subclass = KSCOPE_SUBCLASS_MEMORY_VMM,
-    .requires = (kscope_node_t*[]){&pmm_node},
-    .require_count = 1,
+    .requires = (kscope_node_t*[]){&pmm_node, &paging_node},
+    .require_count = 2,
     .provides = (const char *[]){"mem.virtual", "mem.pages"},
     .provide_count = 2,
 	.init = vmm_init,
@@ -111,24 +125,34 @@ kscope_node_t vmm_node = {
     uintptr_t phys_end = (phys + length + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
     uint32_t pages = (uint32_t)((phys_end - phys_start) / PAGE_SIZE);
 
+    uint32_t flags_saved = spinlock_acquire(&vmm_lock);
+
     uint32_t start = find_free_run(pages);
     if (start == (uint32_t)-1) {
+        spinlock_release(&vmm_lock, flags_saved);
         printk("[vmm] No free window space for %u pages\n", pages);
         return NULL;
     }
+
+    /* Reserve the run immediately so a concurrent caller can't pick
+       the same pages before map_page() below finishes */
+    for (uint32_t i = 0; i < pages; i++) bit_set(start + i);
+
+    spinlock_release(&vmm_lock, flags_saved);
 
     uintptr_t virt_start = VMM_WINDOW_BASE + (uintptr_t)start * PAGE_SIZE;
 
     for (uint32_t i = 0; i < pages; i++) {
         if (map_page(phys_start + (uintptr_t)i * PAGE_SIZE, virt_start + (uintptr_t)i * PAGE_SIZE, flags) != 0) {
-            /* Unwind whatever succeeded before the failure */
+            uint32_t undo_flags = spinlock_acquire(&vmm_lock);
             for (uint32_t j = 0; j < i; j++) {
                 unmap_page(virt_start + (uintptr_t)j * PAGE_SIZE);
                 bit_clear(start + j);
             }
+            bit_clear(start + i);
+            spinlock_release(&vmm_lock, undo_flags);
             return NULL;
         }
-        bit_set(start + i);
     }
 
     return (void *)(virt_start + (phys - phys_start));
@@ -139,11 +163,12 @@ kscope_node_t vmm_node = {
  * Unmap a range previously returned by vmm_map_physical                    *
  *                                                                          *
  * =======================================================================  */
-void vmm_unmap_physical(void *virt, size_t length) {
+ void vmm_unmap_physical(void *virt, size_t length) {
     if (!virt || length == 0) return;
 
     uintptr_t v = (uintptr_t)virt & ~(uintptr_t)(PAGE_SIZE - 1);
-    uintptr_t v_end = ((uintptr_t)virt + length + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
+    uintptr_t v_end = ((uintptr_t)virt + length + PAGE_SIZE - 1) &
+                       ~(uintptr_t)(PAGE_SIZE - 1);
 
     if (v < VMM_WINDOW_BASE || v_end > VMM_WINDOW_BASE + VMM_WINDOW_SIZE) {
         printk("[vmm] unmap: 0x%08x not in mapping window\n", (uint32_t)virt);
@@ -155,6 +180,9 @@ void vmm_unmap_physical(void *virt, size_t length) {
 
     for (uint32_t i = 0; i < pages; i++) {
         unmap_page(v + (uintptr_t)i * PAGE_SIZE);
-        bit_clear(start + i);
     }
+
+    uint32_t flags_saved = spinlock_acquire(&vmm_lock);
+    for (uint32_t i = 0; i < pages; i++) bit_clear(start + i);
+    spinlock_release(&vmm_lock, flags_saved);
 }

@@ -250,7 +250,6 @@ void pci_log_to_fs(void) {
 void kernel_setup(void) {
     kscope_register_all();
     kscope_probe_all();
-    paging_init();
     kscope_dump();
 
     syscall_init();

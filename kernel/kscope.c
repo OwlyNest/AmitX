@@ -326,9 +326,10 @@ const char *kscope_subclass_name(uint32_t subclass) {
         case KSCOPE_SUBCLASS_CORE_PCI: return "PCI";
 
         /* Memory (0x01xx) */
-        case KSCOPE_SUBCLASS_MEMORY_PMM:  return "PMM";
-        case KSCOPE_SUBCLASS_MEMORY_VMM:  return "VMM";
-        case KSCOPE_SUBCLASS_MEMORY_HEAP: return "Heap";
+        case KSCOPE_SUBCLASS_MEMORY_PMM:  return    "PMM";
+        case KSCOPE_SUBCLASS_MEMORY_VMM:  return    "VMM";
+        case KSCOPE_SUBCLASS_MEMORY_HEAP: return    "Heap";
+        case KSCOPE_SUBCLASS_MEMORY_PAGING: return  "Paging";
 
         /* Time (0x03xx) */
         case KSCOPE_SUBCLASS_TIME_PIT:   return "PIT";

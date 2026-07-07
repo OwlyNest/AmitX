@@ -39,6 +39,8 @@
 #define PAGE_ACCESSED 	 0x020
 #define PAGE_DIRTY 		 0x040
 #define PAGE_GLOBAL      0x100
+#define PAGE_NO_EXECUTE  (1ULL << 63)
+
 
 /* Extract physical address or flags from a PDE/PTE */
 #define PTE_ADDR(entry)  ((entry) & ~0xFFF)
@@ -61,7 +63,7 @@
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void paging_init(void);
+int paging_init(void);
 int map_page(uintptr_t phys, uintptr_t virt, uint32_t flags);
 void unmap_page(uintptr_t virt);
 uintptr_t virt_to_phys(uintptr_t virt);

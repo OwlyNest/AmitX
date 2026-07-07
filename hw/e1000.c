@@ -28,6 +28,8 @@
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
 #include <mm/pmm.h>
+#include <mm/vmm.h>
+#include <mm/paging.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <hw/e1000.h>
@@ -261,16 +263,24 @@ static int e1000_init(void) {
     ASSERT(pci_dev);
 
     e1000_dev.pci = pci_dev;
-    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n",
-           pci_dev->bus, pci_dev->device, pci_dev->function,
-           pci_dev->bars[0].base);
+    printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n", pci_dev->bus, pci_dev->device, pci_dev->function, pci_dev->bars[0].base);
 
     if (pci_dev->bars[0].base & 1) {
         printk("[e1000] Error: BAR0 is I/O, driver needs MMIO\n");
         return 1;
     }
 
-    e1000_dev.mmio = (volatile uint32_t *)(pci_dev->bars[0].base & ~0xF);
+    uintptr_t bar0_phys = pci_dev->bars[0].base & ~0xF;
+    size_t mmio_size = 0x20000; /* 128KB covers all e1000 registers */
+
+    /* Map the MMIO region into virtual address space */
+    void *mmio_virt = vmm_map_physical(bar0_phys, mmio_size, PAGE_WRITABLE | PAGE_NOCACHE);
+    if (!mmio_virt) {
+        printk("[e1000] Failed to map MMIO region\n");
+        return 1;
+    }
+
+    e1000_dev.mmio = (volatile uint32_t *)mmio_virt;
 
     e1000_reset(&e1000_dev);
     e1000_read_mac(&e1000_dev);
@@ -490,4 +500,9 @@ void e1000_shutdown(void) {
     e1000_dev.tx_head = 0;
     e1000_dev.tx_tail = 0;
     e1000_dev.rx_head = 0;
+
+    if (e1000_dev.mmio) {
+        vmm_unmap_physical((void *)e1000_dev.mmio, 0x20000);
+        e1000_dev.mmio = NULL;
+    }
 }

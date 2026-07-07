@@ -28,22 +28,32 @@
 #include <internal/virtmem.h>
 #include <screen/printk.h>
 #include <mm/vmm.h>
+#include <mm/pmm.h>
 #include <mm/paging.h>
+#include <internal/multiboot.h>
 #include <stdarg.h>
 /* --- Typedefs - Structs - Enums ---*/
+extern uint32_t multiboot_info_ptr;   /* set in boot.S, physical address */
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-ACPI_STATUS AcpiOsInitialize(void)  { return AE_OK; }
-ACPI_STATUS AcpiOsTerminate(void)   { return AE_OK; }
+
+
 
 ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer(void) {
     ACPI_PHYSICAL_ADDRESS addr = 0;
     AcpiFindRootPointer(&addr);        /* ACPICA does the EBDA/BIOS scan */
     return addr;
+}
+
+ACPI_STATUS AcpiOsInitialize(void)  {
+    return AE_OK;
+}
+ACPI_STATUS AcpiOsTerminate(void)   {
+    return AE_OK;
 }
 
 ACPI_STATUS AcpiOsPredefinedOverride(const ACPI_PREDEFINED_NAMES *Predefined, ACPI_STRING *NewValue) {
@@ -74,11 +84,34 @@ void  AcpiOsFree(void *Memory) {
 }
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length) {
-    return vmm_map_physical((uintptr_t)PhysicalAddress, (size_t)Length, PAGE_WRITABLE);
+    uintptr_t phys_page = (uintptr_t)PhysicalAddress & ~0xFFF;
+    size_t offset       = (uintptr_t)PhysicalAddress & 0xFFF;
+    size_t aligned_len  = ((size_t)Length + offset + 0xFFF) & ~0xFFF;
+
+    // Base attributes: Memory is present, user-space can't touch it, non-executable
+    uint64_t flags = PAGE_PRESENT | PAGE_NO_EXECUTE;
+
+    if (is_physical_address_mmio(phys_page)) {
+        // MMIO: Must bypass CPU cache entirely and allow write operations
+        flags |= PAGE_WRITABLE | PAGE_NOCACHE;
+    } else {
+        // Regular tables: Read-only to prevent corruption, cacheable (Write-Back)
+        // No caching flags added here = standard Write-Back cache mode on x86
+    }
+
+    void *v_page = vmm_map_physical(phys_page, aligned_len, flags);
+    if (!v_page) return NULL;
+
+    return (void *)((uintptr_t)v_page + offset);
 }
 
+
 void AcpiOsUnmapMemory(void *where, ACPI_SIZE length) {
-    vmm_unmap_physical(where, (size_t)length);
+    uintptr_t virt_page = (uintptr_t)where & ~0xFFF;
+    size_t offset = (uintptr_t)where & 0xFFF;
+    size_t aligned_len = ((size_t)length + offset + 0xFFF) & ~0xFFF;
+
+    vmm_unmap_physical((void *)virt_page, aligned_len);
 }
 
 ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value, UINT32 Width) {

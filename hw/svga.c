@@ -146,7 +146,7 @@ static int svga_map_fb(void) {
     for (size_t i = 0; i < pages; i++) {
         uintptr_t phys = fb_phys        + i * PAGE_SIZE;
         uintptr_t virt = SVGA_FB_VIRT   + i * PAGE_SIZE;
-        if (map_page(phys, virt, PAGE_WRITABLE | PAGE_NOCACHE) != 0) {
+        if (map_page(phys, virt, PAGE_WRITABLE | PAGE_WRITETHRU) != 0) {
             printk("[svga] FB map failed page %u "
                    "(phys 0x%08x)\n", (unsigned)i, (unsigned)phys);
             return -1;

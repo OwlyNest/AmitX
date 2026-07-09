@@ -170,6 +170,7 @@ void acpi_print_info(void) {
                ((uint8_t *)fadt)[2], ((uint8_t *)fadt)[3]);
     }
     acpi_madt_t *madt = acpi_get_madt();
+    acpi_parse_madt();
 
     if (!fadt) {
         printk("[acpi] Not initialized (no FADT available)\n");
@@ -199,6 +200,7 @@ void acpi_print_info(void) {
 
     if (madt) {
         printk("MADT at:     0x%08x\n", (uint32_t)madt);
+        printk("  Cores      0x%08x\n", (uint32_t)madt_parsed.num_cpus);
         printk("  LAPIC:     0x%08x\n", madt->local_apic_addr);
     } else {
         printk("MADT:        not present\n");

@@ -5,6 +5,7 @@
 #include <screen/printk.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <arch/x86/interrupts.h>
 #include <internal/amitx_consts.h>
 #include <lib/string.h>
 #include <internal/kscope.h>
@@ -39,6 +40,11 @@ static int heap_init(void) {
 
     uintptr_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
 
+    if (pmm_is_region_free(start, HEAP_SIZE) != 0) {
+        printk("[heap] heap region not free\n");
+        panic("The heap is doing it again", 0xFFFF, 0xDEAD);
+    }
+    printk("[heap] heap region free\n");
     pmm_reserve_region(start, HEAP_SIZE);
 
     heap_base = (uint8_t *)start;

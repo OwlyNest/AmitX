@@ -27,6 +27,7 @@ run "bear -- make clean"
 
 echo -e "\e[33m[x] Building kernel...\e[0m"
 run "bear -- make"
+find . -name '*.c' -o -name '*.h' -o -name '*.S' | sed 's/.*/"&"/' | xargs wc -l | tail -n 1
 make size
 make readelf
 make sections
@@ -51,6 +52,7 @@ echo -e "\e[33m[x] Fabricating Hybrid ISO (No Sudo Required)...\e[0m"
 # Using raw xorriso flags ensures a standard ISO layout contains an embedded MBR partition layout
 run "grub-mkrescue -o amitx.iso isodir -- -as mkisofs -graft-points -b boot/grub/i386-pc/eltorito.img -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img"
 
+cp amitx.iso /mnt/c/Users/23066776/AmitX/
 echo -e "\e[33m[x] Launching QEMU (Testing Image)...\e[0m"
 set +e
 

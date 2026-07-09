@@ -13,6 +13,17 @@
 #include <stdint.h>
 
 /* --- Functions ---*/
+static const char *fetch_string(va_list *args) {
+    return va_arg(*args, const char *);
+}
+
+static void *fetch_pointer(va_list *args) {
+    return va_arg(*args, void *);
+}
+
+static int fetch_char(va_list *args) {
+    return va_arg(*args, int);
+}
 
 static void emit_char(char **out, size_t *remaining, int *count, char c) {
     if (*remaining > 1) {
@@ -302,13 +313,11 @@ int kvsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
 
         switch (spec.specifier) {
         case 's':
-            format_string(&out, &remaining, &count,
-                          va_arg(args, const char *), &spec);
+            format_string(&out, &remaining, &count, fetch_string(&args), &spec);
             break;
 
         case 'c': {
-            char c = (char)va_arg(args, int);
-            emit_char(&out, &remaining, &count, c);
+            emit_char(&out, &remaining, &count, (char)fetch_char(&args));
             break;
         }
 
@@ -339,17 +348,18 @@ int kvsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
                             16, 1, &spec);
             break;
 
-        case 'p': {
-            FormatSpec pspec = spec;
-            pspec.width = sizeof(uintptr_t) * 2;
-            pspec.zero = 1;
-            pspec.precision = -1;
-            emit_string(&out, &remaining, &count, "0x");
-            format_integer(&out, &remaining, &count,
-                            (uint64_t)(uintptr_t)va_arg(args, void *), 0,
-                            16, 0, &pspec);
-            break;
-        }
+            case 'p': {
+                FormatSpec pspec = spec;
+                pspec.width = sizeof(uintptr_t) * 2;
+                pspec.zero = 1;
+                pspec.precision = -1;
+            
+                emit_string(&out, &remaining, &count, "0x");
+                format_integer(&out, &remaining, &count,
+                               (uint64_t)(uintptr_t)fetch_pointer(&args),
+                               0, 16, 0, &pspec);
+                break;
+            }
 
         case '\0':
             break;

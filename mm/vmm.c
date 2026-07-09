@@ -30,11 +30,10 @@
  * KERNEL_VIRT_BASE (0xC0000000), and clear of the recursive mapping
  * (0xFFC00000+).
  */
-#define VMM_WINDOW_BASE     0xE0000000u
-#define VMM_WINDOW_SIZE     0x01C00000u        /* 28 MB */
 #define VMM_WINDOW_PAGES    (VMM_WINDOW_SIZE / PAGE_SIZE)
 /* --- Includes ---*/
 #include <mm/vmm.h>
+#include <mm/mmap.h>
 #include <mm/paging.h>
 #include <screen/printk.h>
 #include <lib/string.h>

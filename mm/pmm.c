@@ -153,6 +153,25 @@ void pmm_unreserve_region(uintptr_t start, size_t length) {
     }
 }
 
+int pmm_is_region_free(uintptr_t start, size_t length) {
+    if (length == 0)
+        return -1;
+
+    uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
+    uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
+
+    if (end_frame > total_frames) {
+        return -1;
+    }
+
+    for (uint32_t i = start_frame; i < end_frame; i++) {
+        if (bitmap_test(i)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* ==========================================================================
  * Early kernel initialization (called from boot.S before kernel_main)
  * Validates multiboot, detects RAM, saves boot info.

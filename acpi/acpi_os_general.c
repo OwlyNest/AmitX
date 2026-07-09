@@ -88,16 +88,12 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length) {
     size_t offset       = (uintptr_t)PhysicalAddress & 0xFFF;
     size_t aligned_len  = ((size_t)Length + offset + 0xFFF) & ~0xFFF;
 
-    // Base attributes: Memory is present, user-space can't touch it, non-executable
-    uint64_t flags = PAGE_PRESENT | PAGE_NO_EXECUTE;
+    uint32_t flags = PAGE_PRESENT;
 
     if (is_physical_address_mmio(phys_page)) {
-        // MMIO: Must bypass CPU cache entirely and allow write operations
         flags |= PAGE_WRITABLE | PAGE_NOCACHE;
-    } else {
-        // Regular tables: Read-only to prevent corruption, cacheable (Write-Back)
-        // No caching flags added here = standard Write-Back cache mode on x86
     }
+    /* else: read-only, cacheable — default PTE state */
 
     void *v_page = vmm_map_physical(phys_page, aligned_len, flags);
     if (!v_page) return NULL;

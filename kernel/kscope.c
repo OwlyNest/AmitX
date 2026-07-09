@@ -121,8 +121,7 @@ static void kscope_mark_failed(kscope_node_t *node,
  * Returns 0 on success, -1 if a cycle was detected.
  * On cycle, the nodes involved are marked FAILED.
  * ======================================================================= */
-static int kscope_topo_sort(kscope_node_t **out_order,
-                            size_t *out_count) {
+static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
     uint8_t visited[KSCOPE_MAX_NODES] = { 0 };
     /* 0 = unvisited, 1 = visiting, 2 = done */
 
@@ -324,6 +323,7 @@ const char *kscope_subclass_name(uint32_t subclass) {
         case KSCOPE_SUBCLASS_CORE_TSS: return "TSS";
         case KSCOPE_SUBCLASS_CORE_PIC: return "PIC";
         case KSCOPE_SUBCLASS_CORE_PCI: return "PCI";
+        case KSCOPE_SUBCLASS_CORE_CPUID: return "CPUID";
 
         /* Memory (0x01xx) */
         case KSCOPE_SUBCLASS_MEMORY_PMM:  return    "PMM";

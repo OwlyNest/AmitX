@@ -46,6 +46,7 @@ extern kscope_node_t svga_node;
 extern kscope_node_t scheduler_node;
 extern kscope_node_t vmm_node;
 extern kscope_node_t paging_node;
+extern kscope_node_t cpuid_node;
 
 /* --- Prototypes ---*/
 #endif

@@ -39,6 +39,7 @@ void kscope_register_all(void) {
 	kscope_register(&x86_gdt_node);
 	kscope_register(&x86_pic_node);
 	kscope_register(&x86_idt_node);
+	kscope_register(&cpuid_node);
 	kscope_register(&serial_node);
 	kscope_register(&pit_timer_node);
 	kscope_register(&keyboard_node);

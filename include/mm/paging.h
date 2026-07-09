@@ -53,11 +53,12 @@
  *   0xFFC00000 + (pd_idx * 4096)  -> page table pd_idx
  *   0xFFFFF000                      -> page directory itself
  * ======================================================================= */
-#define PT_VIRT(pd_idx)         ((uint32_t *)(0xFFC00000u + ((pd_idx) * 4096u)))
-#define PD_VIRT                 ((uint32_t *)0xFFFFF000u)
+#define PT_VIRT(pd_idx)         ((uint32_t *)(RECURSIVE_PT_BASE + ((pd_idx) * 4096u)))
+#define PD_VIRT                 ((uint32_t *)RECURSIVE_PD_BASE)
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>
+#include <mm/mmap.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/

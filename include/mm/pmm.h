@@ -69,6 +69,7 @@ void *pmm_alloc_frames(uint32_t count);
 void pmm_free_frames(void *frame, uint32_t count);
 void pmm_reserve_region(uintptr_t start, size_t length);
 void pmm_unreserve_region(uintptr_t start, size_t length);
+int pmm_is_region_free(uintptr_t start, size_t length);
 void pmm_get_stats(pmm_stats_t *stats);
 void pmm_print_map(void);
 uint32_t pmm_get_total_frames(void);

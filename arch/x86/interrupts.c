@@ -10,77 +10,77 @@
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 
-/*
-    * 1) Stack trace in panic — walk EBP chain, print return addresses
-    * 2) IRQ nesting / in_irq flag — prevent reentrant issues
-    * 3) Mouse handler migration — you said you already did this
-    * 4) Timer handler cleanup — remove timer_callback_wrapper indirection
-    * 5) APIC planning — since you have MADT, sketch the migration
-*/
+#define MAX_INTERRUPTS     256
+#define MAX_IRQ_HANDLERS   4
 
-#define MAX_INTERRUPTS 256
-
-static irq_handler_t interrupt_handlers[MAX_INTERRUPTS];
+static irq_handler_t interrupt_handlers[MAX_INTERRUPTS][MAX_IRQ_HANDLERS];
 
 extern volatile uint32_t tick_count;
 extern void syscall_dispatch(interrupt_frame_t *frame);
 
 static const char* exception_names[32] = {
-    "Divide Error",
-    "Debug",
-    "NMI",
-    "Breakpoint",
-    "Overflow",
-    "BOUND Range",
-    "Invalid Opcode",
-    "Device Not Available",
-    "Double Fault",
-    "Coprocessor Segment Overrun",
-    "Invalid TSS",
-    "Segment Not Present",
-    "Stack Fault",
-    "General Protection Fault",
-    "Page Fault",
-    "Reserved",
-    "x87 FP Exception",
-    "Alignment Check",
-    "Machine Check",
-    "SIMD FP Exception",
-    "Virtualization Exception",
-    "Control Protection Exception",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved"
+    "Divide Error", "Debug", "NMI", "Breakpoint", "Overflow",
+    "BOUND Range", "Invalid Opcode", "Device Not Available",
+    "Double Fault", "Coprocessor Segment Overrun", "Invalid TSS",
+    "Segment Not Present", "Stack Fault", "General Protection Fault",
+    "Page Fault", "Reserved", "x87 FP Exception", "Alignment Check",
+    "Machine Check", "SIMD FP Exception", "Virtualization Exception",
+    "Control Protection Exception", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved"
 };
 
-void panic(const char* msg, uint32_t interrupt_number, uint32_t err);
-
+/* ------------------------------------------------------------------ */
+/* Register a handler on a shared vector.                             */
+/* ------------------------------------------------------------------ */
 void register_interrupt_handler(int n, irq_handler_t handler) {
-    interrupt_handlers[n] = handler;
+    for (int i = 0; i < MAX_IRQ_HANDLERS; i++) {
+        if (interrupt_handlers[n][i] == NULL) {
+            interrupt_handlers[n][i] = handler;
+            return;
+        }
+    }
+    printk("WARN: no free handler slot for vector %d\n", n);
 }
 
-void exception_handler(interrupt_frame_t *frame) {
+/* ------------------------------------------------------------------ */
+/* Exceptions: we only use slot [0]                                   */
+/* ------------------------------------------------------------------ */
+int exception_handler(interrupt_frame_t *frame) {
     panic_frame(frame, exception_names[frame->err_no]);
+    return 0; /* never reached */
 }
 
 void register_exception_handlers(void) {
     for (int i = 0; i < 32; i++) {
-        interrupt_handlers[i] = exception_handler;
+        interrupt_handlers[i][0] = exception_handler;
     }
-    interrupt_handlers[8] = NULL;
+    interrupt_handlers[8][0] = NULL; /* double fault uses task gate */
 }
 
-void halt(void) {
-    for (;;) {
-        __asm__ volatile ("hlt");
+/* ------------------------------------------------------------------ */
+/* PIC helpers                                                        */
+/* ------------------------------------------------------------------ */
+void pic_set_irq_level_triggered(uint8_t irq) {
+    uint16_t port;
+    uint8_t mask;
+
+    if (irq == 0 || irq == 2 || irq == 8 || irq == 13) {
+        /* These are system-reserved / edge-only */
+        return;
     }
+
+    if (irq < 8) {
+        port = 0x4D0;
+        mask = (1 << irq);
+    } else {
+        port = 0x4D1;
+        mask = (1 << (irq - 8));
+    }
+
+    uint8_t val = inb(port);
+    val |= mask;
+    outb(port, val);
 }
 
 void pic_eoi(uint8_t irq) {
@@ -90,7 +90,7 @@ void pic_eoi(uint8_t irq) {
         outb(PORT_PIC_MASTER_CMD, 0x0B);
         isr = inb(PORT_PIC_MASTER_CMD);
         if (!(isr & 0x80)) {
-            return;
+            return; /* spurious */
         }
     }
     if (irq == 15) {
@@ -98,7 +98,7 @@ void pic_eoi(uint8_t irq) {
         isr = inb(PORT_PIC_SLAVE_CMD);
         if (!(isr & 0x80)) {
             outb(PORT_PIC_MASTER_CMD, PIC_EOI);
-            return;
+            return; /* spurious */
         }
     }
     if (irq >= 8) {
@@ -107,19 +107,45 @@ void pic_eoi(uint8_t irq) {
     outb(PORT_PIC_MASTER_CMD, PIC_EOI);
 }
 
+/* ------------------------------------------------------------------ */
+/* Main dispatcher called from isr.S                                  */
+/* ------------------------------------------------------------------ */
 void isr_handler(interrupt_frame_t *frame) {
     uint32_t int_no = frame->err_no;
     uint32_t err    = frame->err_code;
+    int handled = 0;
+
     if (int_no < 32) {
-        if (interrupt_handlers[int_no]) {
-            interrupt_handlers[int_no](frame);
+        /* CPU exception */
+        if (interrupt_handlers[int_no][0]) {
+            interrupt_handlers[int_no][0](frame);
         } else {
             panic_frame(frame, exception_names[int_no]);
         }
     } else if (int_no < 48) {
-        if (interrupt_handlers[int_no])
-            interrupt_handlers[int_no](frame);
-        pic_eoi(int_no);
+        /* Hardware IRQ (0-15) */
+        uint32_t irq = int_no - 32;
+
+        for (int i = 0; i < MAX_IRQ_HANDLERS; i++) {
+            if (interrupt_handlers[int_no][i]) {
+                if (interrupt_handlers[int_no][i](frame)) {
+                    handled = 1;
+                }
+            }
+        }
+
+        if (handled) {
+            pic_eoi(irq);
+        } else {
+            /*
+             * Nobody claimed it.  Send EOI anyway so we don't
+             * deadlock, but warn.  If a device is still asserting
+             * the line we'll immediately re-enter, but at least
+             * the system doesn't freeze.
+             */
+            printk("Unhandled IRQ%u (spurious?)\n", irq);
+            pic_eoi(irq);
+        }
     } else if (int_no == VECTOR_SYSCALL) {
         syscall_dispatch(frame);
     } else {
@@ -127,6 +153,7 @@ void isr_handler(interrupt_frame_t *frame) {
     }
 }
 
+/* ... pic_unmask_irq / pic_mask_irq stay exactly the same ... */
 void pic_unmask_irq(uint8_t irq) {
     uint16_t port;
     uint8_t value;
@@ -141,13 +168,28 @@ void pic_unmask_irq(uint8_t irq) {
     value = inb(port) & ~(1 << irq);
     outb(port, value);
 }
-// PIC remapping stays unchanged
-static int pic_remap() {
+
+void pic_mask_irq(uint8_t irq) {
+    uint16_t port;
+    uint8_t value;
+
+    if (irq < 8) {
+        port = PORT_PIC_MASTER_DATA;
+    } else {
+        port = PORT_PIC_SLAVE_DATA;
+        irq -= 8;
+    }
+    value = inb(port) | (1 << irq);
+    outb(port, value);
+}
+
+/* ... PIC remap stays the same ... */
+static int pic_remap(void) {
     outb(PORT_PIC_MASTER_CMD, PIC_ICW1_INIT);
     outb(PORT_PIC_SLAVE_CMD, PIC_ICW1_INIT);
 
-    outb(PORT_PIC_MASTER_DATA, 0x20);  // Master vector offset
-    outb(PORT_PIC_SLAVE_DATA, 0x28);  // Slave vector offset
+    outb(PORT_PIC_MASTER_DATA, 0x20);
+    outb(PORT_PIC_SLAVE_DATA, 0x28);
 
     outb(PORT_PIC_MASTER_DATA, PIC_ICW3_MASTER_SLAVE2);
     outb(PORT_PIC_SLAVE_DATA, PIC_ICW3_SLAVE_ID2);
@@ -155,9 +197,12 @@ static int pic_remap() {
     outb(PORT_PIC_MASTER_DATA, PIC_ICW4_8086);
     outb(PORT_PIC_SLAVE_DATA, PIC_ICW4_8086);
 
-    /* Mask ALL interrupts initially — unmask selectively per driver */
-    outb(PORT_PIC_MASTER_DATA, 0xFF);  // Mask all master IRQs
-    outb(PORT_PIC_SLAVE_DATA, 0xFF);     // Mask all slave IRQs
+    outb(PORT_PIC_MASTER_DATA, 0xFF);
+    outb(PORT_PIC_SLAVE_DATA, 0xFF);
+
+    uint8_t elcr_slave = inb(0x4D1);
+    elcr_slave |= (1 << 1);   /* IRQ9 = level-triggered */
+    outb(0x4D1, elcr_slave);
 
     printk("PIC remapped, all IRQs masked\n");
     return 0;
@@ -171,9 +216,10 @@ kscope_node_t x86_pic_node = {
     .requires = (kscope_node_t*[]){ &x86_gdt_node },
     .require_count = 1,
     .provides = (const char*[]){"cpu.pic", "irq.controller"},
-	.provide_count = 2,
+    .provide_count = 2,
     .init = pic_remap,
 };
+
 
 __attribute__((noreturn))
 void panic(const char* msg, uint32_t int_no, uint32_t err) {

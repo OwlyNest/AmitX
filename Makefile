@@ -91,6 +91,7 @@ LIBS := -lgcc
 # --------------------------------------------------------------------
 
 C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+C_SRCS := $(filter-out arch/x86/cpuid.c,$(C_SRCS))
 S_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.S))
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))

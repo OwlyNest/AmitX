@@ -70,6 +70,21 @@ uint8_t pci_read_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg
     return (val >> ((reg & 3) * 8)) & 0xFF;
 }
 
+void pci_write_config_byte(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val) {
+    uint32_t aligned = reg & ~3;
+
+    pci_config_addr(bus, dev, func, aligned);
+
+    uint32_t orig = inl(PCI_CONFIG_DATA);
+
+    uint32_t shift = (reg & 3) * 8;
+
+    orig &= ~(0xFFu << shift);
+    orig |= ((uint32_t)val << shift);
+
+    outl(PCI_CONFIG_DATA, orig);
+}
+
 /* ==========================================================================
  * BAR parsing
  * ======================================================================= */

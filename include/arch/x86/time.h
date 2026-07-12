@@ -27,7 +27,7 @@
 #include <arch/x86/interrupts.h>
 
 /* --- Prototypes ---*/
-void timer_callback(interrupt_frame_t *frame);
+int timer_callback(interrupt_frame_t *frame);
 void sleep(uint32_t seconds);
 void sleep_ms(uint32_t milliseconds);
 void sleep_t(uint32_t ticks);

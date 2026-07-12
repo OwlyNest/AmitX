@@ -56,10 +56,26 @@
 #define CPUID_VENDOR_PARALLELS_ALT " lrpepyh vr " // Sometimes Parallels incorrectly encodes "prl hyperv" as "lrpepyh vr" due to an endianness mismatch.
 #define CPUID_VENDOR_BHYVE         "bhyve bhyve "
 #define CPUID_VENDOR_QNX           " QNXQVMBSQG "
+
+#define CPUID_RAW_MAX 128
 /* --- Includes ---*/
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
+typedef struct {
+    uint32_t leaf;
+    uint32_t subleaf;
+
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+} cpuid_raw_t;
+
+typedef struct {
+    cpuid_raw_t entries[CPUID_RAW_MAX];
+    uint32_t count;
+} cpuid_raw_db_t;
 
 // Leaf 1 feature flags, ECX register.
 typedef enum {
@@ -596,12 +612,6 @@ typedef struct {
     uint32_t            topo_count;
     cpuid_svm_info_t    svm;            // Leaf 0x8000000A
 
-    uint8_t             has_leaf7;
-    uint8_t             has_leaf80000008;
-    uint8_t             has_leaf8000000a;
-    uint8_t             has_leafb;
-    uint8_t             has_leaf15;
-    uint8_t             has_leaf16;
     uint8_t             has_mwait;
     uint8_t             has_thermal;
     uint8_t             has_svm;

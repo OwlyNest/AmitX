@@ -128,36 +128,42 @@ static inline void cpuid_exec(uint32_t eax, uint32_t *a, uint32_t *b, uint32_t *
  * Execute CPUID with EAX=leaf, ECX=subleaf and return all four registers   *
  *                                                                          *
  ========================================================================== */
-static inline void cpuid_exec_sub(uint32_t eax, uint32_t ecx, uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d) {
-#ifdef __x86_64__
-    uint32_t rb;
-
-    __asm__ __volatile__ (
-        "pushq %%rbx\n\t"
-        "cpuid\n\t"
-        "movl %%ebx, %1\n\t"
-        "popq %%rbx"
-        : "=a"(*a), "=r"(rb), "=c"(*c), "=d"(*d)
-        : "a"(eax), "c"(ecx)
-        : "cc", "memory"
-    );
-
-    *b = rb;
-#else
-    uint32_t rb;
-
-    __asm__ __volatile__ (
-        "pushl %%ebx\n\t"
-        "cpuid\n\t"
-        "movl %%ebx, %1\n\t"
-        "popl %%ebx"
-        : "=a"(*a), "=r"(rb), "=c"(*c), "=d"(*d)
-        : "a"(eax), "c"(ecx)
-        : "cc", "memory"
-    );
-
-    *b = rb;
-#endif
+static inline void cpuid_exec_sub(uint32_t leaf, uint32_t subleaf, uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d) {
+    #ifdef __x86_64__
+        uint32_t ra, rb, rd;
+    
+        __asm__ __volatile__ (
+            "pushq %%rbx\n\t"
+            "cpuid\n\t"
+            "movl %%ebx, %1\n\t"
+            "popq %%rbx"
+            : "=a"(ra), "=r"(rb), "+c"(subleaf), "=d"(rd)
+            : "a"(leaf)
+            : "cc", "memory"
+        );
+    
+        *a = ra;
+        *b = rb;
+        *c = subleaf;
+        *d = rd;
+    #else
+        uint32_t ra, rb, rd;
+    
+        __asm__ __volatile__ (
+            "pushl %%ebx\n\t"
+            "cpuid\n\t"
+            "movl %%ebx, %1\n\t"
+            "popl %%ebx"
+            : "=a"(ra), "=r"(rb), "+c"(subleaf), "=d"(rd) // '+' makes subleaf read/write
+            : "a"(leaf)
+            : "cc", "memory"
+        );
+    
+        *a = ra;
+        *b = rb;
+        *c = subleaf;
+        *d = rd;
+    #endif
 }
 
 /* ==========================================================================
@@ -294,7 +300,7 @@ void cpuid_get_proc_info(cpuid_proc_info_t *info) {
  *                                                                          *
  ========================================================================== */
 int cpuid_get_cache_info(uint32_t index, cpuid_cache_info_t *info) {
-    uint32_t eax, ebx, ecx, edx;
+    uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
 
     cpuid_exec_sub(4, index, &eax, &ebx, &ecx, &edx);
 
@@ -716,6 +722,13 @@ void cpuid_get_freq(uint32_t max_basic, cpuid_freq_info_t *info) {
  * Fill a cpu_info_t structure with CPU information                         *
  *                                                                          *
  ========================================================================== */
+/*
+ * One for the data
+ * Two for the leaves
+ * Three to get ready
+ * Now go UART go
+ * But don't you, step on my CPU...
+*/
 void cpuid_init(cpu_info_t *info) {
     uint32_t dummy;
     uint32_t max_basic;
@@ -1164,10 +1177,11 @@ void cpuid_dump(cpu_info_t *info) {
         dump_freq(info->has_leaf16, &info->freq);
     }
 
+    for (uint32_t i = 0; i < info->cache_count; i++) {
+        dump_cache(i, &info->caches[i]);
+    }
+    
     if (info->has_thermal) {
-        for (uint32_t i = 0; i < info->cache_count; i++) {
-            dump_cache(i, &info->caches[i]);
-        }
         dump_thermal(&info->thermal);
     }
     if (info->has_topology) {

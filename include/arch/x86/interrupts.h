@@ -1,4 +1,3 @@
-
 #ifndef __ARCH_X86_INTERRUPTS_H__
 #define __ARCH_X86_INTERRUPTS_H__
 
@@ -18,14 +17,18 @@ typedef struct {
     uint32_t eax;
 } interrupt_frame_t;
 
-typedef void (*irq_handler_t)(interrupt_frame_t *frame);
+/* Return 1 if you handled this interrupt, 0 if it came from another device */
+typedef int (*irq_handler_t)(interrupt_frame_t *frame);
 
-void divide_by_zero_handler();
+int exception_handler(interrupt_frame_t *frame);
 void panic(const char* msg, uint32_t interrupt_number, uint32_t err);
 void pic_unmask_irq(uint8_t irq);
+void pic_mask_irq(uint8_t irq);
+void pic_set_irq_level_triggered(uint8_t irq);
 void isr_handler(interrupt_frame_t *frame);
 void register_interrupt_handler(int n, irq_handler_t handler);
 
 __attribute__((noreturn))
 void panic_frame(interrupt_frame_t *frame, const char *msg);
+
 #endif

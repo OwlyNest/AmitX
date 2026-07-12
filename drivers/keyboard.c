@@ -93,7 +93,7 @@ static const size_t MAP_LEN = sizeof(scancode_map) / sizeof(scancode_map[0]);
 /* --- Prototypes ---*/
 static void buffer_put(unsigned char c);
 static unsigned char buffer_get(void);
-static void keyboard_callback(interrupt_frame_t *frame);
+static int keyboard_callback(interrupt_frame_t *frame);
 
 /* --- Functions ---*/
 
@@ -181,13 +181,13 @@ int keyboard_poll(unsigned char *c) {
 /* ==========================================================================
  * IRQ1 handler
  * ======================================================================= */
-static void keyboard_callback(interrupt_frame_t *frame) {
+static int keyboard_callback(interrupt_frame_t *frame) {
     (void)frame;
     uint8_t scancode = inb(PORT_KBD_DATA);
 
     if (scancode == SC_PREFIX_E0) {
         expecting_e0 = 1;
-        return;
+        return 1;
     }
 
     uint8_t is_release = scancode & SC_RELEASE_BIT;
@@ -215,37 +215,37 @@ static void keyboard_callback(interrupt_frame_t *frame) {
             }
         }
         expecting_e0 = 0;
-        return;
+        return 1;
     }
 
     /* ---- Shift modifiers ---- */
     if (scancode == SC_LSHIFT || scancode == SC_RSHIFT) {
         shift_down = 1;
-        return;
+        return 1;
     }
     if (scancode == (SC_LSHIFT | SC_RELEASE_BIT) ||
         scancode == (SC_RSHIFT | SC_RELEASE_BIT)) {
         shift_down = 0;
-        return;
+        return 1;
     }
 
     /* --- Ctrl modifiers --- */
     if (scancode == SC_LCTRL) {
         ctrl_down = 1;
-        return;
+        return 1;
     }
 
     if (scancode == (SC_LCTRL | SC_RELEASE_BIT)) {
         ctrl_down = 0;
-        return;
+        return 1;
     }
 
     if (code >= MAX_SCANCODE)
-        return;
+        return 1;
 
     if (is_release) {
         key_state[code] = 0;
-        return;
+        return 1;
     }
 
     /* ---- Make code: only buffer on first press, ignore autorepeat ---- */
@@ -253,7 +253,7 @@ static void keyboard_callback(interrupt_frame_t *frame) {
         key_state[code] = 1;
 
         if (code >= MAP_LEN)
-            return;
+            return 1;
 
         unsigned char c = shift_down
             ? scancode_map_shift[code]
@@ -267,10 +267,11 @@ static void keyboard_callback(interrupt_frame_t *frame) {
         }
 
         if (!c)
-            return;
+            return 1;
 
         buffer_put(c);
     }
+    return 1;
 }
 
 /* ==========================================================================

@@ -40,9 +40,20 @@
 
 .global isr32
 .global isr33
+.global isr34
+.global isr35
 .global isr36
+.global isr37
+.global isr38
+.global isr39
+.global isr40
+.global isr41
 .global isr42
+.global isr43
 .global isr44
+.global isr45
+.global isr46
+.global isr47
 .global isr128
 
 .extern isr_handler
@@ -185,6 +196,40 @@ isr33:
 
     iret
 
+isr34:
+    
+    pushad
+
+    push 0
+    push 34
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+isr35:
+    
+    pushad
+
+    push 0
+    push 35
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
 # IRQ4 (serial)
 isr36:
     
@@ -192,6 +237,92 @@ isr36:
 
     push 0              
     push 36
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+isr37:
+    
+    pushad
+
+    push 0
+    push 37
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+isr38:
+    
+    pushad
+
+    push 0
+    push 38
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+isr39:
+    
+    pushad
+
+    push 0
+    push 39
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+isr40:
+    
+    pushad
+
+    push 0
+    push 40
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
+
+# IRQ9 (ACPI)
+isr41:
+    pushad
+
+    push 0              
+    push 41
     
     push esp
     call isr_handler
@@ -220,6 +351,22 @@ isr42:
 
     iret
 
+isr43:
+    pushad
+
+    push 0              
+    push 43
+    
+    push esp
+    call isr_handler
+    add esp, 4
+
+    add esp, 8
+    
+    popad
+
+    iret
+
 # IRQ12 (PS/2 Mouse)
 isr44:
 
@@ -227,6 +374,57 @@ isr44:
 
     push 0
     push 44
+    
+    push esp
+    call isr_handler
+    add esp, 4
+    
+    add esp, 8
+
+    popad
+
+    iret
+
+isr45:
+
+    pushad
+
+    push 0
+    push 45
+    
+    push esp
+    call isr_handler
+    add esp, 4
+    
+    add esp, 8
+
+    popad
+
+    iret
+
+isr46:
+
+    pushad
+
+    push 0
+    push 46
+    
+    push esp
+    call isr_handler
+    add esp, 4
+    
+    add esp, 8
+
+    popad
+
+    iret
+
+isr47:
+
+    pushad
+
+    push 0
+    push 47
     
     push esp
     call isr_handler

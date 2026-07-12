@@ -64,7 +64,7 @@ static int serial_detect(uint16_t base) {
 	return 0;
 }
 
-static void serial_irq_handler(interrupt_frame_t *frame) {
+static int serial_irq_handler(interrupt_frame_t *frame) {
 	(void)frame;
 
 	serial_port_t *port = &serial_com1;
@@ -77,6 +77,7 @@ static void serial_irq_handler(interrupt_frame_t *frame) {
             port->rx_head = next;
         }
     }
+    return 1;
 }
 
 static int serial_init(void) {

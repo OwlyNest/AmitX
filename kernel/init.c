@@ -265,7 +265,6 @@ void kernel_setup(void) {
         pci_log_to_fs();
         kscope_log_to_fs();
     }
-    cpuid_dump(&info);
     puts("\nPress ENTER to continue...");
     while (keyboard_getchar() != '\n');
 

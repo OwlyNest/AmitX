@@ -33,24 +33,14 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-extern void register_interrupt_handler(int n, void (*handler)());
+extern void register_interrupt_handler(int n, int (*handler)());
 
 /* Handler signature must match interrupt_frame_t* */
-static void (*timer_handler)(interrupt_frame_t *) = NULL;
+static int (*timer_handler)(interrupt_frame_t *) = NULL;
 
 /* --- Prototypes ---*/
-static void timer_callback_wrapper(interrupt_frame_t *frame);
 
 /* --- Functions ---*/
-
-/* ==========================================================================
- * Wrapper: dispatches to the registered timekeeping handler
- * ======================================================================= */
-static void timer_callback_wrapper(interrupt_frame_t *frame) {
-    if (timer_handler)
-        timer_handler(frame);
-}
-
 /* ==========================================================================
  * Initialize PIT channel 0 to the requested frequency.
  * Safe fallback if frequency is zero or too low.
@@ -74,7 +64,7 @@ void init_timer(uint32_t frequency) {
     outb(PORT_PIT_CH0, (divisor >> 8) & 0xFF);
 
     timer_handler = timer_callback;
-    register_interrupt_handler(VECTOR_IRQ0, timer_callback_wrapper);
+    register_interrupt_handler(VECTOR_IRQ0, timer_callback);
 
     printk("[timer] PIT initialized at %u Hz (divisor %u)\n", PIT_BASE_HZ / divisor, divisor);
 

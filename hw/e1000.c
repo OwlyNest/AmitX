@@ -232,9 +232,13 @@ static int e1000_probe(struct pci_device **out_dev) {
     return -1;
 }
 
-static void e1000_irq_handler(interrupt_frame_t *frame) {
+static int e1000_irq_handler(interrupt_frame_t *frame) {
     (void)frame;
     uint32_t icr = e1000_read(&e1000_dev, E1000_REG_ICR);
+
+    if (icr == 0) {
+        return 0;
+    }
 
     if (icr & (1 << 6)) {  /* RXT0 */
         uint8_t buf[2048];
@@ -251,6 +255,7 @@ static void e1000_irq_handler(interrupt_frame_t *frame) {
     if (icr & (1 << 2)) {  /* LSC */
         e1000_poll_link();
     }
+    return 1;
 }
 
 static int e1000_init(void) {
@@ -261,6 +266,8 @@ static int e1000_init(void) {
         return 1;
     }
     ASSERT(pci_dev);
+
+
 
     e1000_dev.pci = pci_dev;
     printk("[e1000] Found at %02x:%02x.%x, BAR0=0x%x\n", pci_dev->bus, pci_dev->device, pci_dev->function, pci_dev->bars[0].base);
@@ -315,8 +322,27 @@ static int e1000_init(void) {
                 | (1 << 6)   /* RXT0 */
                 | (1 << 2)); /* LSC */
 
-    register_interrupt_handler(VECTOR_IRQ10, e1000_irq_handler);
-    pic_unmask_irq(10);
+
+    uint8_t irq_line = pci_read_config_byte(pci_dev->bus, pci_dev->device, pci_dev->function, 0x3C);
+    uint8_t irq_pin = pci_read_config_byte(pci_dev->bus, pci_dev->device, pci_dev->function, 0x3D);
+
+    
+    if (irq_pin == 0) {
+        printk("E1000: no INTx pin (maybe MSI/MSI-X only)\n");
+        /* fall back to polling or enable MSI later */
+    } else {
+        printk("E1000: using IRQ%u (pin INT%c)\n",
+            irq_line, 'A' + (irq_pin - 1));
+
+        /* PCI legacy interrupts are level-triggered */
+        pic_set_irq_level_triggered(irq_line);
+
+        /* Register on the *shared* vector */
+        register_interrupt_handler(32 + irq_line, e1000_irq_handler);
+
+        /* Now it's safe to let the PIC deliver it */
+        pic_unmask_irq(irq_line);
+    }
 
     e1000_ready = 1;
     printk("[e1000] Initialization complete\n");

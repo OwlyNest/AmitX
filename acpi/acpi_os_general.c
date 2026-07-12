@@ -45,7 +45,7 @@ extern uint32_t multiboot_info_ptr;   /* set in boot.S, physical address */
 
 ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer(void) {
     ACPI_PHYSICAL_ADDRESS addr = 0;
-    AcpiFindRootPointer(&addr);        /* ACPICA does the EBDA/BIOS scan */
+    AcpiFindRootPointer(&addr);       /* ACPICA does the EBDA/BIOS scan */
     return addr;
 }
 
@@ -112,7 +112,8 @@ void AcpiOsUnmapMemory(void *where, ACPI_SIZE length) {
 
 ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value, UINT32 Width) {
     size_t width_bytes = Width / 8;
-    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, PAGE_WRITABLE);
+    uint32_t flags = PAGE_PRESENT | PAGE_WRITABLE | PAGE_NOCACHE;
+    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, flags);
     if (!v) return AE_NO_MEMORY;
 
     switch (Width) {
@@ -129,7 +130,8 @@ ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value, UINT3
 
 ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value, UINT32 Width) {
     size_t width_bytes = Width / 8;
-    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, PAGE_WRITABLE);
+    uint32_t flags = PAGE_PRESENT | PAGE_WRITABLE | PAGE_NOCACHE;
+    void *v = vmm_map_physical((uintptr_t)Address, width_bytes, flags);
     if (!v) return AE_NO_MEMORY;
 
     switch (Width) {

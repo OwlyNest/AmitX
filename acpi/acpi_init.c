@@ -31,6 +31,26 @@
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
+void acpi_print_pm1_ports(void) {
+    ACPI_TABLE_FADT *fadt = NULL;
+    if (ACPI_FAILURE(AcpiGetTable(ACPI_SIG_FADT, 1, (ACPI_TABLE_HEADER **)&fadt))) {
+        printk("[acpi] Failed to get FADT\n");
+        return;
+    }
+
+    printk("[acpi] PM1a_EVT_BLK = 0x%08x (len %u)\n",
+           fadt->Pm1aEventBlock, fadt->Pm1EventLength);
+    printk("[acpi] PM1b_EVT_BLK = 0x%08x\n", fadt->Pm1bEventBlock);
+    printk("[acpi] PM1a_CNT_BLK  = 0x%08x\n", fadt->Pm1aControlBlock);
+    printk("[acpi] PM1b_CNT_BLK  = 0x%08x\n", fadt->Pm1bControlBlock);
+
+    /* ACPI 2.0+ extended addresses */
+    printk("[acpi] X_PM1a_EVT: space=%u addr=0x%llx width=%u\n",
+           fadt->XPm1aEventBlock.SpaceId,
+           fadt->XPm1aEventBlock.Address,
+           fadt->XPm1aEventBlock.BitWidth);
+}
+
 static int acpi_subsystem_init(void) {
     ACPI_STATUS status;
 
@@ -51,6 +71,8 @@ static int acpi_subsystem_init(void) {
         printk("[acpi] AcpiLoadTables failed: %u\n", status);
         return -1;
     }
+    
+    acpi_print_pm1_ports();
 
     status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
     if (ACPI_FAILURE(status)) {
@@ -73,8 +95,8 @@ kscope_node_t acpi_node = {
     .id = 0x000A,
     .class = KSCOPE_CLASS_POWER,
     .subclass = KSCOPE_SUBCLASS_POWER_ACPI,
-    .requires = (kscope_node_t *[]){&heap_node, &scheduler_node, &x86_idt_node, &paging_node},
-    .require_count = 4,
+    .requires = (kscope_node_t *[]){&heap_node, &scheduler_node, &x86_idt_node, &paging_node, &pci_node},
+    .require_count = 5,
     .provides = (const char *[]){"power.acpi", "hw.tables"},
     .provide_count = 2,
     .init = acpi_subsystem_init,

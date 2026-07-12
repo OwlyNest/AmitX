@@ -102,7 +102,7 @@ static void mouse_wait_output(void);
 static void mouse_wait_input(void);
 static uint8_t mouse_read_byte(void);
 static int mouse_send_cmd(uint8_t cmd);
-static void mouse_handler(interrupt_frame_t *frame);
+static int mouse_handler(interrupt_frame_t *frame);
 
 /* --- Functions ---*/
 /* --- Cursor helpers --- */
@@ -240,14 +240,14 @@ static int mouse_send_cmd(uint8_t cmd) {
  * ONLY updates coordinates.  NEVER draws here — the UI loop handles
  * all rendering and presentation.
  * ======================================================================= */
-static void mouse_handler(interrupt_frame_t *frame) {
+static int mouse_handler(interrupt_frame_t *frame) {
     (void)frame;
 
     uint8_t status = inb(PORT_KBD_STATUS);
 
     /* Bit 0: output buffer full. Bit 5: auxiliary device data. */
     if (!(status & 0x01) || !(status & 0x20))
-        return;
+        return 0;
 
     int8_t data = (int8_t)inb(PORT_KBD_DATA);
 
@@ -303,6 +303,7 @@ static void mouse_handler(interrupt_frame_t *frame) {
 
         break;
     }
+    return 1;
 }
 
 /* ==========================================================================

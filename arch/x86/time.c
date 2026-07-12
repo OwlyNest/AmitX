@@ -44,9 +44,11 @@ extern int menu;
  * PIT IRQ0 handler — increments global tick counter
  * ======================================================================= */
 
-void timer_callback(interrupt_frame_t *frame) {
+int timer_callback(interrupt_frame_t *frame) {
     (void)frame;
     tick_count++;
+    scheduler_tick();
+    return 1;
 }
 
 

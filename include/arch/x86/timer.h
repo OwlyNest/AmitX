@@ -6,6 +6,6 @@
 #include <stdint.h>
 
 void init_timer(uint32_t frequency);
-void timer_callback(interrupt_frame_t *frame);
+int timer_callback(interrupt_frame_t *frame);
 
 #endif

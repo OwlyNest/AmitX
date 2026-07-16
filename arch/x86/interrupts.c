@@ -22,9 +22,9 @@ static const char* exception_names[32] = {
     "Divide Error", "Debug", "NMI", "Breakpoint", "Overflow",
     "BOUND Range", "Invalid Opcode", "Device Not Available",
     "Double Fault", "Coprocessor Segment Overrun", "Invalid TSS",
-    "Segment Not Present", "Stack Fault", "General Protection Fault",
+    "Segment Not Present", "Stack Segment Fault", "General Protection Fault",
     "Page Fault", "Reserved", "x87 FP Exception", "Alignment Check",
-    "Machine Check", "SIMD FP Exception", "Virtualization Exception",
+    "Machine Check", "SIMD Floating-Point Exception", "Virtualization Exception",
     "Control Protection Exception", "Reserved", "Reserved", "Reserved",
     "Reserved", "Reserved", "Reserved", "Reserved", "Reserved",
     "Reserved", "Reserved"

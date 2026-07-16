@@ -1,5 +1,4 @@
 # Auto-generated build.mk for arch/x86
-obj-y += arch/x86/cpuid.o
 obj-y += arch/x86/cpuid2.o
 obj-y += arch/x86/idt.o
 obj-y += arch/x86/interrupts.o

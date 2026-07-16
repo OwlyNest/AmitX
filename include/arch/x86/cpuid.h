@@ -317,15 +317,18 @@ typedef struct {
 
 // Cache topology from leaf 4.
 typedef struct {
+    // EAX
     uint8_t  cache_type;            // 0=Null, 1=Data, 2=Inst, 3=Unified
     uint8_t  cache_level;
     uint8_t  self_initializing;
     uint8_t  fully_associative;
     uint32_t max_threads_sharing;
     uint32_t max_cores_sharing;
-    uint32_t line_size;
-    uint32_t line_partitions;
-    uint32_t ways;
+    // EBX
+    uint32_t line_size; // -1
+    uint32_t line_partitions; // -1
+    uint32_t ways; // =1
+    // EDS
     uint32_t sets;
     uint8_t  wbinvd;
     uint8_t  inclusive;
@@ -334,11 +337,15 @@ typedef struct {
 
 // MONITOR/MWAIT from leaf 5.
 typedef struct {
+    // EAX
     uint32_t smallest_line;
+    // EBX
     uint32_t largest_line;
+    // ECX
     uint8_t  extensions;
     uint8_t  interrupts_as_break;
     uint8_t  monitorless;
+    // EDX
     uint32_t c0_substates;
     uint32_t c1_substates;
     uint32_t c2_substates;
@@ -351,36 +358,336 @@ typedef struct {
 
 // Thermal and power from leaf 6.
 typedef struct {
+    // EAX
     uint8_t  digital_temp_sensor;
     uint8_t  turbo_boost;
     uint8_t  arat;
+    // reserved
     uint8_t  pln;
     uint8_t  ecmd;
     uint8_t  ptm;
+    uint8_t  hwp;
+    uint8_t  hwp_n;
+    uint8_t  hwp_aw;
+    uint8_t  hwp_epp;
+    uint8_t  hwp_plr;
+    // reserved
+    uint8_t  hdc;
+    uint8_t  turbo_boost_max;
+    uint8_t  hwp_cap;
+    uint8_t  hwp_peci;
+    uint8_t  hwp_flex;
+    uint8_t  hwp_rfa;
+    uint8_t  hwp_feedback;
+    uint8_t  hwp_rii;
+    // reserved
+    uint8_t  hwp_control;
+    uint8_t  thread_director;
+    // EBX
     uint32_t interrupt_thresholds;
-    uint8_t  hardware_coordination;
+    // ECX
+    uint8_t  effective_frequency_interface;
+    uint8_t  acnt2;
+    // reserved
     uint8_t  energy_perf_bias;
+    //reserved
+    uint32_t thread_director_classes;
+    // EDX
+    uint8_t performance_capability_reporting;
+    uint8_t efficiency_capability_reporting;
+    uint32_t hardware_feedback_interface_size; // * 4 kiB - 1
+    uint32_t logical_row_idx;
 } cpuid_thermal_info_t;
 
-// Extended features from leaf 7, sub-leaf 0.
+// Extended features from leaf 7
 typedef struct {
-    uint32_t ebx;
-    uint32_t ecx;
-    uint32_t edx;
+    /* --- Sub Leaf 0 --- */
+    // EBX
+    uint8_t fsgsbase;
+    uint8_t tsc_adjust;
+    uint8_t sgx;
+    uint8_t bmi1;
+    uint8_t hle;
+    uint8_t avx2;
+    uint8_t fdp_excptn_only;
+    uint8_t smep;
+    uint8_t bmi2;
+    uint8_t erms;
+    uint8_t invpcid;
+    uint8_t rtm;
+    uint8_t rdt_m_pqm;
+    uint8_t fcs_fds_deprecation;
+    uint8_t mpx;
+    uint8_t rdt_a_pqe;
+    uint8_t avx512_f;
+    uint8_t avx512_dq;
+    uint8_t rdseed;
+    uint8_t adx;
+    uint8_t smap;
+    uint8_t avx512_ifma;
+    uint8_t pmcommit;
+    uint8_t clflushopt;
+    uint8_t clwb;
+    uint8_t pt;
+    uint8_t avx512_pf;
+    uint8_t avx512_er;;
+    uint8_t avx512_cd;
+    uint8_t sha;
+    uint8_t avx512_bw;
+    uint8_t avx512_vl;
+    // ECX
+    uint8_t prefetchwt1;
+    uint8_t avx512_vbmi;
+    uint8_t umip;
+    uint8_t pku;
+    uint8_t ospke;
+    uint8_t waitpkg;
+    uint8_t avx512_vmbi2;
+    uint8_t cet_ss;
+    uint8_t gfni;
+    uint8_t vaes;
+    uint8_t vpclmulqdq;
+    uint8_t avx512_vnni;
+    uint8_t avx512_bitalg;
+    uint8_t tme_en;
+    uint8_t avx512_vpopcntdq;
+    uint8_t fzm;
+    uint8_t la57;
+    uint32_t mawau;
+    uint8_t rdpid;
+    uint8_t kl;
+    uint8_t bus_lock_detect;
+    uint8_t cldemote;
+    uint8_t mprr;
+    uint8_t movdiri;
+    uint8_t movdir64b;
+    uint8_t enqcmd;
+    uint8_t sgx_lc;
+    uint8_t pks4;
+    // EDX
+    uint8_t sgx_term;
+    uint8_t sgx_keys;
+    uint8_t avx512_4vnniw;
+    uint8_t avx512_4fmaps;
+    uint8_t fsrm;
+    uint8_t uintr;
+    // reserved
+    // reserved
+    uint8_t avx512_vp2intersect;
+    uint8_t srbds_ctrl;
+    uint8_t md_clear;
+    uint8_t rtm_always_abort;
+    // reserved
+    uint8_t rtm_force_abort;
+    uint8_t serialize;
+    uint8_t hybrid;
+    uint8_t tsxldtrk;
+    // reserved
+    uint8_t pconfig;
+    uint8_t lbr;
+    uint8_t cet_ibt;
+    // reserved
+    uint8_t iamx_bf16;
+    uint8_t avx512_fp16;
+    uint8_t iamx_tile;
+    uint8_t iamx_int8;
+    uint8_t spec_ctrl;
+    uint8_t stibp;
+    uint8_t l1d_flush;
+    uint8_t arch_capabilities;
+    uint8_t core_capabilities;
+    uint8_t ssbd;
+    /* --- Sub Leaf 1 --- */
+    // EAX
+    uint8_t sha512;
+    uint8_t sm3;
+    uint8_t sm4;
+    uint8_t rao_int;
+    uint8_t amx_vnni;
+    uint8_t avx512_bf16;
+    uint8_t lass;
+    uint8_t cmpccxadd;
+    uint8_t archperfmonext;
+    uint8_t dedup;
+    uint8_t fzrm;
+    uint8_t fsrs;
+    uint8_t rsrcs;
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    uint8_t fred;
+    uint8_t lkgs;
+    uint8_t wrmsrns;
+    uint8_t nmi_src;
+    uint8_t iamx_fp16;
+    uint8_t hreset;
+    uint8_t avx_ifma;
+    // reserved
+    // reserved
+    uint8_t lam;
+    uint8_t msrlist;
+    // reserved
+    // reserved
+    uint8_t invd_disable_post_bios_done;
+    uint8_t movrs;
+    // EBX
+    uint8_t ppin;
+    uint8_t pbndkb;
+    // reserved
+    uint8_t cpuid_maxval_lim_rmv;
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    uint8_t mpsadbw_512;
+    // reserved
+    uint8_t avx512_rao_fp;
+    // ECX
+    uint8_t rdt_m_asym;
+    uint8_t rdt_a_asym;
+    uint8_t reduced_isa;
+    // reserved
+    uint8_t sipi64;
+    uint8_t msr_imm;
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    uint8_t ace;
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // EDX
+    // reserved
+    uint8_t avx512_vnni_fp16;
+    uint8_t avx512_vnni_int8;
+    uint8_t avx512_ne_convert;
+    uint8_t avx_vnni_int8;
+    uint8_t avx_ne_convert;
+    // reserved
+    // reserved
+    uint8_t iamx_complex;
+    // reserved
+    uint8_t avx_vnni_int16;
+    uint8_t avx512_vnni_int16;
+    // reserved
+    uint8_t utmr;
+    uint8_t prefetchi;
+    uint8_t user_msr;
+    uint8_t avx512_bf16_ne;
+    uint8_t uiret_uif_from_rflags;
+    uint8_t cet_sss;
+    uint8_t avx10;
+    // reserved
+    uint8_t apx_f;
+    uint8_t sec_tee_attestation;
+    uint8_t mwait;
+    uint8_t slsm;
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    // reserved
+    /* --- Sub Leaf 2 --- */
+    // EDX
+    uint8_t psfd;
+    uint8_t ipred_ctrl;
+    uint8_t rrsba_ctrl;
+    uint8_t ddpu_u;
+    uint8_t bhi_ctrl;
+    uint8_t mcdt_no;
+    uint8_t uc_lock_disable;
+    uint8_t monitor_mitg_no;    
 } cpuid_feat7_t;
 
 // Address sizes from leaf 0x80000008.
 typedef struct {
-    uint8_t  phys_addr_bits;
-    uint8_t  lin_addr_bits;
-    uint8_t  guest_phys_bits;
-    uint8_t  clzero;
-    uint8_t  rstr_fp_err_ptrs;
-    uint8_t  wbnoinvd;
-    uint32_t max_nc;                // Max physical cores in package
-    uint8_t  apicid_size;
-    uint8_t  perf_tsc_size;
-} cpuid_addr_size_t;
+    // EBX
+    uint8_t clzero;
+    uint8_t retired_instr;
+    uint8_t xrstor_fp_err;
+    uint8_t invlpgb;
+    uint8_t rdpru;
+    uint8_t xotext; // Playstation 5????
+    uint8_t mbe;
+    // reserved
+    uint8_t mcommit;
+    uint8_t wbnoinvd;
+    uint8_t lbr_ext_v1;
+    // reserved
+    uint8_t ibpb;
+    uint8_t wbinvd_int;
+    uint8_t ibrs;
+    uint8_t stibp;
+    uint8_t ibrsalwayson;
+    uint8_t stibpalwayson;
+    uint8_t ibrs_preferred;
+    uint8_t ibrs_same_mode_protection;
+    uint8_t no_efer_lmsle;
+    uint8_t invlpgb_nested;
+    uint8_t lbr_tsx;
+    uint8_t ppin;
+    uint8_t ssbd;
+    uint8_t ssbd_legacy;
+    uint8_t ssbd_no;
+    uint8_t cpppc;
+    uint8_t psfd;
+    uint8_t btc_no;
+    uint8_t ibpb_ret;
+    uint8_t branch_sampling;
+    // EAX
+    uint32_t n_physical_addr_bits;
+    uint32_t n_linear_addr_bits;
+    uint32_t guest_physical_addr_size;
+    // ECX
+    uint32_t n_physical_threads; // -1
+    uint32_t apic_id_size;
+    uint32_t perf_timestep_counter_size;
+    // EDX
+    uint32_t invlpgb_max_pages;
+    uint32_t max_ecx_rdpru;
+} cpuid_ext_func2_t;
 
 // SVM features from leaf 0x8000000A (AMD).
 typedef struct {
@@ -591,21 +898,21 @@ typedef struct {
     uint32_t max_basic_leaf;
     uint32_t max_extended_leaf;
 
-    uint32_t features_ecx;
-    uint32_t features_edx;
 
     cpuid_proc_info_t   proc;
-    cpuid_feat7_t       feat7;
-    cpuid_addr_size_t   addr_size;
-    cpuid_freq_info_t   freq;
-    uint32_t            features_ext_ecx;
-    uint32_t            features_ext_edx;
     cpuid_feat_t        features;
     cpuid_ext_feat_t    features_ext;
+    cpuid_feat7_t       feat7;
 
-    // --- Embedded sub-structures ---
     cpuid_mwait_info_t  mwait;
     cpuid_thermal_info_t thermal;
+    
+    cpuid_ext_func2_t   addr_size;
+    cpuid_freq_info_t   freq;
+
+
+    // --- Embedded sub-structures ---
+
     cpuid_cache_info_t  caches[8];      // Leaf 4: usually 4-6 caches
     uint32_t            cache_count;
     cpuid_topology_t    topo[8];        // Leaf 0x0B: usually 2-3 levels
@@ -630,7 +937,7 @@ int      cpuid_get_cache_info(uint32_t index, cpuid_cache_info_t *info);
 void     cpuid_get_mwait_info(cpuid_mwait_info_t *info);
 void     cpuid_get_thermal_info(cpuid_thermal_info_t *info);
 void     cpuid_get_feat7(cpuid_feat7_t *info);
-void     cpuid_get_addr_size(cpuid_addr_size_t *info);
+void     cpuid_get_addr_size(cpuid_ext_func2_t *info);
 void     cpuid_get_svm_info(cpuid_svm_info_t *info);
 int      cpuid_get_topology(uint32_t level, cpuid_topology_t *info);
 void     cpuid_get_freq(uint32_t max_basic, cpuid_freq_info_t *info);

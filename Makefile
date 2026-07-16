@@ -1,48 +1,54 @@
+# --------------------------------------------------------------------
 # Toolchain
-CC := i686-elf-gcc
-CXX := i686-elf-g++
-LD := $(CC)
-
-BUILD_DIR := build
-
-# Directories
-SRC_DIRS := src \
-	shell \
-	fs \
-	boot \
-	arch/x86 \
-	drivers \
-	lib \
-	mm \
-	kernel \
-	screen \
-	apps \
-	tests \
-	logo \
-	ui \
-	hw \
-	gfx \
-	exec \
-	sync \
-	acpi
-
-# --------------------------------------------------------------------
-# ACPICA (vendored third-party — recursive glob, relaxed warnings)
-# --------------------------------------------------------------------
-# --------------------------------------------------------------------
-# ACPICA (explicit module selection)
 # --------------------------------------------------------------------
 
+CC       := i686-elf-gcc
+CXX      := i686-elf-g++
+LD       := $(CC)
+AS       := $(CC)
+
+AR       := i686-elf-ar
+NM       := i686-elf-nm
+SIZE     := i686-elf-size
+OBJDUMP  := i686-elf-objdump
+OBJCOPY  := i686-elf-objcopy
+READELF  := i686-elf-readelf
+
+RUSTC    ?= rustc
+CARGO    ?= cargo
+
 # --------------------------------------------------------------------
-# ACPICA (vendored third-party)
+# Project layout
 # --------------------------------------------------------------------
+
+TARGET     := kernel.elf
+BUILD_DIR  := build
+
+SRC_DIRS := \
+    src \
+    shell \
+    fs \
+    boot \
+    arch/x86 \
+    drivers \
+    lib \
+    mm \
+    kernel \
+    screen \
+    apps \
+    tests \
+    logo \
+    ui \
+    hw \
+    gfx \
+    exec \
+    sync \
+    acpi
+
 ACPICA_DIR := third_party/acpica/components
 ACPICA_INC := third_party/acpica/include
 
-ACPICA_CORE_SRCS := $(shell find $(ACPICA_DIR) -name '*.c')
-ACPICA_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ACPICA_CORE_SRCS))
-
-ACPICA_CFLAGS := \
+COMMON_CFLAGS := \
     -m32 \
     -ffreestanding \
     -fno-stack-protector \
@@ -51,70 +57,72 @@ ACPICA_CFLAGS := \
     -fno-pic \
     -fno-pie \
     -O2 \
-    -Wall \
-    -Wno-unused-parameter \
-    -Wno-sign-compare \
+    -MMD \
+    -MP \
     -D__OWLYNEST__ \
-    -I$(ACPICA_INC) \
     -Iinclude
 
-# Output
-TARGET := kernel.elf
-
-# Flags
 CFLAGS := \
-    -m32 \
-    -ffreestanding \
-    -fno-stack-protector \
-	-fno-asynchronous-unwind-tables \
-	-fno-unwind-tables \
-    -fno-pic \
-    -fno-pie \
-    -O2 \
+    $(COMMON_CFLAGS) \
     -Wall \
     -Wextra \
     -Werror \
-    -MMD \
-    -MP \
-    -Iinclude
+    -isystem $(ACPICA_INC)
 
-CFLAGS += -D__OWLYNEST__ -isystem third_party/acpica/include
+ACPICA_CFLAGS := \
+    $(COMMON_CFLAGS) \
+    -Wall \
+    -Wno-unused-parameter \
+    -Wno-sign-compare \
+    -I$(ACPICA_INC)
+
+CXXFLAGS := \
+    $(COMMON_FLAGS) \
+    -Wall \
+    -Wextra \
+    -Werror \
+    -fno-exceptions \
+    -fno-rtti \
+    -fno-threadsafe-statics \
+    -fno-use-cxa-atexit \
+    -std=c++20
+
+RUSTFLAGS := \
+    -C panic=abort \
+    -C opt-level=2 \
+    -C relocation-model=static \
+    -C force-frame-pointers=no
 
 LDFLAGS := \
-	-T boot/linker.ld \
-	-nostdlib
+    -T boot/linker.ld \
+    -nostdlib
 
 LIBS := -lgcc
 
-# --------------------------------------------------------------------
-# Source discovery
-# --------------------------------------------------------------------
+C_SRCS    := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
+CPP_SRCS  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.cpp))
+ASM_SRCS  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.S))
+RUST_SRCS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.rs))
+ACPICA_SRCS := $(shell find $(ACPICA_DIR) -name '*.c')
 
-C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
-C_SRCS := $(filter-out arch/x86/cpuid.c,$(C_SRCS))
-S_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.S))
+C_OBJS    := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
+CPP_OBJS  := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
+ASM_OBJS  := $(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SRCS))
+RUST_OBJS := $(patsubst %.rs,$(BUILD_DIR)/%.o,$(RUST_SRCS))
 
-OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
-OBJS += $(patsubst %.S,$(BUILD_DIR)/%.o,$(S_SRCS))
-OBJS += $(ACPICA_OBJS)
+OBJS := \
+    $(C_OBJS) \
+    $(CPP_OBJS) \
+    $(ASM_OBJS) \
+    $(ACPICA_OBJS) \
+    $(RUST_OBJS)
 
 DEPS := $(OBJS:.o=.d)
-DEPS += $(ACPICA_OBJS:.o=.d)
 
-# --------------------------------------------------------------------
-# Targets
-# --------------------------------------------------------------------
-
-.PHONY: all clean
-
-all: $(TARGET)
-
-$(TARGET): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-# --------------------------------------------------------------------
-# C compilation
-# --------------------------------------------------------------------
+define compile-c
+	@mkdir -p $(dir $@)
+	$(CC) $(1) -c $< -o $@
+endef
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -122,43 +130,44 @@ $(BUILD_DIR)/%.o: %.c
 
 $(ACPICA_OBJS): $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(ACPICA_CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(ACPICA_CFLAGS) -c $< -o $@
 
-# --------------------------------------------------------------------
-# Assembly compilation
-# --------------------------------------------------------------------
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.S
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(COMMON_FLAGS) -c $< -o $@
 
-# --------------------------------------------------------------------
-# Cleanup
-# --------------------------------------------------------------------
+$(BUILD_DIR)/%.o: %.rs
+	@mkdir -p $(dir $@)
+	$(RUSTC) \
+		--crate-type lib \
+		--emit=obj \
+		-C panic=abort \
+		-C opt-level=2 \
+		-C relocation-model=static \
+		-o $@ \
+		$<
 
-clean:
-	rm -rf $(BUILD_DIR) $(TARGET)
+.PHONY: \
+    clean \
+    size \
+    sections \
+    symbols \
+    readelf \
+    acpica-only
 
-# --------------------------------------------------------------------
-# Auto-generated dependencies
-# --------------------------------------------------------------------
+size:
+	$(SIZE) $(TARGET)
 
--include $(DEPS)
+sections:
+	$(OBJDUMP) -h $(TARGET)
 
-.PHONY: size sections symbols
+symbols:
+	$(NM) -n $(TARGET)
 
-size: kernel.elf
-	i686-elf-size kernel.elf
+readelf:
+	$(READELF) -l $(TARGET)
 
-sections: kernel.elf
-	i686-elf-objdump -h kernel.elf
-
-symbols: kernel.elf
-	i686-elf-nm -n kernel.elf | less
-
-readelf: kernel.elf
-	i686-elf-readelf -l kernel.elf
-
-.PHONY: acpica-only
-acpica-only: $(ACPICA_OBJS)
-	@echo "[x] ACPICA compiled cleanly: $(words $(ACPICA_OBJS)) objects"

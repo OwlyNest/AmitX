@@ -48,7 +48,7 @@ SRC_DIRS := \
 ACPICA_DIR := third_party/acpica/components
 ACPICA_INC := third_party/acpica/include
 
-COMMON_CFLAGS := \
+COMMON_FLAGS := \
     -m32 \
     -ffreestanding \
     -fno-stack-protector \

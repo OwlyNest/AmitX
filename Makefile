@@ -23,9 +23,10 @@ CARGO    ?= cargo
 
 TARGET     := kernel.elf
 BUILD_DIR  := build
+.DEFAULT_GOAL := all
+.DELETE_ON_ERROR:
 
 SRC_DIRS := \
-    src \
     shell \
     fs \
     boot \
@@ -35,7 +36,6 @@ SRC_DIRS := \
     mm \
     kernel \
     screen \
-    apps \
     tests \
     logo \
     ui \
@@ -63,14 +63,14 @@ COMMON_FLAGS := \
     -Iinclude
 
 CFLAGS := \
-    $(COMMON_CFLAGS) \
+    $(COMMON_FLAGS) \
     -Wall \
     -Wextra \
     -Werror \
     -isystem $(ACPICA_INC)
 
 ACPICA_CFLAGS := \
-    $(COMMON_CFLAGS) \
+    $(COMMON_FLAGS) \
     -Wall \
     -Wno-unused-parameter \
     -Wno-sign-compare \
@@ -99,15 +99,19 @@ LDFLAGS := \
 
 LIBS := -lgcc
 
-C_SRCS    := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
-CPP_SRCS  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.cpp))
-ASM_SRCS  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.S))
-RUST_SRCS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.rs))
+rwildcard = $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+C_SRCS    := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.c))
+CPP_SRCS  := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.cpp))
+ASM_SRCS  := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.S))
+RUST_SRCS := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.rs))
 ACPICA_SRCS := $(shell find $(ACPICA_DIR) -name '*.c')
 
 C_OBJS    := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
 CPP_OBJS  := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
 ASM_OBJS  := $(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SRCS))
+ACPICA_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ACPICA_SRCS))
+$(ACPICA_OBJS): CFLAGS := $(ACPICA_CFLAGS)
 RUST_OBJS := $(patsubst %.rs,$(BUILD_DIR)/%.o,$(RUST_SRCS))
 
 OBJS := \
@@ -117,47 +121,55 @@ OBJS := \
     $(ACPICA_OBJS) \
     $(RUST_OBJS)
 
-DEPS := $(OBJS:.o=.d)
+all: $(TARGET)
 
-define compile-c
-	@mkdir -p $(dir $@)
-	$(CC) $(1) -c $< -o $@
-endef
+$(TARGET): $(OBJS)
+	@printf " LD  %-6s\n" "$@"
+	@$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+DEPS := $(OBJS:.o=.d)
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(ACPICA_OBJS): $(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(ACPICA_CFLAGS) -c $< -o $@
+	@printf " CC  %-6s\n" "$<"
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	@printf " CXX  %-6s\n" "$<"
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.S
 	@mkdir -p $(dir $@)
-	$(CC) $(COMMON_FLAGS) -c $< -o $@
+	@printf " AS  %-6s\n" "$<"
+	@$(CC) $(COMMON_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.rs
 	@mkdir -p $(dir $@)
-	$(RUSTC) \
-		--crate-type lib \
-		--emit=obj \
-		-C panic=abort \
-		-C opt-level=2 \
-		-C relocation-model=static \
-		-o $@ \
-		$<
+	@printf " RS  %-6s\n" "$<"
+	@$(RUSTC) \
+        --crate-type lib \
+        --emit=obj \
+        $(RUSTFLAGS) \
+        -o $@ \
+        $<
+
+
+-include $(DEPS)
 
 .PHONY: \
+    all \
     clean \
     size \
     sections \
     symbols \
     readelf \
     acpica-only
+
+
+clean:
+	$(RM) -r $(BUILD_DIR)
+	$(RM) $(TARGET)
 
 size:
 	$(SIZE) $(TARGET)

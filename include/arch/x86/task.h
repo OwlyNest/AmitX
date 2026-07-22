@@ -25,9 +25,22 @@
 
 #define TASK_NAME_LEN        32
 #define TASK_STACK_SIZE      4096
-#define TASK_MAX_TASKS       64
-#define TASK_DEFAULT_QUANTUM 10
+#define TASK_MAX_TASKS       256
+#define TASK_DEFAULT_QUANTUM 2
 #define TASK_NO_TIMEOUT      0
+
+/* Priority levels: 0 = idle, 1-15 = dynamic, 16-30 = real-time,
+ * 31 = critical (DPCs, reaper).  Matches Win32-ish semantics.
+*/
+#define TASK_PRIO_IDLE       0
+#define TASK_PRIO_LOWEST     1
+#define TASK_PRIO_BELOW_NORM 4
+#define TASK_PRIO_NORMAL     8
+#define TASK_PRIO_ABOVE_NORM 12
+#define TASK_PRIO_HIGHEST    15
+#define TASK_PRIO_REALTIME   16
+#define TASK_PRIO_CRITICAL   31
+#define TASK_NUM_PRIOS       32
 
 /* --- Includes ---*/
 #include <stdint.h>
@@ -42,7 +55,8 @@ typedef enum {
     TASK_RUNNING,
     TASK_BLOCKED,
     TASK_SLEEPING,
-    TASK_TERMINATED
+    TASK_TERMINATED,
+    TASK_ZOMBIE
 } task_state_t;
 
 typedef enum {
@@ -67,7 +81,18 @@ typedef struct task {
     /* Scheduling */
     task_state_t state;
     sched_class_t sched_class;
+
+    /* Base priority: set at creation, never changes for RT,
+     * adjusted for dynamic classes.
+    */
+    uint8_t base_prio;
+    /* Current priority: may be boosted due to I/O completion,
+     * mutex priority inheritance, or foreground focus.
+    */
+    uint8_t cur_prio;
+
     uint32_t quantum;
+    uint32_t quantum_max; /* Quantum this task started with*/
     uint32_t sleep_until;
 
     /* Saved CPU context (callee-saved + eflags + esp) */
@@ -85,7 +110,7 @@ typedef struct task {
     void *kernel_stack;
     uint32_t kernel_stack_size;
 
-    /* Scheduler links */
+    /* Scheduler links -- doubly-linked, one list per priority */
     struct task *next;
     struct task *prev;
 
@@ -97,6 +122,11 @@ typedef struct task {
     struct task *wait_prev;
     struct task_queue *wait_queue;
     wake_reason_t wake_reason;
+
+    /* Timer wheel linkage for sleep/timeout */
+    struct task *timer_next;
+    struct task *timer_prev;
+    uint32_t timer_bucket;
 } task_t;
 
 typedef struct task_queue {
@@ -119,6 +149,12 @@ typedef struct scheduler_class {
  * ======================================================================= */
 void task_init(void);
 task_t *task_create(void (*entry)(void), const char *name);
+task_t *task_create_prio(void (*entry)(void), const char *name,
+                         uint8_t priority);
+task_t *task_create_arg(void (*entry)(void *), void *arg,
+                        const char *name);
+task_t *task_create_arg_prio(void (*entry)(void *), void *arg,
+                             const char *name, uint8_t priority);
 void task_destroy(task_t *task);
 void task_exit(void);
 
@@ -148,12 +184,13 @@ task_t *task_find(tid_t tid);
 int task_count(void);
 
 /* ==========================================================================
- * Argument-based creation (for callbacks needing context, e.g. ACPICA)
+ * Priority management
  * ======================================================================= */
-task_t *task_create_arg(void (*entry)(void *), void *arg, const char *name);
+void task_boost_priority(task_t *task, uint8_t new_prio);
+void task_unboost_priority(task_t *task);
 
 /* ==========================================================================
- * Wait queues — building block for mutexes and semaphores
+ * Wait queues -- building block for mutexes and semaphores
  * ======================================================================= */
 void task_queue_init(task_queue_t *q);
 void task_queue_push(task_queue_t *q, task_t *task);
@@ -161,5 +198,15 @@ task_t *task_queue_pop(task_queue_t *q);
 void task_queue_remove(task_queue_t *q, task_t *task);
 wake_reason_t task_block_on(task_queue_t *q, uint32_t timeout_ms);
 void task_wake_one(task_queue_t *q);
+void task_wake_all_queue(task_queue_t *q);
+
+/* ==========================================================================
+ * Timer wheel for efficient sleep/timeout management
+ * ======================================================================= */
+void timer_wheel_insert(task_t *task, uint32_t timeout_ticks);
+void timer_wheel_remove(task_t *task);
+void timer_wheel_tick(void);
+
+task_t **task_get_table(void);
 
 #endif

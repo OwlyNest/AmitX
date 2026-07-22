@@ -22,8 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include "arch/x86/task.h"
-#include "sync/spinlock.h"
+#include <arch/x86/task.h>
+#include <sync/spinlock.h>
 #include <sync/mutex.h>
 #include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
@@ -39,6 +39,7 @@ void mutex_init(mutex_t *m) {
 
 	m->locked = 0;
 	m->owner = NULL;
+	m->owner_orig_prio = 0;
 	spinlock_init(&m->lock);
 	task_queue_init(&m->waiters);
 }
@@ -52,6 +53,9 @@ int mutex_trylock(mutex_t *m) {
 	if (!m->locked) {
 		m->locked = 1;
 		m->owner = task_current();
+		if (m->owner) {
+			m->owner_orig_prio = m->owner->base_prio;
+		}
 		aquired = 1;
 	}
 
@@ -60,26 +64,59 @@ int mutex_trylock(mutex_t *m) {
 }
 
 int mutex_lock(mutex_t *m, uint32_t timeout_ms) {
-	if (!m) return 0;
-	if (mutex_trylock(m)) return 1;
+    if (!m) return 0;
 
-	for (;;) {
-		uint32_t wait_ms = (timeout_ms == MUTEX_WAIT_FOREVER) ? TASK_NO_TIMEOUT : timeout_ms;
-		wake_reason_t reason = task_block_on(&m->waiters, wait_ms);
+    task_t *self = task_current();
 
-		if (reason == WAKE_TIMEOUT) return 0;
-		if (mutex_trylock(m)) return 1;
-		if (timeout_ms != MUTEX_WAIT_FOREVER) return 0;
-	}
+    for (;;) {
+        uint32_t flags = spinlock_acquire(&m->lock);
+
+        if (!m->locked) {
+            m->locked = 1;
+            m->owner = self;
+            if (self) m->owner_orig_prio = self->base_prio;
+            spinlock_release(&m->lock, flags);
+            return 1;
+        }
+
+        if (m->owner->cur_prio < self->cur_prio) {
+            task_boost_priority(m->owner, self->cur_prio);
+        }
+
+        uint32_t wait_ms = (timeout_ms == MUTEX_WAIT_FOREVER) ? TASK_NO_TIMEOUT : timeout_ms;
+
+        /* task_block_on pushes onto m->waiters and calls schedule()
+         * while we're still holding m->lock (interrupts off). Nobody
+         * can clear m->locked and check m->waiters until they also
+         * acquire m->lock -- so unlock can never run in the window
+         * between "we saw it locked" and "we're on the list".
+        */
+        wake_reason_t reason = task_block_on(&m->waiters, wait_ms);
+
+        spinlock_release(&m->lock, flags);
+
+        if (reason == WAKE_TIMEOUT) return 0;
+        /* Signaled -- loop back, re-check !m->locked under the lock */
+    }
 }
 
 void mutex_unlock(mutex_t *m) {
-	if (!m) return;
+    if (!m) return;
 
-	uint32_t flags = spinlock_acquire(&m->lock);
-	m->locked = 0;
-	m->owner = NULL;
-	spinlock_release(&m->lock, flags);
+    uint32_t flags = spinlock_acquire(&m->lock);
 
-	task_wake_one(&m->waiters);
+    if (m->owner && m->owner->cur_prio != m->owner_orig_prio) {
+        task_unboost_priority(m->owner);
+    }
+
+    m->locked = 0;
+    m->owner = NULL;
+    m->owner_orig_prio = 0;
+
+    /* Wake while still holding m->lock -- same reasoning as above,
+     * mirrored from the other side.
+    */
+    task_wake_one(&m->waiters);
+
+    spinlock_release(&m->lock, flags);
 }

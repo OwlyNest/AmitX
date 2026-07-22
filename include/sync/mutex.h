@@ -23,6 +23,7 @@
 #ifndef __SYNC_MUTEX_H__
 #define __SYNC_MUTEX_H__
 
+#include <stdint.h>
 #define MUTEX_NO_TIMEOUT 0
 #define MUTEX_WAIT_FOREVER 0xFFFFFFff
 /* --- Includes ---*/
@@ -32,6 +33,7 @@
 typedef struct mutex {
     int locked;
     task_t *owner;
+	uint8_t owner_orig_prio; /* Saved priority before boost */
     spinlock_t lock;
     task_queue_t waiters;
 } mutex_t;

@@ -151,6 +151,40 @@ static int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
 }
 
 /* Checksum */
-static uint32_t checksum_compute(const void *data, size_t len);
-static void header_checksum_update(smkfs_header_t *h, const void *data, size_t len);
-static int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len);
+static uint32_t checksum_compute(const void *data, size_t len) {
+	const uint8_t *ptr = (const uint8_t *)data;
+	uint32_t sum = 0xFFFFFF;
+
+	for (size_t i = 0; i < len; i++) {
+		sum ^= ptr[i];
+		for (int j = 0; j < 8; j++) {
+			if (sum & 1) {
+				sum = (sum >> 1) ^ 0xEDB88320;
+			} else {
+				sum >>= 1;
+			}
+		}
+	}
+
+	return ~sum;
+}
+
+static void header_checksum_update(smkfs_header_t *h, const void *data, size_t len) {
+	h->checksum = 0; // compute assumes checksum == 0;
+	h->checksum = checksum_compute(data, len);
+}
+
+static int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len) {
+	uint32_t saved = h->checksum;
+
+	smkfs_header_t *mutable_h = (smkfs_header_t *)h;
+	mutable_h->checksum = 0;
+	uint32_t computed = checksum_compute(data, len);
+	mutable_h->checksum = computed;
+
+	if (computed != saved) {
+		return -1;
+	}
+
+	return 0;
+}

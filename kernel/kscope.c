@@ -95,8 +95,7 @@ static int kscope_check_deps(const kscope_node_t *node) {
 /* ==========================================================================
  * Mark a node and all its un-initialized dependents as FAILED
  * ======================================================================= */
-static void kscope_mark_failed(kscope_node_t *node,
-                                const char *reason) {
+static void kscope_mark_failed(kscope_node_t *node, const char *reason) {
     node->state = KSCOPE_STATE_FAILED;
     printk("[kscope] %s: FAILED (%s)\n", node->name, reason);
 

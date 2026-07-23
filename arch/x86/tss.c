@@ -23,7 +23,6 @@
 
 /* --- Includes ---*/
 #include <arch/x86/gdt.h>
-#include <screen/printk.h>
 #include <internal/kscope.h>
 /* --- Typedefs - Structs - Enums ---*/
 

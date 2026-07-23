@@ -23,12 +23,20 @@
 
 /* --- Includes ---*/
 #include <fs/smkfs.h>
+#include <hw/ide.h>
+#include <screen/printk.h>
+#include <lib/string.h>
+#include <mm/heap.h>
 #include <stdint.h>
 #include <stddef.h>
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-
+static smkfs_superblock_t sb;
+static int mounted = 0;
+static uint8_t drive_num = 0;
+static uint64_t journal_next_sequence = 1;
+static int journal_in_transaction = 0;
 /* --- Prototypes ---*/
 
 /* ~~~ Level 4: Internal ~~~ */
@@ -80,3 +88,69 @@ static int journal_log_alloc(uint64_t block, uint32_t count);
 static int journal_log_free(uint64_t block, uint32_t count);
 static int journal_commit(void);
 /* --- Functions ---*/
+
+
+/* ~~~ Level 4: Internal ~~~ */
+
+/* Block I/O */
+
+static int read_block(uint64_t block, void *buf) {
+	uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
+	uint32_t lba = (uint32_t)(block * sectors);
+	uint8_t *ptr = (uint8_t *)buf;
+
+
+	for (uint8_t i = 0; i < sectors; i++) {
+		if (ide_read_sectors(drive_num, lba + 1, 1, (uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int write_block(uint64_t block, const void *buf) {
+	uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
+	uint32_t lba = (uint32_t)(block * sectors);
+	const uint8_t *ptr = (const uint8_t *)buf;
+
+	for (uint8_t i = 0; i < sectors; i++) {
+		if (ide_write_sectors(drive_num, lba + 1, 1, (const uint16_t *)(ptr + i *SMKFS_SECTOR_SIZE)) != 0) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+/* Header */
+
+static void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags) {
+	memcpy(h->magic, SMKFS_MAGIC, 4);
+	h->version = SMKFS_VERSION;
+	h->type = type;
+	h->length = length;
+	h->flags = flags;
+	h->checksum = 0;
+}
+
+static int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
+	if (memcmp(h->magic, SMKFS_MAGIC, 4) != 0) {
+		return -1;
+	}
+
+	if (h->version != SMKFS_VERSION) {
+		return -1;
+	}
+
+	if (h->type != expected_type) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Checksum */
+static uint32_t checksum_compute(const void *data, size_t len);
+static void header_checksum_update(smkfs_header_t *h, const void *data, size_t len);
+static int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len);

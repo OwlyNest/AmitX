@@ -188,3 +188,111 @@ static int header_checksum_verify(const smkfs_header_t *h, const void *data, siz
 
 	return 0;
 }
+
+/* Bitmap */
+static void bitmap_set(uint64_t block) {
+	if (block < sb.data_start) return;
+	uint64_t idx = block - sb.data_start;
+	uint64_t byte_offset = idx / 8;
+	uint64_t bit_offset = idx % 8;
+	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+	read_block(bitmap_block, buf);
+	buf[block_offset] |= (1 << bit_offset);
+	write_block(bitmap_block, buf);
+}
+
+static void bitmap_clear(uint64_t block) {
+	if (block < sb.data_start) return;
+	uint64_t idx = block - sb.data_start;
+	uint64_t byte_offset = idx / 8;
+	uint64_t bit_offset = idx % 8;
+	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+	read_block(bitmap_block, buf);
+	buf[block_offset] &= ~(1 << bit_offset);
+	write_block(bitmap_block, buf);
+}
+
+static int bitmap_test(uint64_t block){
+	if (block < sb.data_start) return -1;
+	uint64_t idx = block - sb.data_start;
+	uint64_t byte_offset = idx / 8;
+	uint64_t bit_offset = idx % 8;
+	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+	read_block(bitmap_block, buf);
+	return (buf[block_offset] >> bit_offset) & 1;
+}
+
+static uint64_t bitmap_alloc_range(uint32_t count) {
+	if (count == 0) return -1;
+
+	uint64_t total_bits = sb.total_blocks - sb.data_start;
+	uint64_t run_start = 0;
+	uint32_t run_len = 0;
+
+	for (uint64_t bb = 0; bb < sb.bitmap_length; bb++) {
+		uint8_t buf[SMKFS_BLOCK_SIZE];
+		read_block(sb.bitmap_start + bb, buf);
+
+		for (int bo = 0; bo < SMKFS_BLOCK_SIZE; bo++) {
+			uint8_t byte = buf[bo];
+			for (int bi = 0; bi < 8; bi++) {
+				uint64_t global_bit = bb * SMKFS_BLOCK_SIZE * 8 + bo * 8 + bi;
+				if (global_bit >= total_bits) break;
+
+				if ((byte >> bi) & 1) {
+					run_len = 0;
+				} else {
+					if (run_len == 0) run_start = global_bit;
+					run_len++;
+					if (run_len >= count) {
+						uint64_t first_block = sb.data_start + run_start;
+						for (uint32_t j = 0; j < count; j++) {
+							uint64_t idx = run_start + j;
+                            uint64_t j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
+                            uint64_t j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+                            uint64_t j_bi = idx % 8;
+                            uint8_t j_buf[SMKFS_BLOCK_SIZE];
+                            read_block(sb.bitmap_start + j_bb, j_buf);
+                            j_buf[j_bo] |= (1 << j_bi);
+                            write_block(sb.bitmap_start + j_bb, j_buf);
+						}
+						sb.free_blocks -= count;
+						return first_block;
+					}
+				}
+			}
+		}
+	}
+	return -1;
+}
+
+static uint64_t bitmap_alloc(void) {
+	return bitmap_alloc_range(1);
+}
+
+static void bitmap_free_range(uint64_t start, uint32_t count) {
+	for (uint32_t i = 0; i < count; i++) {
+		uint64_t block = start + i;
+        if (block < sb.data_start) continue;
+        uint64_t idx = block - sb.data_start;
+        uint64_t bb = idx / (SMKFS_BLOCK_SIZE * 8);
+        uint64_t bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+        uint64_t bi = idx % 8;
+
+        uint8_t buf[SMKFS_BLOCK_SIZE];
+        read_block(sb.bitmap_start + bb, buf);
+        buf[bo] &= ~(1 << bi);
+        write_block(sb.bitmap_start + bb, buf);
+	}
+	sb.free_blocks += count;
+}
+

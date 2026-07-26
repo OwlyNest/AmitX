@@ -26,6 +26,7 @@
 /* Magic And Version */
 #define SMKFS_MAGIC 			"SmKF"
 #define SMKFS_VERSION 			1
+#define SMKFS_NAME_LEN          256
 
 /* Block Size */
 #define SMKFS_SECTOR_SIZE 		512
@@ -66,6 +67,7 @@
 #define SMKFS_FLA_ENCRYPTED 	0x00000008 // 0b1000
 
 /* B+ Tree Nodes */
+#define SMKFS_BTR_MAX_KEY 255
 #define SMKFS_BTN_LEAF 0x1
 #define SMKFS_BTN_ROOT 0x2
 /* --- Includes ---*/
@@ -99,28 +101,27 @@ typedef struct {
     uint32_t length;
 } smkfs_attr_header_t;
 
-/* B+ tree key/value */
-typedef struct {
-    uint64_t key_hash;
-    uint64_t record_id;
-} smkfs_btree_leaf_entry_t;
-
-typedef struct {
-    uint64_t child_block;
-    uint64_t key_hash;
-} smkfs_btree_index_entry_t;
-
-/* B+ tree node header */
+/* B+ tree node header — unchanged */
 typedef struct {
     smkfs_header_t header;
-
-    uint64_t parent_block;
-
-    uint32_t flags;
-    uint32_t key_count;
-
-    uint64_t right_sibling;
+    uint64_t       parent_block;
+    uint32_t       flags;
+    uint32_t       key_count;
+    uint64_t       right_sibling;
 } smkfs_btree_node_t;
+
+/* In-memory leaf entry */
+typedef struct {
+    uint64_t record_id;
+    char     name[SMKFS_NAME_LEN];
+} smkfs_btree_leaf_entry_t;
+
+/* In-memory index entry */
+typedef struct {
+    uint64_t child_block;
+    char     prefix[16];
+    uint8_t  prefix_len;
+} smkfs_btree_index_entry_t;
 
 /* Record header */
 typedef struct {
@@ -165,7 +166,7 @@ typedef struct {
 /* Directory entry (in memory) */
 typedef struct {
 	uint64_t record_id;
-	char     name[256];
+	char     name[SMKFS_NAME_LEN];
 } smkfs_dirent_t;
 /* --- Globals ---*/
 

@@ -20,6 +20,7 @@
 */
 
 /* --- Macros ---*/
+#define SMKFS_UNUSED __attribute__((unused))
 
 /* --- Includes ---*/
 #include <fs/smkfs.h>
@@ -32,11 +33,11 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-static smkfs_superblock_t sb;
-static int mounted = 0;
-static uint8_t drive_num = 0;
-static uint64_t journal_next_sequence = 1;
-static int journal_in_transaction = 0;
+static smkfs_superblock_t SMKFS_UNUSED sb;
+static int SMKFS_UNUSED mounted = 0;
+static uint8_t SMKFS_UNUSED drive_num = 0;
+static uint64_t SMKFS_UNUSED journal_next_sequence = 1;
+static int SMKFS_UNUSED journal_in_transaction = 0;
 /* --- Prototypes ---*/
 
 /* ~~~ Level 4: Internal ~~~ */
@@ -66,7 +67,7 @@ static int record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, 
 static int record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf);
 static uint64_t record_alloc(uint16_t object_type);
 static void record_free(uint64_t record_id);
-static int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t out_len);
+static int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t *out_len);
 static int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len);
 static int record_remove_attr(void *attr_buf, uint16_t attr_type);
 
@@ -76,10 +77,10 @@ static int extent_add(uint64_t record_id, uint64_t logical_block, uint64_t physi
 static void extent_remove_all(uint64_t record_id);
 
 /* B+ tree */
-static int btree_search(uint64_t root_block, uint64_t key_hash, uint64_t *out_value);
-static int btree_insert(uint64_t root_block, uint64_t key_hash, uint64_t value, uint64_t *new_root);
-static int btree_delete(uint64_t root_block, uint64_t key_hash, uint64_t *new_root);
-static int btree_iterate(uint64_t root_block, int (*cb)(uint64_t key, uint64_t value, void *ctx), void *ctx);
+static int btree_search(uint64_t root_block, const char *key, uint64_t *out_value);
+static int btree_insert(uint64_t root_block, const char *key, uint64_t value, uint64_t *new_root);
+static int btree_delete(uint64_t root_block, const char *key, uint64_t *new_root);
+static int btree_iterate(uint64_t root_block, int (*cb)(const char *key, uint64_t value, void *ctx), void *ctx);
 
 /* Journal */
 static int journal_start_transaction(void);
@@ -89,19 +90,61 @@ static int journal_log_free(uint64_t block, uint32_t count);
 static int journal_commit(void);
 /* --- Functions ---*/
 
+static int SMKFS_UNUSED btree_search(uint64_t root_block, const char *key, uint64_t *out_value) {
+	(void)root_block; (void)key; (void)out_value;
+	return -1;
+}
+
+static int SMKFS_UNUSED btree_insert(uint64_t root_block, const char *key, uint64_t value, uint64_t *new_root) {
+	(void)root_block; (void)key; (void)value; (void)new_root;
+	return -1;
+}
+
+static int SMKFS_UNUSED btree_delete(uint64_t root_block, const char *key, uint64_t *new_root) {
+	(void)root_block; (void)key; (void)new_root;
+	return -1;
+}
+
+static int SMKFS_UNUSED btree_iterate(uint64_t root_block, int (*cb)(const char *key, uint64_t value, void *ctx), void *ctx) {
+	(void)root_block; (void)cb; (void)ctx;
+	return -1;
+}
+
+static int SMKFS_UNUSED journal_start_transaction(void) {
+	return 0;
+}
+
+static int SMKFS_UNUSED journal_log_write(uint64_t block, const void *old_data, const void *new_data, size_t len) {
+	(void)block; (void)old_data; (void)new_data; (void)len;
+	return 0;
+}
+
+static int SMKFS_UNUSED journal_log_alloc(uint64_t block, uint32_t count) {
+	(void)block; (void)count;
+	return 0;
+}
+
+static int SMKFS_UNUSED journal_log_free(uint64_t block, uint32_t count) {
+	(void)block; (void)count;
+	return 0;
+}
+
+static int SMKFS_UNUSED journal_commit(void) {
+	return 0;
+}
+
 
 /* ~~~ Level 4: Internal ~~~ */
 
 /* Block I/O */
 
-static int read_block(uint64_t block, void *buf) {
+static int SMKFS_UNUSED read_block(uint64_t block, void *buf) {
 	uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
 	uint32_t lba = (uint32_t)(block * sectors);
 	uint8_t *ptr = (uint8_t *)buf;
 
-
 	for (uint8_t i = 0; i < sectors; i++) {
-		if (ide_read_sectors(drive_num, lba + 1, 1, (uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
+		if (ide_read_sectors(drive_num, lba, 1, (uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
 			return -1;
 		}
 	}
@@ -109,13 +152,13 @@ static int read_block(uint64_t block, void *buf) {
 	return 0;
 }
 
-static int write_block(uint64_t block, const void *buf) {
+static int SMKFS_UNUSED write_block(uint64_t block, const void *buf) {
 	uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
 	uint32_t lba = (uint32_t)(block * sectors);
 	const uint8_t *ptr = (const uint8_t *)buf;
 
 	for (uint8_t i = 0; i < sectors; i++) {
-		if (ide_write_sectors(drive_num, lba + 1, 1, (const uint16_t *)(ptr + i *SMKFS_SECTOR_SIZE)) != 0) {
+		if (ide_write_sectors(drive_num, lba, 1, (const uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
 			return -1;
 		}
 	}
@@ -125,7 +168,7 @@ static int write_block(uint64_t block, const void *buf) {
 
 /* Header */
 
-static void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags) {
+static void SMKFS_UNUSED header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags) {
 	memcpy(h->magic, SMKFS_MAGIC, 4);
 	h->version = SMKFS_VERSION;
 	h->type = type;
@@ -134,7 +177,7 @@ static void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint3
 	h->checksum = 0;
 }
 
-static int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
+static int SMKFS_UNUSED header_validate(const smkfs_header_t *h, uint16_t expected_type) {
 	if (memcmp(h->magic, SMKFS_MAGIC, 4) != 0) {
 		return -1;
 	}
@@ -152,9 +195,9 @@ static int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
 
 /* Checksum */
 
-static uint32_t checksum_compute(const void *data, size_t len) {
+static uint32_t SMKFS_UNUSED checksum_compute(const void *data, size_t len) {
 	const uint8_t *ptr = (const uint8_t *)data;
-	uint32_t sum = 0xFFFFFF;
+	uint32_t sum = 0xFFFFFFFF;
 
 	for (size_t i = 0; i < len; i++) {
 		sum ^= ptr[i];
@@ -170,18 +213,22 @@ static uint32_t checksum_compute(const void *data, size_t len) {
 	return ~sum;
 }
 
-static void header_checksum_update(smkfs_header_t *h, const void *data, size_t len) {
+static void SMKFS_UNUSED header_checksum_update(smkfs_header_t *h, const void *data, size_t len) {
 	h->checksum = 0; // compute assumes checksum == 0;
 	h->checksum = checksum_compute(data, len);
 }
 
-static int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len) {
+static int SMKFS_UNUSED header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len) {
 	uint32_t saved = h->checksum;
+	uint8_t tmp_buf[SMKFS_BLOCK_SIZE];
 
-	smkfs_header_t *mutable_h = (smkfs_header_t *)h;
-	mutable_h->checksum = 0;
-	uint32_t computed = checksum_compute(data, len);
-	mutable_h->checksum = computed;
+	if (len > sizeof(tmp_buf)) {
+		return -1;
+	}
+
+	memcpy(tmp_buf, data, len);
+	((smkfs_header_t *)tmp_buf)->checksum = 0;
+	uint32_t computed = checksum_compute(tmp_buf, len);
 
 	if (computed != saved) {
 		return -1;
@@ -192,7 +239,7 @@ static int header_checksum_verify(const smkfs_header_t *h, const void *data, siz
 
 /* Bitmap */
 
-static void bitmap_set(uint64_t block) {
+static void SMKFS_UNUSED bitmap_set(uint64_t block) {
 	if (block < sb.data_start) return;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -206,7 +253,7 @@ static void bitmap_set(uint64_t block) {
 	write_block(bitmap_block, buf);
 }
 
-static void bitmap_clear(uint64_t block) {
+static void SMKFS_UNUSED bitmap_clear(uint64_t block) {
 	if (block < sb.data_start) return;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -220,7 +267,7 @@ static void bitmap_clear(uint64_t block) {
 	write_block(bitmap_block, buf);
 }
 
-static int bitmap_test(uint64_t block){
+static int SMKFS_UNUSED bitmap_test(uint64_t block) {
 	if (block < sb.data_start) return -1;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -237,8 +284,8 @@ static int bitmap_test(uint64_t block){
  * TODO:
  * optimize
 */
-static uint64_t bitmap_alloc_range(uint32_t count) {
-	if (count == 0) return -1;
+static uint64_t SMKFS_UNUSED bitmap_alloc_range(uint32_t count) {
+	if (count == 0) return 0;
 
 	uint64_t total_bits = sb.total_blocks - sb.data_start;
 	uint64_t run_start = 0;
@@ -278,14 +325,14 @@ static uint64_t bitmap_alloc_range(uint32_t count) {
 			}
 		}
 	}
-	return -1;
+	return 0;
 }
 
-static uint64_t bitmap_alloc(void) {
+static uint64_t SMKFS_UNUSED bitmap_alloc(void) {
 	return bitmap_alloc_range(1);
 }
 
-static void bitmap_free_range(uint64_t start, uint32_t count) {
+static void SMKFS_UNUSED bitmap_free_range(uint64_t start, uint32_t count) {
 	for (uint32_t i = 0; i < count; i++) {
 		uint64_t block = start + i;
         if (block < sb.data_start) continue;
@@ -304,7 +351,7 @@ static void bitmap_free_range(uint64_t start, uint32_t count) {
 
 /* Record */
 
-static int record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
+static int SMKFS_UNUSED record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
 	if (read_block(record_id, block) != 0) return -1;
 
@@ -320,7 +367,7 @@ static int record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, 
 	return (int)attr_len;
 }
 
-static int record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf) {
+static int SMKFS_UNUSED record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
 	size_t total_len = rec->header.length;
 
@@ -334,24 +381,28 @@ static int record_write(uint64_t record_id, const smkfs_record_t *rec, const voi
 	return write_block(record_id, block);
 }
 
-static uint64_t record_alloc(uint16_t object_type) {
+static uint64_t SMKFS_UNUSED record_alloc(uint16_t object_type) {
 	uint64_t block = bitmap_alloc();
-	if (block == 0) return -1;
-	
+	if (block == 0) return 0;
+
 	smkfs_record_t rec;
-	header_init(&rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t), 0);
+	header_init(&rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), 0);
 	rec.record_id = block;
 	rec.object_type = object_type;
 	rec.attr_count = 0;
 
-	uint8_t term = 0;
+	smkfs_attr_header_t term;
+	term.type = SMKFS_ATTRT_END;
+	term.flags = 0;
+	term.id = 0;
+	term.length = 0;
 	record_write(block, &rec, &term);
 
 	sb.record_count++;
 	return block;
 }
 
-static void record_free(uint64_t record_id) {
+static void SMKFS_UNUSED record_free(uint64_t record_id) {
 	extent_remove_all(record_id);
 
 	uint8_t block[SMKFS_BLOCK_SIZE];
@@ -366,7 +417,7 @@ static void record_free(uint64_t record_id) {
 	sb.record_count--;
 }
 
-static int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t out_len) {
+static int SMKFS_UNUSED record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t *out_len) {
 	const uint8_t *ptr = (const uint8_t *)attr_buf;
 
 	while (1) {
@@ -374,14 +425,15 @@ static int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out
 		if (ah->type == SMKFS_ATTRT_END) break;
 		if (ah->type == attr_type) {
 			if (out_attr) *out_attr = (void *)(ptr + sizeof(smkfs_attr_header_t));
-			if (out_len) out_len = ah->length;
+			if (out_len) *out_len = ah->length;
+			return 0;
 		}
 		ptr += sizeof(smkfs_attr_header_t) + ah->length;
 	}
 	return -1;
 }
 
-static int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len) {
+static int SMKFS_UNUSED record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len) {
 	uint8_t *ptr = (uint8_t *)attr_buf;
 	size_t used = 0;
 
@@ -417,7 +469,7 @@ static int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, 
 	return 0;
 }
 
-static int record_remove_attr(void *attr_buf, uint16_t attr_type) {
+static int SMKFS_UNUSED record_remove_attr(void *attr_buf, uint16_t attr_type) {
     uint8_t *ptr = (uint8_t *)attr_buf;
     uint8_t *found = NULL;
     size_t found_len = 0;
@@ -434,14 +486,14 @@ static int record_remove_attr(void *attr_buf, uint16_t attr_type) {
 
     if (!found) return 0;
 
-    size_t tail = (size_t)(ptr - (found + found_len)) + sizeof(smkfs_attr_header_t);
+    size_t tail = (size_t)(ptr - (found + found_len));
     memmove(found, found + found_len, tail);
     return 0;
 }
 
 /* Extent */
 
-static int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out) {
+static int SMKFS_UNUSED extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out) {
 	uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
 	smkfs_record_t rec;
 	int attr_len = record_read(record_id, &rec, attr_buf, sizeof(attr_buf));
@@ -449,7 +501,7 @@ static int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_exte
 
 	void *attr_data;
 	size_t attr_data_len = 0;
-	if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &attr_data, attr_data_len) != 0) {
+	if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &attr_data, &attr_data_len) != 0) {
 		return -1;
 	}
 
@@ -469,7 +521,7 @@ static int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_exte
  * TODO:
  * optimize
 */
-static int extent_add(uint64_t record_id, uint64_t logical_block,
+static int SMKFS_UNUSED extent_add(uint64_t record_id, uint64_t logical_block,
         uint64_t physical_block, uint32_t count) {
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec = (smkfs_record_t *)block;
@@ -484,7 +536,7 @@ static int extent_add(uint64_t record_id, uint64_t logical_block,
     smkfs_extent_t extents[32];
     uint32_t num_extents = 0;
 
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, existing_len) == 0) {
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) == 0) {
         num_extents = existing_len / sizeof(smkfs_extent_t);
         if (num_extents >= 32) return -1;
         memcpy(extents, existing, existing_len);
@@ -516,7 +568,7 @@ static int extent_add(uint64_t record_id, uint64_t logical_block,
     return write_block(record_id, block);
 }
 
-static void extent_remove_all(uint64_t record_id) {
+static void SMKFS_UNUSED extent_remove_all(uint64_t record_id) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
 	smkfs_record_t *rec = (smkfs_record_t *)block;
 
@@ -526,7 +578,7 @@ static void extent_remove_all(uint64_t record_id) {
 
 	void *existing;
 	size_t existing_len = 0;
-	if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, existing_len) != 0) {
+	if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) != 0) {
 		return;
 	}
 

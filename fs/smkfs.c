@@ -208,7 +208,10 @@ static void SMKFS_UNUSED bitmap_set(uint64_t block) {
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
 	uint8_t buf[SMKFS_BLOCK_SIZE];
-	read_block(bitmap_block, buf);
+	if (read_block(bitmap_block, buf) != 0) return;
+	if (((buf[block_offset] >> bit_offset) & 1) == 0) {
+		sb.free_blocks--;
+	}
 	buf[block_offset] |= (1 << bit_offset);
 	write_block(bitmap_block, buf);
 }
@@ -222,7 +225,10 @@ static void SMKFS_UNUSED bitmap_clear(uint64_t block) {
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
 	uint8_t buf[SMKFS_BLOCK_SIZE];
-	read_block(bitmap_block, buf);
+	if (read_block(bitmap_block, buf) != 0) return;
+	if (((buf[block_offset] >> bit_offset) & 1) != 0) {
+		sb.free_blocks++;
+	}
 	buf[block_offset] &= ~(1 << bit_offset);
 	write_block(bitmap_block, buf);
 }
@@ -236,7 +242,7 @@ static int SMKFS_UNUSED bitmap_test(uint64_t block) {
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
 	uint8_t buf[SMKFS_BLOCK_SIZE];
-	read_block(bitmap_block, buf);
+	if (read_block(bitmap_block, buf) != 0) return -1;
 	return (buf[block_offset] >> bit_offset) & 1;
 }
 
@@ -253,7 +259,7 @@ static uint64_t SMKFS_UNUSED bitmap_alloc_range(uint32_t count) {
 
 	for (uint64_t bb = 0; bb < sb.bitmap_length; bb++) {
 		uint8_t buf[SMKFS_BLOCK_SIZE];
-		read_block(sb.bitmap_start + bb, buf);
+		if (read_block(sb.bitmap_start + bb, buf) != 0) return 0;
 
 		for (int bo = 0; bo < SMKFS_BLOCK_SIZE; bo++) {
 			uint8_t byte = buf[bo];
@@ -313,11 +319,13 @@ static void SMKFS_UNUSED bitmap_free_range(uint64_t start, uint32_t count) {
 
 static int SMKFS_UNUSED record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
+	if (!rec || !attr_buf) return -1;
 	if (read_block(record_id, block) != 0) return -1;
 
 	memcpy(rec, block, sizeof(smkfs_record_t));
 
 	if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) return -1;
+	if (rec->header.length < sizeof(smkfs_record_t)) return -1;
 	if (header_checksum_verify(&rec->header, block, rec->header.length) != 0) return -1;
 
 	size_t attr_len = rec->header.length - sizeof(smkfs_record_t);
@@ -329,10 +337,14 @@ static int SMKFS_UNUSED record_read(uint64_t record_id, smkfs_record_t *rec, voi
 
 static int SMKFS_UNUSED record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
-	size_t total_len = rec->header.length;
+	size_t total_len = 0;
 
-	if (total_len > SMKFS_BLOCK_SIZE) return -1;
+	if (!rec) return -1;
+	total_len = rec->header.length;
+	if (total_len < sizeof(smkfs_record_t) || total_len > SMKFS_BLOCK_SIZE) return -1;
+	if (total_len > sizeof(smkfs_record_t) && !attr_buf) return -1;
 
+	memset(block, 0, sizeof(block));
 	memcpy(block, rec, sizeof(smkfs_record_t));
 	memcpy(block + sizeof(smkfs_record_t), attr_buf, total_len - sizeof(smkfs_record_t));
 
@@ -396,6 +408,9 @@ static int SMKFS_UNUSED record_find_attr(const void *attr_buf, uint16_t attr_typ
 static int SMKFS_UNUSED record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len) {
 	uint8_t *ptr = (uint8_t *)attr_buf;
 	size_t used = 0;
+
+	if (!attr_buf || (data_len > 0 && !data)) return -1;
+	if (buf_size < 2 * sizeof(smkfs_attr_header_t) + data_len) return -1;
 
 	record_remove_attr(attr_buf, attr_type);
 
@@ -568,7 +583,8 @@ static void SMKFS_UNUSED extent_remove_all(uint64_t record_id) {
 
 static int btree_node_read(uint64_t block, smkfs_btree_node_t *node, void *payload, size_t payload_size) {
 	uint8_t raw[SMKFS_BLOCK_SIZE];
-	if (!node || !payload || block == 0) return -1;
+	if (!node || block == 0) return -1;
+	if (payload_size > 0 && !payload) return -1;
 	if (read_block(block, raw) != 0) return -1;
 	memcpy(node, raw, sizeof(*node));
 	if (header_validate(&node->header, SMKFS_ST_BTREE_NODE) != 0) return -1;
@@ -581,7 +597,8 @@ static int btree_node_read(uint64_t block, smkfs_btree_node_t *node, void *paylo
 
 static int btree_node_write(uint64_t block, const smkfs_btree_node_t *node, const void *payload, size_t payload_size) {
 	uint8_t raw[SMKFS_BLOCK_SIZE];
-	if (!node || !payload || block == 0) return -1;
+	if (!node || block == 0) return -1;
+	if (payload_size > 0 && !payload) return -1;
 	memset(raw, 0, sizeof(raw));
 	memcpy(raw, node, sizeof(*node));
 	if (payload_size > 0) {
@@ -771,7 +788,6 @@ static int SMKFS_UNUSED journal_start_transaction(void) {
 	if (journal_in_transaction) return -1;
 	journal_in_transaction = 1;
 	return (int)journal_next_sequence;
-	return 0;
 }
 
 static int SMKFS_UNUSED journal_log_write(uint64_t block, const void *old_data, const void *new_data, size_t len) {
@@ -780,6 +796,7 @@ static int SMKFS_UNUSED journal_log_write(uint64_t block, const void *old_data, 
 	size_t total_len;
 
 	if (!journal_in_transaction || len > SMKFS_BLOCK_SIZE) return -1;
+	if (len > 0 && (!old_data || !new_data)) return -1;
 
 	total_len = sizeof(smkfs_journal_entry_t) + len * 2;
     if (total_len > SMKFS_BLOCK_SIZE) return -1;
@@ -793,8 +810,10 @@ static int SMKFS_UNUSED journal_log_write(uint64_t block, const void *old_data, 
     ent->operation = SMKFS_JOP_WRITE;
     ent->data_length = (uint32_t)(len * 2);
 
-    memcpy(buf + sizeof(smkfs_journal_entry_t), old_data, len);
-    memcpy(buf + sizeof(smkfs_journal_entry_t) + len, new_data, len);
+    if (len > 0) {
+        memcpy(buf + sizeof(smkfs_journal_entry_t), old_data, len);
+        memcpy(buf + sizeof(smkfs_journal_entry_t) + len, new_data, len);
+    }
 
 	header_checksum_update(&ent->header, buf, ent->header.length);
 
@@ -894,8 +913,8 @@ static int SMKFS_UNUSED journal_commit(void) {
 static int SMKFS_UNUSED journal_replay(void) {
     uint8_t buf[SMKFS_BLOCK_SIZE];
     smkfs_journal_entry_t *ent;
-    uint64_t tx_start = 0;
-    int in_tx = 0;
+    uint64_t replay_limit = sb.journal_length;
+    int committed = 0;
 
     for (uint64_t i = 0; i < sb.journal_length; i++) {
         if (read_block(sb.journal_start + i, buf) != 0) continue;
@@ -907,19 +926,22 @@ static int SMKFS_UNUSED journal_replay(void) {
             continue;
 
         if (ent->operation == SMKFS_JOP_COMMIT) {
-            tx_start = i + 1;
-            in_tx = 0;
-        } else {
-            in_tx = 1;
+            replay_limit = i;
+            committed = 1;
+            break;
         }
     }
 
-    if (!in_tx) {
+    if (!committed) {
+        for (uint64_t i = 0; i < sb.journal_length; i++) {
+            memset(buf, 0, sizeof(buf));
+            write_block(sb.journal_start + i, buf);
+        }
         journal_write_pos = 0;
         return 0;
     }
 
-    for (uint64_t i = tx_start; i < sb.journal_length; i++) {
+    for (uint64_t i = 0; i < replay_limit; i++) {
         if (read_block(sb.journal_start + i, buf) != 0) continue;
 
         ent = (smkfs_journal_entry_t *)buf;
@@ -929,17 +951,16 @@ static int SMKFS_UNUSED journal_replay(void) {
             break;
 
         if (ent->operation == SMKFS_JOP_WRITE) {
-            uint8_t old_data[SMKFS_BLOCK_SIZE];
+            uint8_t new_data[SMKFS_BLOCK_SIZE];
             size_t half = ent->data_length / 2;
-            memcpy(old_data, buf + sizeof(smkfs_journal_entry_t), half);
-            write_block(ent->target_block, old_data);
+            memcpy(new_data, buf + sizeof(smkfs_journal_entry_t) + half, half);
+            write_block(ent->target_block, new_data);
         } else if (ent->operation == SMKFS_JOP_ALLOC) {
-            bitmap_free_range(ent->target_block, ent->data_length);
-        } else if (ent->operation == SMKFS_JOP_FREE) {
             for (uint32_t j = 0; j < ent->data_length; j++)
                 bitmap_set(ent->target_block + j);
-        } else if (ent->operation == SMKFS_JOP_COMMIT) {
-            break;
+        } else if (ent->operation == SMKFS_JOP_FREE) {
+            for (uint32_t j = 0; j < ent->data_length; j++)
+                bitmap_clear(ent->target_block + j);
         }
     }
 

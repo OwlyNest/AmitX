@@ -33,11 +33,12 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-static smkfs_superblock_t SMKFS_UNUSED sb;
+static smkfs_superblock_t sb;
 static int SMKFS_UNUSED mounted = 0;
-static uint8_t SMKFS_UNUSED drive_num = 0;
-static uint64_t SMKFS_UNUSED journal_next_sequence = 1;
-static int SMKFS_UNUSED journal_in_transaction = 0;
+static uint8_t drive_num = 0;
+static uint64_t journal_next_sequence = 1;
+static int journal_in_transaction = 0;
+static uint64_t journal_write_pos = 0;
 /* --- Prototypes ---*/
 
 /* ~~~ Level 4: Internal ~~~ */
@@ -89,6 +90,7 @@ static int journal_log_write(uint64_t block, const void *old_data, const void *n
 static int journal_log_alloc(uint64_t block, uint32_t count);
 static int journal_log_free(uint64_t block, uint32_t count);
 static int journal_commit(void);
+static int journal_replay(void);
 
 /* --- Functions ---*/
 
@@ -764,26 +766,188 @@ static int SMKFS_UNUSED btree_iterate(uint64_t root_block, int (*cb)(const char 
 }
 
 /* Journal */
+
 static int SMKFS_UNUSED journal_start_transaction(void) {
+	if (journal_in_transaction) return -1;
+	journal_in_transaction = 1;
+	return (int)journal_next_sequence;
 	return 0;
 }
 
 static int SMKFS_UNUSED journal_log_write(uint64_t block, const void *old_data, const void *new_data, size_t len) {
-	(void)block; (void)old_data; (void)new_data; (void)len;
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+	smkfs_journal_entry_t *ent;
+	size_t total_len;
+
+	if (!journal_in_transaction || len > SMKFS_BLOCK_SIZE) return -1;
+
+	total_len = sizeof(smkfs_journal_entry_t) + len * 2;
+    if (total_len > SMKFS_BLOCK_SIZE) return -1;
+
+    memset(buf, 0, sizeof(buf));
+    ent = (smkfs_journal_entry_t *)buf;
+    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT,
+            sizeof(smkfs_journal_entry_t) + len * 2, 0);
+    ent->sequence = journal_next_sequence++;
+    ent->target_block = block;
+    ent->operation = SMKFS_JOP_WRITE;
+    ent->data_length = (uint32_t)(len * 2);
+
+    memcpy(buf + sizeof(smkfs_journal_entry_t), old_data, len);
+    memcpy(buf + sizeof(smkfs_journal_entry_t) + len, new_data, len);
+
+	header_checksum_update(&ent->header, buf, ent->header.length);
+
+    if (write_block(sb.journal_start + journal_write_pos, buf) != 0)
+        return -1;
+
+    journal_write_pos++;
+    if (journal_write_pos >= sb.journal_length) {
+        journal_write_pos = 0;
+	}
 	return 0;
 }
 
 static int SMKFS_UNUSED journal_log_alloc(uint64_t block, uint32_t count) {
-	(void)block; (void)count;
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+    smkfs_journal_entry_t *ent;
+
+    if (!journal_in_transaction) return -1;
+
+    memset(buf, 0, sizeof(buf));
+    ent = (smkfs_journal_entry_t *)buf;
+    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+    ent->sequence = journal_next_sequence++;
+    ent->target_block = block;
+    ent->operation = SMKFS_JOP_ALLOC;
+    ent->data_length = count;
+
+    header_checksum_update(&ent->header, buf, ent->header.length);
+
+    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
+        return -1;
+	}
+
+    journal_write_pos++;
+    if (journal_write_pos >= sb.journal_length) {
+        journal_write_pos = 0;
+	}
 	return 0;
 }
 
 static int SMKFS_UNUSED journal_log_free(uint64_t block, uint32_t count) {
-	(void)block; (void)count;
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+    smkfs_journal_entry_t *ent;
+
+    if (!journal_in_transaction) return -1;
+
+    memset(buf, 0, sizeof(buf));
+    ent = (smkfs_journal_entry_t *)buf;
+    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+    ent->sequence = journal_next_sequence++;
+    ent->target_block = block;
+    ent->operation = SMKFS_JOP_FREE;
+    ent->data_length = count;
+
+    header_checksum_update(&ent->header, buf, ent->header.length);
+
+    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
+        return -1;
+	}
+
+    journal_write_pos++;
+    if (journal_write_pos >= sb.journal_length) {
+        journal_write_pos = 0;
+	}
+
 	return 0;
 }
 
 static int SMKFS_UNUSED journal_commit(void) {
-	return 0;
-}
+	uint8_t buf[SMKFS_BLOCK_SIZE];
+    smkfs_journal_entry_t *ent;
 
+    if (!journal_in_transaction) return -1;
+
+    memset(buf, 0, sizeof(buf));
+    ent = (smkfs_journal_entry_t *)buf;
+    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+    ent->sequence = journal_next_sequence++;
+    ent->target_block = 0;
+    ent->operation = SMKFS_JOP_COMMIT;
+    ent->data_length = 0;
+
+    header_checksum_update(&ent->header, buf, ent->header.length);
+
+    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
+        return -1;
+	}
+
+    journal_write_pos++;
+    if (journal_write_pos >= sb.journal_length) {
+        journal_write_pos = 0;
+	}
+
+    journal_in_transaction = 0;
+    return 0;
+}
+static int SMKFS_UNUSED journal_replay(void) {
+    uint8_t buf[SMKFS_BLOCK_SIZE];
+    smkfs_journal_entry_t *ent;
+    uint64_t tx_start = 0;
+    int in_tx = 0;
+
+    for (uint64_t i = 0; i < sb.journal_length; i++) {
+        if (read_block(sb.journal_start + i, buf) != 0) continue;
+
+        ent = (smkfs_journal_entry_t *)buf;
+        if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != 0)
+            continue;
+        if (header_checksum_verify(&ent->header, buf, ent->header.length) != 0)
+            continue;
+
+        if (ent->operation == SMKFS_JOP_COMMIT) {
+            tx_start = i + 1;
+            in_tx = 0;
+        } else {
+            in_tx = 1;
+        }
+    }
+
+    if (!in_tx) {
+        journal_write_pos = 0;
+        return 0;
+    }
+
+    for (uint64_t i = tx_start; i < sb.journal_length; i++) {
+        if (read_block(sb.journal_start + i, buf) != 0) continue;
+
+        ent = (smkfs_journal_entry_t *)buf;
+        if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != 0)
+            break;
+        if (header_checksum_verify(&ent->header, buf, ent->header.length) != 0)
+            break;
+
+        if (ent->operation == SMKFS_JOP_WRITE) {
+            uint8_t old_data[SMKFS_BLOCK_SIZE];
+            size_t half = ent->data_length / 2;
+            memcpy(old_data, buf + sizeof(smkfs_journal_entry_t), half);
+            write_block(ent->target_block, old_data);
+        } else if (ent->operation == SMKFS_JOP_ALLOC) {
+            bitmap_free_range(ent->target_block, ent->data_length);
+        } else if (ent->operation == SMKFS_JOP_FREE) {
+            for (uint32_t j = 0; j < ent->data_length; j++)
+                bitmap_set(ent->target_block + j);
+        } else if (ent->operation == SMKFS_JOP_COMMIT) {
+            break;
+        }
+    }
+
+    for (uint64_t i = 0; i < sb.journal_length; i++) {
+        memset(buf, 0, sizeof(buf));
+        write_block(sb.journal_start + i, buf);
+    }
+
+    journal_write_pos = 0;
+    return 0;
+}

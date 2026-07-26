@@ -70,6 +70,12 @@
 #define SMKFS_BTR_MAX_KEY 255
 #define SMKFS_BTN_LEAF 0x1
 #define SMKFS_BTN_ROOT 0x2
+
+/* Journal OPerations */
+#define SMKFS_JOP_WRITE  1
+#define SMKFS_JOP_ALLOC  2
+#define SMKFS_JOP_FREE   3
+#define SMKFS_JOP_COMMIT 4
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>

@@ -76,9 +76,14 @@
 #define SMKFS_JOP_ALLOC  2
 #define SMKFS_JOP_FREE   3
 #define SMKFS_JOP_COMMIT 4
+
+/* File Descriptor */
+#define SMKFS_FD_MAX 16
+
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* Canonical header */
@@ -174,6 +179,15 @@ typedef struct {
 	uint64_t record_id;
 	char     name[SMKFS_NAME_LEN];
 } smkfs_dirent_t;
+
+/* File Descriptor*/
+typedef struct {
+	int used;
+	uint64_t record_id;
+	uint64_t offset;
+	int flags;
+} smkfs_fd_t;
+
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/

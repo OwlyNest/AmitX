@@ -38,9 +38,9 @@ if [[ $REBUILD -eq 1 ]]; then
     fi
     echo -e "\e[33m[x] Building kernel...\e[0m"
     if [[ $FULL -eq 1 ]]; then
-        run "bear -- make"
+        run "bear -- make -j"
     else
-        run "make"
+        run "make -j"
     fi
     find . -name '*.c' -o -name '*.h' -o -name '*.S' | sed 's/.*/"&"/' | xargs wc -l | tail -n 1
     make size

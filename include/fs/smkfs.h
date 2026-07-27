@@ -80,6 +80,24 @@
 /* File Descriptor */
 #define SMKFS_FD_MAX 16
 
+/* Open flags */
+#define SMKFS_O_RDONLY  0x0000
+#define SMKFS_O_WRONLY  0x0001
+#define SMKFS_O_RDWR    0x0002
+#define SMKFS_O_CREATE  0x0004
+#define SMKFS_O_TRUNC   0x0008
+#define SMKFS_O_APPEND  0x0010
+
+/* SEEK flags*/
+#define SMKFS_SEEK_SET 0
+#define SMKFS_SEEK_CUR 1
+#define SMKFS_SEEK_END 2
+
+/* PERMissions */
+#define SMKFS_PERM_WRITE   0x0080
+#define SMKFS_PERM_EXEC    0x0040
+#define SMKFS_PERM_READ    0x0100
+
 /* --- Includes ---*/
 #include <stdint.h>
 #include <stddef.h>
@@ -180,13 +198,20 @@ typedef struct {
 	char     name[SMKFS_NAME_LEN];
 } smkfs_dirent_t;
 
-/* File Descriptor*/
+/* File Descriptor */
 typedef struct {
 	int used;
 	uint64_t record_id;
 	uint64_t offset;
 	int flags;
 } smkfs_fd_t;
+
+/* Read Directory Context */
+typedef struct {
+    smkfs_dirent_t *entries;
+    size_t max;
+    size_t count;
+} readdir_ctx_t;
 
 /* --- Globals ---*/
 
@@ -207,6 +232,7 @@ int smkfs_getattr(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_
 int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size_t len);
 
 /* ~~~ Level 2: User ~~~ */
+int path_lookup(const char *path, uint64_t *out_record);
 int smkfs_open(const char *path, int flags);
 int smkfs_close(int fd);
 int smkfs_read_file(int fd, void *buf, size_t len);
@@ -217,11 +243,11 @@ int smkfs_delete_file(const char *path);
 int smkfs_mkdir(const char *path);
 int smkfs_rmdir(const char *path);
 int smkfs_readdir(const char *path, smkfs_dirent_t *entries, size_t max_entries, size_t *out_count);
-int smkfs_stat(const char *path, ...);
+int smkfs_stat(const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size);
 int smkfs_chmod(const char *path, uint16_t permissions);
 int smkfs_chown(const char *path, uint32_t uid, uint32_t gid);
 
-/* ~~~ Level 1: Existence ~~~ */
+/* ~~~ Level 1: Admin ~~~ */
 int smkfs_mkfs(uint8_t drive, uint64_t total_blocks);
 int smkfs_fsck(uint8_t drive);
 int smkfs_dump_superblock(void);

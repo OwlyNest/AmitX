@@ -764,7 +764,7 @@ static int btree_delete(uint64_t root_block, const char *key, uint64_t *new_root
 	return 0;
 }
 
-static int SMKFS_UNUSED btree_iterate(uint64_t root_block, int (*cb)(const char *key, uint64_t value, void *ctx), void *ctx) {
+static int btree_iterate(uint64_t root_block, int (*cb)(const char *key, uint64_t value, void *ctx), void *ctx) {
 	uint8_t block[SMKFS_BLOCK_SIZE];
 	smkfs_btree_node_t node;
 	smkfs_btree_leaf_entry_t entries[64];
@@ -1503,16 +1503,332 @@ int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size
 
 /* ~~~ Level 2: User ~~~ */
 
-int smkfs_open(const char *path, int flags);
-int smkfs_close(int fd);
-int smkfs_read_file(int fd, void *buf, size_t len);
-int smkfs_write_file(int fd, const void *buf, size_t len);
-int smkfs_seek(int fd, int64_t offset, int whence);
-int smkfs_create_file(const char *path, uint16_t permissions);
-int smkfs_delete_file(const char *path);
-int smkfs_mkdir(const char *path);
-int smkfs_rmdir(const char *path);
-int smkfs_readdir(const char *path, smkfs_dirent_t *entries, size_t max_entries, size_t *out_count);
-int smkfs_stat(const char *path, ...);
-int smkfs_chmod(const char *path, uint16_t permissions);
-int smkfs_chown(const char *path, uint32_t uid, uint32_t gid);
+int path_lookup(const char *path, uint64_t *out_record) {
+    const char *p;
+    char name[SMKFS_NAME_LEN];
+    uint64_t current;
+    int i;
+    uint8_t path_drive;
+
+    if (!path || path[1] != ':' || path[2] != '/') return -1;
+
+    path_drive = path[0] - 'A';
+    if (path_drive != drive_num) return -1;
+
+    current = sb.root_record;
+    p = path + 3;
+
+    while (*p) {
+        while (*p == '/') p++;
+        if (!*p) break;
+
+        i = 0;
+        while (*p && *p != '/' && i < SMKFS_NAME_LEN - 1) {
+            name[i++] = *p++;
+        }
+        name[i] = '\0';
+
+        if (smkfs_lookup_by_name(current, name, &current) != 0) {
+            return -1;
+        }
+    }
+
+    if (out_record) *out_record = current;
+    return 0;
+}
+
+int smkfs_open(const char *path, int flags) {
+    uint64_t record_id;
+    int fd;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &record_id) != 0) {
+        if (flags & SMKFS_O_CREATE) {
+            if (smkfs_create_file(path, SMKFS_PERM_WRITE | SMKFS_PERM_WRITE) != 0) return -1;
+            if (path_lookup(path, &record_id) != 0) return -1;
+        } else {
+            return -1;
+        }
+    }
+
+    for (fd = 0; fd < SMKFS_FD_MAX; fd++) {
+        if (!fd_table[fd].used) break;
+    }
+    if (fd >= SMKFS_FD_MAX) return -1;
+
+    fd_table[fd].used = 1;
+    fd_table[fd].record_id = record_id;
+    fd_table[fd].offset = 0;
+    fd_table[fd].flags = flags;
+
+    if (flags & SMKFS_O_APPEND) {
+        uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+        smkfs_record_t rec;
+        uint64_t *fsize_ptr;
+        if (record_read(record_id, &rec, attr_buf, sizeof(attr_buf)) == 0) {
+            if (record_find_attr(attr_buf, SMKFS_ATTRT_FSIZE, (void **)&fsize_ptr, NULL) == 0) {
+                fd_table[fd].offset = *fsize_ptr;
+            }
+        }
+    }
+
+    return fd;
+}
+
+int smkfs_close(int fd){
+	if (fd < 0 || fd >= SMKFS_FD_MAX) return -1;
+	if (!fd_table[fd].used) return -1;
+
+	fd_table[fd].used = 0;
+    fd_table[fd].record_id = 0;
+    fd_table[fd].offset = 0;
+    fd_table[fd].flags = 0;
+
+	return 0;
+}
+
+int smkfs_read_file(int fd, void *buf, size_t len) {
+	int ret;
+
+	if (fd < 0 || fd >= SMKFS_FD_MAX) return -1;
+	if (!fd_table[fd].used) return -1;
+	if (!buf) return -1;
+
+	ret = smkfs_read(fd_table[fd].record_id, fd_table[fd].offset, len, buf);
+    if (ret > 0) fd_table[fd].offset += ret;
+
+	return ret;
+}
+
+int smkfs_write_file(int fd, const void *buf, size_t len) {
+    int ret;
+
+    if (fd < 0 || fd >= SMKFS_FD_MAX) return -1;
+    if (!fd_table[fd].used) return -1;
+    if (!buf) return -1;
+
+    ret = smkfs_write(fd_table[fd].record_id, fd_table[fd].offset, len, buf);
+    if (ret > 0) fd_table[fd].offset += ret;
+
+    return ret;
+}
+
+int smkfs_seek(int fd, int64_t offset, int whence) {
+	uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+    smkfs_record_t rec;
+    uint64_t *fsize_ptr;
+    uint64_t file_size = 0;
+    int64_t new_offset;
+
+	if (fd < 0 || fd >= SMKFS_FD_MAX) return -1;
+	if (!fd_table[fd].used) return -1;
+
+	switch (whence) {
+		case SMKFS_SEEK_END: {
+			if (record_read(fd_table[fd].record_id, &rec, attr_buf, sizeof(attr_buf)) == 0) {
+				if (record_find_attr(attr_buf, SMKFS_ATTRT_FSIZE, (void **)&fsize_ptr, NULL) == 0) {
+					file_size = *fsize_ptr;
+				}
+			}
+
+			new_offset = (int64_t)file_size + offset;
+
+			break;
+		}
+		case SMKFS_SEEK_CUR: {
+			new_offset = (int64_t)fd_table[fd].offset + offset;
+		}
+		case SMKFS_SEEK_SET: {
+			new_offset = offset;
+		}
+		default: {
+			return -1;
+		}
+	}
+
+	if (new_offset < 0) return -1;
+
+	fd_table[fd].offset = (uint64_t)new_offset;
+	return (int)fd_table[fd].offset;
+}
+
+int smkfs_create_file(const char *path, uint16_t permissions) {
+    uint64_t parent;
+    char name[SMKFS_NAME_LEN];
+    const char *last_slash;
+    const char *name_start;
+    uint64_t new_record;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    last_slash = strrchr(path, '/');
+    if (!last_slash || last_slash == path + 2) {
+        parent = sb.root_record;
+        name_start = path + 3;
+    } else {
+        char parent_path[SMKFS_NAME_LEN];
+        int len = last_slash - path;
+        if (len >= SMKFS_NAME_LEN) return -1;
+        memcpy(parent_path, path, len);
+        parent_path[len] = '\0';
+        if (path_lookup(parent_path, &parent) != 0) return -1;
+        name_start = last_slash + 1;
+    }
+
+    int i = 0;
+    while (*name_start && *name_start != '/' && i < SMKFS_NAME_LEN - 1) {
+        name[i++] = *name_start++;
+    }
+    name[i] = '\0';
+
+    if (smkfs_create_record(SMKFS_ROT_FILE, parent, name, &new_record) != 0) {
+        return -1;
+	}
+
+    uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+    smkfs_record_t rec;
+    if (record_read(new_record, &rec, attr_buf, sizeof(attr_buf)) == 0) {
+        record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
+        rec.attr_count++;
+        record_write(new_record, &rec, attr_buf);
+    }
+
+    return 0;
+}
+
+int smkfs_delete_file(const char *path) {
+	uint64_t record_id;
+
+	if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &record_id) != 0) return -1;
+
+    return smkfs_delete_record(record_id);
+}
+
+int smkfs_mkdir(const char *path) {
+    uint64_t parent;
+    char name[SMKFS_NAME_LEN];
+    const char *last_slash;
+    const char *name_start;
+    uint64_t new_record;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    last_slash = strrchr(path, '/');
+    if (!last_slash || last_slash == path + 2) {
+        parent = sb.root_record;
+        name_start = path + 3;
+    } else {
+        char parent_path[SMKFS_NAME_LEN];
+        int len = last_slash - path;
+        if (len >= SMKFS_NAME_LEN) return -1;
+        memcpy(parent_path, path, len);
+        parent_path[len] = '\0';
+        if (path_lookup(parent_path, &parent) != 0) return -1;
+        name_start = last_slash + 1;
+    }
+
+    int i = 0;
+    while (*name_start && *name_start != '/' && i < SMKFS_NAME_LEN - 1) {
+        name[i++] = *name_start++;
+    }
+    name[i] = '\0';
+
+    return smkfs_create_record(SMKFS_ROT_DIR, parent, name, &new_record);
+}
+
+int smkfs_rmdir(const char *path) {
+    uint64_t record_id;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &record_id) != 0) return -1;
+
+    return smkfs_delete_record(record_id);
+}
+
+int readdir_cb(const char *key, uint64_t value, void *ctx) {
+    readdir_ctx_t *c = (readdir_ctx_t *)ctx;
+    if (c->count >= c->max) return -1;
+    strncpy(c->entries[c->count].name, key, SMKFS_NAME_LEN - 1);
+    c->entries[c->count].name[SMKFS_NAME_LEN - 1] = '\0';
+    c->entries[c->count].record_id = value;
+    c->count++;
+    return 0;
+}
+
+int smkfs_readdir(const char *path, smkfs_dirent_t *entries, size_t max_entries, size_t *out_count) {
+    uint64_t dir_record;
+    uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+    smkfs_record_t rec;
+    uint64_t *btree_root;
+    readdir_ctx_t ctx;
+
+    if (!mounted || !path || !entries || !out_count) return -1;
+    if (path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &dir_record) != 0) return -1;
+
+    if (record_read(dir_record, &rec, attr_buf, sizeof(attr_buf)) < 0) {
+        return -1;
+	}
+
+    if (rec.object_type != SMKFS_ROT_DIR) return -1;
+
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_DATA, (void **)&btree_root, NULL) != 0) {
+        return -1;
+	}
+
+    ctx.entries = entries;
+    ctx.max = max_entries;
+    ctx.count = 0;
+
+    btree_iterate(*btree_root, readdir_cb, &ctx);
+
+    *out_count = ctx.count;
+    return 0;
+}
+
+int smkfs_stat(const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
+    uint64_t record_id;
+
+    if (!mounted || !path || !rec || !attr_buf || path[1] != ':' || path[2] != '/') {
+        return -1;
+	}
+
+    if (path_lookup(path, &record_id) != 0) return -1;
+
+    return smkfs_getattr(record_id, rec, attr_buf, buf_size);
+}
+
+int smkfs_chmod(const char *path, uint16_t permissions) {
+    uint64_t record_id;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &record_id) != 0) return -1;
+
+    return smkfs_setattr(record_id, SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
+}
+
+int smkfs_chown(const char *path, uint32_t uid, uint32_t gid) {
+    uint64_t record_id;
+    uint64_t owner = ((uint64_t)uid << 32) | gid;
+
+    if (!mounted || !path || path[1] != ':' || path[2] != '/') return -1;
+
+    if (path_lookup(path, &record_id) != 0) return -1;
+
+    return smkfs_setattr(record_id, SMKFS_ATTRT_OWNER, &owner, sizeof(owner));
+}
+
+/* ~~~ Level 1: Admin ~~~ */
+
+int smkfs_mkfs(uint8_t drive, uint64_t total_blocks);
+int smkfs_fsck(uint8_t drive);
+int smkfs_dump_superblock(void);
+int smkfs_dump_record(uint64_t record_id);
+int smkfs_dump_journal(void);
+int smkfs_dump_btree(uint64_t root_block);

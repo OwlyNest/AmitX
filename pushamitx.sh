@@ -10,7 +10,7 @@ COMMIT_MSG=${*:-"Update on: AmitX version $VERSION"}
 #Clear stuck rebase state if it exists
 if [ -d ".git/rebase-merge" ]; then
     echo "[x] Detected incomplete rebase. Cleaning up..."
-    rm -rf .git/rebase-merge
+    git rebase --abort 2>/dev/null || true
 fi
 
 #Ensure this is a Git repo

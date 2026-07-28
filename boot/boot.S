@@ -33,7 +33,8 @@ mb2_header_end:
 .section .bss
 .align 16
 stack_bottom:
-    .skip 16384         # 16 KB stack
+    #.skip 16384         # 16 KB stack
+    .skip 65536         # 64 KB stack
 stack_top:
 
 .section .data

@@ -73,8 +73,6 @@ fi
 echo -e "\e[33m[x] Launching QEMU (Testing Image)...\e[0m"
 set +e
 
-# Point QEMU to our hybrid asset via standard cdrom flag configuration mapping
-# NOTIE: Backslash voor het commentaar is hieronder weggehaald om syntaxfouten te voorkomen
 GDK_BACKEND=x11 qemu-system-i386 \
     -cpu Haswell \
     -cdrom amitx.iso \
@@ -88,8 +86,7 @@ GDK_BACKEND=x11 qemu-system-i386 \
     -device vmware-svga \
     -display gtk,full-screen=on,zoom-to-fit=on \
     -rtc base=localtime
-
-# -d int,cpu_exit # reveal your secrets (Als je dit wilt gebruiken, zet er dan een \ boven)
+    # -d int,cpu_exit # reveal your secrets
 
 QEMU_EXIT=$?
 

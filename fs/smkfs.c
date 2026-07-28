@@ -93,6 +93,8 @@ static int journal_log_free(uint64_t block, uint32_t count);
 static int journal_commit(void);
 static int journal_replay(void);
 
+static size_t attr_buf_total_len(const void *attr_buf);
+
 /* --- Functions ---*/
 
 /* ~~~ Level 4: Internal ~~~ */
@@ -105,7 +107,7 @@ static int read_block(uint64_t block, void *buf) {
 	uint8_t *ptr = (uint8_t *)buf;
 
 	for (uint8_t i = 0; i < sectors; i++) {
-		if (ide_read_sectors(drive_num, lba, 1, (uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
+		if (ide_read_sectors(drive_num, lba + i, 1, (uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
 			return -1;
 		}
 	}
@@ -114,17 +116,17 @@ static int read_block(uint64_t block, void *buf) {
 }
 
 static int write_block(uint64_t block, const void *buf) {
-	uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
-	uint32_t lba = (uint32_t)(block * sectors);
-	const uint8_t *ptr = (const uint8_t *)buf;
+    uint8_t sectors = SMKFS_BLOCK_SIZE / SMKFS_SECTOR_SIZE;
+    uint32_t lba = (uint32_t)(block * sectors);
+    const uint8_t *ptr = (const uint8_t *)buf;
 
-	for (uint8_t i = 0; i < sectors; i++) {
-		if (ide_write_sectors(drive_num, lba, 1, (const uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
-			return -1;
-		}
-	}
-
-	return 0;
+    for (uint8_t i = 0; i < sectors; i++) {
+        if (ide_write_sectors(drive_num, lba + i, 1, (const uint16_t *)(ptr + i * SMKFS_SECTOR_SIZE)) != 0) {
+            printk("[SmKFS] write_block FAILED: block=%llu LBA=%u sector=%u\n", block, lba + i, i);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 /* Header */
@@ -140,14 +142,17 @@ static void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint3
 
 static int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
 	if (memcmp(h->magic, SMKFS_MAGIC, 4) != 0) {
+		printk("[SmKFS] Wrong magic, expected %s, got %s\n", SMKFS_MAGIC, h->magic);
 		return -1;
 	}
 
 	if (h->version != SMKFS_VERSION) {
+		printk("[SmKFS] Wrong version, expected %d, got %d\n", SMKFS_VERSION, h->version);
 		return -1;
 	}
 
 	if (h->type != expected_type) {
+		printk("[SmKFS] Wrong type, expected %d, got %d\n", expected_type, h->type);
 		return -1;
 	}
 
@@ -201,6 +206,8 @@ static int header_checksum_verify(const smkfs_header_t *h, const void *data, siz
 /* Bitmap */
 
 static void bitmap_set(uint64_t block) {
+	uint8_t *buf;
+
 	if (block < sb.data_start) return;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -208,16 +215,26 @@ static void bitmap_set(uint64_t block) {
 	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-	if (read_block(bitmap_block, buf) != 0) return;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return;
+	if (read_block(bitmap_block, buf) != 0) {
+		free(buf);
+		return;
+	}
 	if (((buf[block_offset] >> bit_offset) & 1) == 0) {
 		sb.free_blocks--;
 	}
 	buf[block_offset] |= (1 << bit_offset);
-	write_block(bitmap_block, buf);
+	if (write_block(bitmap_block, buf) != 0) {
+		free(buf);
+		return;
+	}
+	free(buf);
 }
 
 static void bitmap_clear(uint64_t block) {
+	uint8_t *buf;
+
 	if (block < sb.data_start) return;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -225,16 +242,27 @@ static void bitmap_clear(uint64_t block) {
 	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-	if (read_block(bitmap_block, buf) != 0) return;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return;
+	if (read_block(bitmap_block, buf) != 0) {
+		free(buf);
+		return;
+	}
 	if (((buf[block_offset] >> bit_offset) & 1) != 0) {
 		sb.free_blocks++;
 	}
 	buf[block_offset] &= ~(1 << bit_offset);
-	write_block(bitmap_block, buf);
+	if (write_block(bitmap_block, buf) != 0) {
+		free(buf);
+		return;
+	}
+	free(buf);
 }
 
 static int bitmap_test(uint64_t block) {
+	uint8_t *buf;
+	int ret;
+
 	if (block < sb.data_start) return -1;
 	uint64_t idx = block - sb.data_start;
 	uint64_t byte_offset = idx / 8;
@@ -242,9 +270,15 @@ static int bitmap_test(uint64_t block) {
 	uint64_t bitmap_block = sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
 	uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-	if (read_block(bitmap_block, buf) != 0) return -1;
-	return (buf[block_offset] >> bit_offset) & 1;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return -1;
+	if (read_block(bitmap_block, buf) != 0) {
+		free(buf);
+		return -1;
+	}
+	ret = (buf[block_offset] >> bit_offset) & 1;
+	free(buf);
+	return ret;
 }
 
 /*
@@ -252,15 +286,32 @@ static int bitmap_test(uint64_t block) {
  * optimize
 */
 static uint64_t bitmap_alloc_range(uint32_t count) {
+	uint8_t *buf;
+	uint8_t *j_buf;
+	uint64_t total_bits;
+	uint64_t run_start;
+	uint32_t run_len;
+
 	if (count == 0) return -1;
 
-	uint64_t total_bits = sb.total_blocks - sb.data_start;
-	uint64_t run_start = 0;
-	uint32_t run_len = 0;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	j_buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf || !j_buf) {
+		free(buf);
+		free(j_buf);
+		return -1;
+	}
+
+	total_bits = sb.total_blocks - sb.data_start;
+	run_start = 0;
+	run_len = 0;
 
 	for (uint64_t bb = 0; bb < sb.bitmap_length; bb++) {
-		uint8_t buf[SMKFS_BLOCK_SIZE];
-		if (read_block(sb.bitmap_start + bb, buf) != 0) return -1;
+		if (read_block(sb.bitmap_start + bb, buf) != 0) {
+			free(buf);
+			free(j_buf);
+			return -1;
+		}
 
 		for (int bo = 0; bo < SMKFS_BLOCK_SIZE; bo++) {
 			uint8_t byte = buf[bo];
@@ -277,22 +328,33 @@ static uint64_t bitmap_alloc_range(uint32_t count) {
 						uint64_t first_block = sb.data_start + run_start;
 						for (uint32_t j = 0; j < count; j++) {
 							uint64_t idx = run_start + j;
-                            uint64_t j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
-                            uint64_t j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
-                            uint64_t j_bi = idx % 8;
-                            uint8_t j_buf[SMKFS_BLOCK_SIZE];
-                            read_block(sb.bitmap_start + j_bb, j_buf);
-                            j_buf[j_bo] |= (1 << j_bi);
-                            write_block(sb.bitmap_start + j_bb, j_buf);
+							uint64_t j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
+							uint64_t j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+							uint64_t j_bi = idx % 8;
+							if (read_block(sb.bitmap_start + j_bb, j_buf) != 0) {
+								free(buf);
+								free(j_buf);
+								return -1;
+							}
+							j_buf[j_bo] |= (1 << j_bi);
+							if (write_block(sb.bitmap_start + j_bb, j_buf) != 0) {
+								free(buf);
+								free(j_buf);
+								return -1;
+							}
 						}
 						sb.free_blocks -= count;
 						journal_log_alloc(first_block, count);
+						free(buf);
+						free(j_buf);
 						return first_block;
 					}
 				}
 			}
 		}
 	}
+	free(buf);
+	free(j_buf);
 	return -1;
 }
 
@@ -301,66 +363,114 @@ static uint64_t bitmap_alloc(void) {
 }
 
 static void bitmap_free_range(uint64_t start, uint32_t count) {
+	uint8_t *buf;
+
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return;
+
 	for (uint32_t i = 0; i < count; i++) {
 		uint64_t block = start + i;
-        if (block < sb.data_start) continue;
-        uint64_t idx = block - sb.data_start;
-        uint64_t bb = idx / (SMKFS_BLOCK_SIZE * 8);
-        uint64_t bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
-        uint64_t bi = idx % 8;
+		if (block < sb.data_start) continue;
+		uint64_t idx = block - sb.data_start;
+		uint64_t bb = idx / (SMKFS_BLOCK_SIZE * 8);
+		uint64_t bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+		uint64_t bi = idx % 8;
 
-        uint8_t buf[SMKFS_BLOCK_SIZE];
-        read_block(sb.bitmap_start + bb, buf);
-        buf[bo] &= ~(1 << bi);
-        write_block(sb.bitmap_start + bb, buf);
+		if (read_block(sb.bitmap_start + bb, buf) != 0) {
+			free(buf);
+			return;
+		}
+		buf[bo] &= ~(1 << bi);
+		if (write_block(sb.bitmap_start + bb, buf) != 0) {
+			free(buf);
+			return;
+		}
 	}
 	journal_log_free(start, count);
 	sb.free_blocks += count;
+	free(buf);
 }
 
 /* Record */
 
 static int record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
-	uint8_t block[SMKFS_BLOCK_SIZE];
+	uint8_t *block;
+	size_t attr_len;
+	int ret;
+
 	if (!rec || !attr_buf) return -1;
-	if (read_block(record_id, block) != 0) return -1;
+
+	block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!block) return -1;
+
+	if (read_block(record_id, block) != 0) { free(block); return -1; }
 
 	memcpy(rec, block, sizeof(smkfs_record_t));
 
-	if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) return -1;
-	if (rec->header.length < sizeof(smkfs_record_t)) return -1;
-	if (header_checksum_verify(&rec->header, block, rec->header.length) != 0) return -1;
+	if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) { free(block); return -1; }
+	if (rec->header.length < sizeof(smkfs_record_t)) { free(block); return -1; }
+	if (header_checksum_verify(&rec->header, block, rec->header.length) != 0) { free(block); return -1; }
 
-	size_t attr_len = rec->header.length - sizeof(smkfs_record_t);
+	attr_len = rec->header.length - sizeof(smkfs_record_t);
 	if (attr_len > buf_size) attr_len = buf_size;
 
 	memcpy(attr_buf, block + sizeof(smkfs_record_t), attr_len);
-	return (int)attr_len;
+	ret = (int)attr_len;
+	free(block);
+	return ret;
 }
 
 static int record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf) {
-	uint8_t block[SMKFS_BLOCK_SIZE];
-	uint8_t old_block[SMKFS_BLOCK_SIZE];
-	size_t total_len = 0;
+	uint8_t *block, *old_block;
+	size_t total_len;
+	size_t attr_len;
+	int ret;
+	const uint8_t *ptr;
+	smkfs_record_t *wrec;
 
 	if (!rec) return -1;
-	total_len = rec->header.length;
-	if (total_len < sizeof(smkfs_record_t) || total_len > SMKFS_BLOCK_SIZE) return -1;
-	if (total_len > sizeof(smkfs_record_t) && !attr_buf) return -1;
+	if (sizeof(smkfs_record_t) > SMKFS_BLOCK_SIZE) return -1;
+	if (!attr_buf) return -1;
 
-	if (read_block(record_id, old_block) != 0) {
-		memset(old_block, 0, sizeof(old_block));
+	attr_len = 0;
+	ptr = (const uint8_t *)attr_buf;
+	while (1) {
+		smkfs_attr_header_t *ah = (smkfs_attr_header_t *)((uintptr_t)ptr);
+		if (ah->type == SMKFS_ATTRT_END) {
+			attr_len = (size_t)(ptr - (const uint8_t *)attr_buf) + sizeof(smkfs_attr_header_t);
+			break;
+		}
+		if (attr_len > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
+			return -1;
+		}
+		ptr += sizeof(smkfs_attr_header_t) + ah->length;
+		if ((size_t)(ptr - (const uint8_t *)attr_buf) > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
+			return -1;
+		}
 	}
 
-	memset(block, 0, sizeof(block));
-	memcpy(block, rec, sizeof(smkfs_record_t));
-	memcpy(block + sizeof(smkfs_record_t), attr_buf, total_len - sizeof(smkfs_record_t));
+	total_len = sizeof(smkfs_record_t) + attr_len;
+	if (total_len < sizeof(smkfs_record_t) || total_len > SMKFS_BLOCK_SIZE) return -1;
 
-	header_checksum_update(&((smkfs_record_t *)block)->header, block, total_len);
+	block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	old_block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!block || !old_block) { free(block); free(old_block); return -1; }
 
-	journal_log_write(record_id, old_block, block, SMKFS_BLOCK_SIZE);
+	if (read_block(record_id, old_block) != 0) memset(old_block, 0, SMKFS_BLOCK_SIZE);
 
-	return write_block(record_id, block);
+	memset(block, 0, SMKFS_BLOCK_SIZE);
+	wrec = (smkfs_record_t *)block;
+	memcpy(wrec, rec, sizeof(smkfs_record_t));
+	wrec->header.length = total_len;
+	memcpy(block + sizeof(smkfs_record_t), attr_buf, attr_len);
+	header_checksum_update(&wrec->header, block, total_len);
+
+	journal_log_write(record_id, old_block, block, total_len);
+
+	ret = write_block(record_id, block);
+	free(block);
+	free(old_block);
+	return ret;
 }
 
 static uint64_t record_alloc(uint16_t object_type) {
@@ -385,14 +495,19 @@ static uint64_t record_alloc(uint16_t object_type) {
 }
 
 static void record_free(uint64_t record_id) {
+	uint8_t *block;
+
 	extent_remove_all(record_id);
 
-	uint8_t block[SMKFS_BLOCK_SIZE];
-	if (read_block(record_id, block) == 0) {
-		smkfs_record_t *rec = (smkfs_record_t *)block;
-		rec->header.flags |= SMKFS_FLA_DELETED;
-		header_checksum_update(&rec->header, block, rec->header.length);
-		write_block(record_id, block);
+	block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (block) {
+		if (read_block(record_id, block) == 0) {
+			smkfs_record_t *rec = (smkfs_record_t *)block;
+			rec->header.flags |= SMKFS_FLA_DELETED;
+			header_checksum_update(&rec->header, block, rec->header.length);
+			write_block(record_id, block);
+		}
+		free(block);
 	}
 
 	bitmap_clear(record_id);
@@ -554,39 +669,40 @@ static int extent_add(uint64_t record_id, uint64_t logical_block,
 }
 
 static void extent_remove_all(uint64_t record_id) {
-	uint8_t block[SMKFS_BLOCK_SIZE];
-	smkfs_record_t *rec = (smkfs_record_t *)block;
+	uint8_t *block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!block) return;
 
-	if (read_block(record_id, block) != 0) return;
+	smkfs_record_t *rec = (smkfs_record_t *)block;
+	if (read_block(record_id, block) != 0) { free(block); return; }
 
 	uint8_t *attr_buf = block + sizeof(smkfs_record_t);
-
 	void *existing;
 	size_t existing_len = 0;
 	if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) != 0) {
+		free(block);
 		return;
 	}
 
 	uint32_t num_extents = existing_len / sizeof(smkfs_extent_t);
 	smkfs_extent_t *extents = (smkfs_extent_t *)existing;
-
 	for (uint32_t i = 0; i < num_extents; i++) {
-        bitmap_free_range(extents[i].physical_block, extents[i].block_count);
-    }
+		bitmap_free_range(extents[i].physical_block, extents[i].block_count);
+	}
 
-    record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
+	record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
 
-    rec->header.length = sizeof(smkfs_record_t);
-    uint8_t *ptr = attr_buf;
-    while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
-        rec->header.length += sizeof(smkfs_attr_header_t) + ah->length;
-        if (ah->type == SMKFS_ATTRT_END) break;
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
-    }
+	rec->header.length = sizeof(smkfs_record_t);
+	uint8_t *ptr = attr_buf;
+	while (1) {
+		smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
+		rec->header.length += sizeof(smkfs_attr_header_t) + ah->length;
+		if (ah->type == SMKFS_ATTRT_END) break;
+		ptr += sizeof(smkfs_attr_header_t) + ah->length;
+	}
 
 	header_checksum_update(&rec->header, block, rec->header.length);
-    write_block(record_id, block);
+	write_block(record_id, block);
+	free(block);
 }
 
 /* B+ tree */
@@ -605,27 +721,34 @@ static int btree_node_read(uint64_t block, smkfs_btree_node_t *node, void *paylo
 	return 0;
 }
 
-static int btree_node_write(uint64_t block, const smkfs_btree_node_t *node, const void *payload, size_t payload_size) {
-	uint8_t raw[SMKFS_BLOCK_SIZE];
-	uint8_t old_raw[SMKFS_BLOCK_SIZE];
-	if (!node || block == 0) return -1;
+static int btree_node_write(uint64_t block_id, const smkfs_btree_node_t *node, const void *payload, size_t payload_size) {
+	uint8_t *raw, *old_raw;
+	int ret;
+
+	if (!node || block_id == 0) return -1;
 	if (payload_size > 0 && !payload) return -1;
 
-	if (read_block(block, old_raw) != 0) {
-		memset(old_raw, 0, sizeof(old_raw));
-	}
+	raw = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	old_raw = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!raw || !old_raw) { free(raw); free(old_raw); return -1; }
 
-	memset(raw, 0, sizeof(raw));
+	if (read_block(block_id, old_raw) != 0) memset(old_raw, 0, SMKFS_BLOCK_SIZE);
+
+	memset(raw, 0, SMKFS_BLOCK_SIZE);
 	memcpy(raw, node, sizeof(*node));
-	if (payload_size > 0) {
-		memcpy(raw + sizeof(*node), payload, payload_size);
-	}
+	if (payload_size > 0) memcpy(raw + sizeof(*node), payload, payload_size);
 	((smkfs_btree_node_t *)raw)->header.length = sizeof(*node) + payload_size;
 	header_checksum_update(&((smkfs_btree_node_t *)raw)->header, raw, ((smkfs_btree_node_t *)raw)->header.length);
 
-	journal_log_write(block, old_raw, raw, SMKFS_BLOCK_SIZE);
+	journal_log_write(block_id, old_raw, raw, sizeof(*node) + payload_size);
 
-	return write_block(block, raw);
+	ret = write_block(block_id, raw);
+    if (ret != 0) {
+        printk("[SmKFS] btree_node_write FAILED: block_id=%llu\n", block_id);
+    }
+    free(raw);
+    free(old_raw);
+    return ret;
 }
 
 static int btree_leaf_insert_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_entry_t *entries, uint32_t *count, const char *key, uint64_t value) {
@@ -680,8 +803,11 @@ static int btree_insert_recursive(uint64_t block, const char *key, uint64_t valu
 	uint32_t split_point = 0;
 
 	if (!key || !new_root || block == 0) return -1;
+
 	if (btree_node_read(block, &node, entries, sizeof(entries)) != 0) return -1;
+
 	if (!(node.flags & SMKFS_BTN_LEAF)) return -1;
+
 	count = node.key_count;
 	if (btree_leaf_insert_entry(&node, entries, &count, key, value) == 1) {
 		new_leaf = bitmap_alloc();
@@ -810,124 +936,139 @@ static int journal_start_transaction(void) {
 }
 
 static int journal_log_write(uint64_t block, const void *old_data, const void *new_data, size_t len) {
-	uint8_t buf[SMKFS_BLOCK_SIZE];
+	uint8_t *buf;
 	smkfs_journal_entry_t *ent;
 	size_t total_len;
+	int ret;
 
 	if (!journal_in_transaction || len > SMKFS_BLOCK_SIZE) return -1;
 	if (len > 0 && (!old_data || !new_data)) return -1;
 
-	total_len = sizeof(smkfs_journal_entry_t) + len * 2;
-    if (total_len > SMKFS_BLOCK_SIZE) return -1;
+	total_len = sizeof(smkfs_journal_entry_t) + len;
+	if (total_len > SMKFS_BLOCK_SIZE) return -1;
 
-    memset(buf, 0, sizeof(buf));
-    ent = (smkfs_journal_entry_t *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t) + len * 2, 0);
-    ent->sequence = journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_WRITE;
-    ent->data_length = (uint32_t)(len * 2);
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return -1;
 
-    if (len > 0) {
-        memcpy(buf + sizeof(smkfs_journal_entry_t), old_data, len);
-        memcpy(buf + sizeof(smkfs_journal_entry_t) + len, new_data, len);
-    }
+	memset(buf, 0, SMKFS_BLOCK_SIZE);
+	ent = (smkfs_journal_entry_t *)buf;
+	header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t) + len, 0);
+	ent->sequence = journal_next_sequence++;
+	ent->target_block = block;
+	ent->operation = SMKFS_JOP_WRITE;
+	ent->data_length = (uint32_t)len;
+
+	if (len > 0) {	
+		memcpy(buf + sizeof(smkfs_journal_entry_t), new_data, len);
+	}
 
 	header_checksum_update(&ent->header, buf, ent->header.length);
 
-    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
+	ret = write_block(sb.journal_start + journal_write_pos, buf);
+    free(buf);
+    if (ret != 0) {
+        printk("[SmKFS] journal_log_write FAILED at journal block %llu\n", sb.journal_start + journal_write_pos);
         return -1;
-	}
+    }
 
-    journal_write_pos++;
-    if (journal_write_pos >= sb.journal_length) {
-        journal_write_pos = 0;
+	journal_write_pos++;
+	if (journal_write_pos >= sb.journal_length) {
+		journal_write_pos = 0;
 	}
 	return 0;
 }
 
 static int journal_log_alloc(uint64_t block, uint32_t count) {
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-    smkfs_journal_entry_t *ent;
+	uint8_t *buf;
+	smkfs_journal_entry_t *ent;
+	int ret;
 
-    if (!journal_in_transaction) return -1;
+	if (!journal_in_transaction) return -1;
 
-    memset(buf, 0, sizeof(buf));
-    ent = (smkfs_journal_entry_t *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
-    ent->sequence = journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_ALLOC;
-    ent->data_length = count;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return -1;
 
-    header_checksum_update(&ent->header, buf, ent->header.length);
+	memset(buf, 0, SMKFS_BLOCK_SIZE);
+	ent = (smkfs_journal_entry_t *)buf;
+	header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+	ent->sequence = journal_next_sequence++;
+	ent->target_block = block;
+	ent->operation = SMKFS_JOP_ALLOC;
+	ent->data_length = count;
+	header_checksum_update(&ent->header, buf, ent->header.length);
 
-    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
-        return -1;
-	}
+	ret = write_block(sb.journal_start + journal_write_pos, buf);
+	free(buf);
+	if (ret != 0) return -1;
 
-    journal_write_pos++;
-    if (journal_write_pos >= sb.journal_length) {
-        journal_write_pos = 0;
-	}
+	journal_write_pos++;
+	if (journal_write_pos >= sb.journal_length) journal_write_pos = 0;
 	return 0;
 }
 
 static int journal_log_free(uint64_t block, uint32_t count) {
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-    smkfs_journal_entry_t *ent;
+	uint8_t *buf;
+	smkfs_journal_entry_t *ent;
+	int ret;
 
-    if (!journal_in_transaction) return -1;
+	if (!journal_in_transaction) return -1;
 
-    memset(buf, 0, sizeof(buf));
-    ent = (smkfs_journal_entry_t *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
-    ent->sequence = journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_FREE;
-    ent->data_length = count;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return -1;
 
-    header_checksum_update(&ent->header, buf, ent->header.length);
+	memset(buf, 0, SMKFS_BLOCK_SIZE);
+	ent = (smkfs_journal_entry_t *)buf;
+	header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+	ent->sequence = journal_next_sequence++;
+	ent->target_block = block;
+	ent->operation = SMKFS_JOP_FREE;
+	ent->data_length = count;
 
-    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
-        return -1;
-	}
+	header_checksum_update(&ent->header, buf, ent->header.length);
 
-    journal_write_pos++;
-    if (journal_write_pos >= sb.journal_length) {
-        journal_write_pos = 0;
+	ret = write_block(sb.journal_start + journal_write_pos, buf);
+	free(buf);
+	if (ret != 0) return -1;
+
+	journal_write_pos++;
+	if (journal_write_pos >= sb.journal_length) {
+		journal_write_pos = 0;
 	}
 
 	return 0;
 }
 
 static int journal_commit(void) {
-	uint8_t buf[SMKFS_BLOCK_SIZE];
-    smkfs_journal_entry_t *ent;
+	uint8_t *buf;
+	smkfs_journal_entry_t *ent;
+	int ret;
 
-    if (!journal_in_transaction) return -1;
+	if (!journal_in_transaction) return -1;
 
-    memset(buf, 0, sizeof(buf));
-    ent = (smkfs_journal_entry_t *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
-    ent->sequence = journal_next_sequence++;
-    ent->target_block = 0;
-    ent->operation = SMKFS_JOP_COMMIT;
-    ent->data_length = 0;
+	buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+	if (!buf) return -1;
 
-    header_checksum_update(&ent->header, buf, ent->header.length);
+	memset(buf, 0, SMKFS_BLOCK_SIZE);
+	ent = (smkfs_journal_entry_t *)buf;
+	header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(smkfs_journal_entry_t), 0);
+	ent->sequence = journal_next_sequence++;
+	ent->target_block = 0;
+	ent->operation = SMKFS_JOP_COMMIT;
+	ent->data_length = 0;
 
-    if (write_block(sb.journal_start + journal_write_pos, buf) != 0) {
-        return -1;
+	header_checksum_update(&ent->header, buf, ent->header.length);
+
+	ret = write_block(sb.journal_start + journal_write_pos, buf);
+	free(buf);
+	if (ret != 0) return -1;
+
+	journal_write_pos++;
+	if (journal_write_pos >= sb.journal_length) {
+		journal_write_pos = 0;
 	}
 
-    journal_write_pos++;
-    if (journal_write_pos >= sb.journal_length) {
-        journal_write_pos = 0;
-	}
-
-    journal_in_transaction = 0;
-    return 0;
+	journal_in_transaction = 0;
+	return 0;
 }
 static int journal_replay(void) {
     uint8_t buf[SMKFS_BLOCK_SIZE];
@@ -939,6 +1080,9 @@ static int journal_replay(void) {
         if (read_block(sb.journal_start + i, buf) != 0) continue;
 
         ent = (smkfs_journal_entry_t *)buf;
+		if (ent->header.magic[0] == 0)  {
+        	continue;
+		}
         if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != 0)
             continue;
         if (header_checksum_verify(&ent->header, buf, ent->header.length) != 0)
@@ -971,8 +1115,8 @@ static int journal_replay(void) {
 
         if (ent->operation == SMKFS_JOP_WRITE) {
             uint8_t new_data[SMKFS_BLOCK_SIZE];
-            size_t half = ent->data_length / 2;
-            memcpy(new_data, buf + sizeof(smkfs_journal_entry_t) + half, half);
+            memset(new_data, 0, SMKFS_BLOCK_SIZE);
+			memcpy(new_data, buf + sizeof(smkfs_journal_entry_t), ent->data_length);
             write_block(ent->target_block, new_data);
         } else if (ent->operation == SMKFS_JOP_ALLOC) {
             for (uint32_t j = 0; j < ent->data_length; j++)
@@ -990,6 +1134,19 @@ static int journal_replay(void) {
 
     journal_write_pos = 0;
     return 0;
+}
+
+static size_t attr_buf_total_len(const void *attr_buf) {
+	const uint8_t *ptr = (const uint8_t *)attr_buf;
+	size_t total = 0;
+
+	while (1) {
+		const smkfs_attr_header_t *ah = (const smkfs_attr_header_t *)ptr;
+		total += sizeof(smkfs_attr_header_t) + ah->length;
+		if (ah->type == SMKFS_ATTRT_END) break;
+		ptr += sizeof(smkfs_attr_header_t) + ah->length;
+	}
+	return total;
 }
 
 /* ~~~ Level 3: Kernel ~~~ */
@@ -1019,6 +1176,21 @@ int smkfs_mount(uint8_t drive) {
 
 	mounted = 1;
     printk("[SmKFS] Mounted drive %d, %llu blocks, %llu free\n", drive, sb.total_blocks, sb.free_blocks);
+	
+	smkfs_dump_superblock();
+
+	uint8_t *root_attr = (uint8_t *)malloc(SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t));
+	smkfs_record_t root_rec;
+	if (root_attr && record_read(sb.root_record, &root_rec, root_attr,
+	    SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) >= 0) {
+		uint64_t *btree_root_ptr;
+		if (record_find_attr(root_attr, SMKFS_ATTRT_DATA, (void **)&btree_root_ptr, NULL) == 0) {
+			smkfs_dump_btree(*btree_root_ptr);
+		} else {
+			printk("[SmKFS] dump: root record has no DATA attr\n");
+		}
+	}
+	free(root_attr);
 
 	return 0;
 }
@@ -1074,7 +1246,7 @@ int smkfs_lookup_by_name(uint64_t dir_record, const char *name, uint64_t *out_re
 
 	if (rec.object_type != SMKFS_ROT_DIR) return -1;
 
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_NAME, (void **)&root_block, NULL) != 0) {
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_DATA, (void **)&root_block, NULL) != 0) {
         return -1;
     }
 
@@ -1082,99 +1254,136 @@ int smkfs_lookup_by_name(uint64_t dir_record, const char *name, uint64_t *out_re
 }
 
 int smkfs_create_record(uint16_t object_type, uint64_t parent_dir, const char *name, uint64_t *out_record) {
-	if (journal_start_transaction() < 0) return -1;
-    uint8_t parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t parent_rec;
-    uint64_t new_id;
-    uint64_t btree_root = 0;
-    uint64_t *parent_btree;
+	int ret = -1;
+	size_t attr_buf_size = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
+	uint8_t *parent_attr;
+	uint8_t *new_attr;
+	smkfs_record_t parent_rec;
+	uint64_t new_id;
+	uint64_t btree_root = 0;
+	uint64_t *parent_btree;
 
-    if (!mounted || !name || !out_record) return -1;
+	if (journal_start_transaction() < 0) {
+		return -1;
+	}
 
-    new_id = record_alloc(object_type);
-    if (new_id == 0) return -1;
-
-    if (object_type == SMKFS_ROT_DIR) {
-        uint8_t empty_leaf[SMKFS_BLOCK_SIZE];
-        smkfs_btree_node_t *node;
-
-        memset(empty_leaf, 0, sizeof(empty_leaf));
-        node = (smkfs_btree_node_t *)empty_leaf;
-        header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
-        node->parent_block = 0;
-        node->key_count = 0;
-        node->right_sibling = 0;
-        header_checksum_update(&node->header, empty_leaf, sizeof(smkfs_btree_node_t));
-
-        btree_root = bitmap_alloc();
-        if (btree_root <= 0) {
-            record_free(new_id);
-            return -1;
-        }
-        if (write_block(btree_root, empty_leaf) != 0) {
-            bitmap_clear(btree_root);
-            record_free(new_id);
-            return -1;
-        }
-    }
-
-    if (record_read(parent_dir, &parent_rec, parent_attr, sizeof(parent_attr)) < 0) {
-        if (btree_root) bitmap_clear(btree_root);
-        record_free(new_id);
-        return -1;
-    }
-
-    if (record_find_attr(parent_attr, SMKFS_ATTRT_DATA, (void **)&parent_btree, NULL) != 0) {
-        if (btree_root) bitmap_clear(btree_root);
-        record_free(new_id);
-        return -1;
-    }
-
-    uint64_t new_root = *parent_btree;
-    if (btree_insert(*parent_btree, name, new_id, &new_root) != 0) {
-        if (btree_root) bitmap_clear(btree_root);
-        record_free(new_id);
-        return -1;
-    }
-
-    uint8_t new_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    memset(new_attr, 0, sizeof(new_attr));
-    smkfs_attr_header_t term;
-    term.type = SMKFS_ATTRT_END;
-    term.flags = 0;
-    term.id = 0;
-    term.length = 0;
-    memcpy(new_attr, &term, sizeof(term));
-
-    record_add_attr(new_attr, sizeof(new_attr), SMKFS_ATTRT_NAME, name, strlen(name) + 1);
-    record_add_attr(new_attr, sizeof(new_attr), SMKFS_ATTRT_PARENT, &parent_dir, sizeof(parent_dir));
-    if (btree_root) {
-        record_add_attr(new_attr, sizeof(new_attr), SMKFS_ATTRT_DATA, &btree_root, sizeof(btree_root));
-    }
-
-    smkfs_record_t new_rec;
-    header_init(&new_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t), 0);
-    new_rec.record_id = new_id;
-    new_rec.object_type = object_type;
-    new_rec.attr_count = btree_root ? 3 : 2;
-
-    if (record_write(new_id, &new_rec, new_attr) != 0) {
-        if (btree_root) bitmap_clear(btree_root);
-        record_free(new_id);
-        return -1;
-    }
-
-    parent_rec.attr_count++;
-    record_add_attr(parent_attr, sizeof(parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
-    if (record_write(parent_dir, &parent_rec, parent_attr) != 0) {
-        record_free(new_id);
+	parent_attr = (uint8_t *)malloc(attr_buf_size);
+	new_attr = (uint8_t *)malloc(attr_buf_size);
+	if (!parent_attr || !new_attr) {
+		free(parent_attr);
+		free(new_attr);
 		journal_commit();
-        return -1;
-    }
+		return -1;
+	}
 
-    *out_record = new_id;
+	if (!mounted || !name || !out_record) {
+		goto cleanup;
+	}
+
+	new_id = record_alloc(object_type);
+	if (new_id == 0) {
+		printk("[SmKFS] create_record: record_alloc failed\n");
+		goto cleanup;
+	}
+
+	if (object_type == SMKFS_ROT_DIR) {
+		uint8_t *empty_leaf;
+		smkfs_btree_node_t *node;
+
+		empty_leaf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+		if (!empty_leaf) {
+			record_free(new_id);
+			goto cleanup;
+		}
+
+		memset(empty_leaf, 0, SMKFS_BLOCK_SIZE);
+		node = (smkfs_btree_node_t *)empty_leaf;
+		header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
+		node->parent_block = 0;
+		node->key_count = 0;
+		node->right_sibling = 0;
+		header_checksum_update(&node->header, empty_leaf, sizeof(smkfs_btree_node_t));
+
+		btree_root = bitmap_alloc();
+		if (btree_root <= 0) {
+			record_free(new_id);
+			free(empty_leaf);
+			goto cleanup;
+		}
+		if (write_block(btree_root, empty_leaf) != 0) {
+			bitmap_clear(btree_root);
+			record_free(new_id);
+			free(empty_leaf);
+			goto cleanup;
+		}
+		free(empty_leaf);
+	}
+
+	if (record_read(parent_dir, &parent_rec, parent_attr, attr_buf_size) < 0) {
+		if (btree_root) bitmap_clear(btree_root);
+		record_free(new_id);
+		goto cleanup;
+	}
+
+	if (record_find_attr(parent_attr, SMKFS_ATTRT_DATA, (void **)&parent_btree, NULL) != 0) {
+		printk("[SmKFS] create_record: DATA attr missing on parent %llu\n", parent_dir);
+		if (btree_root) bitmap_clear(btree_root);
+		record_free(new_id);
+		goto cleanup;
+	}
+	uint64_t new_root = *parent_btree;
+	if (btree_insert(*parent_btree, name, new_id, &new_root) != 0) {
+		printk("[SmKFS] create_record: btree_insert failed, root=%llu\n", *parent_btree);
+		if (btree_root) bitmap_clear(btree_root);
+		record_free(new_id);
+		goto cleanup;
+	}
+
+	memset(new_attr, 0, attr_buf_size);
+	smkfs_attr_header_t term;
+	term.type = SMKFS_ATTRT_END;
+	term.flags = 0;
+	term.id = 0;
+	term.length = 0;
+	memcpy(new_attr, &term, sizeof(term));
+
+	record_add_attr(new_attr, attr_buf_size, SMKFS_ATTRT_NAME, name, strlen(name) + 1);
+	record_add_attr(new_attr, attr_buf_size, SMKFS_ATTRT_PARENT, &parent_dir, sizeof(parent_dir));
+	if (btree_root) {
+		record_add_attr(new_attr, attr_buf_size, SMKFS_ATTRT_DATA, &btree_root, sizeof(btree_root));
+	}
+
+	smkfs_record_t new_rec;
+	header_init(&new_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t), 0);
+	new_rec.record_id = new_id;
+	new_rec.object_type = object_type;
+	new_rec.attr_count = btree_root ? 3 : 2;
+	new_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(new_attr);
+
+	if (record_write(new_id, &new_rec, new_attr) != 0) {
+		printk("[SmKFS] create_record: record_write(new_id=%llu) failed\n", new_id);
+		if (btree_root) bitmap_clear(btree_root);
+		record_free(new_id);
+		goto cleanup;
+	}
+
+	parent_rec.attr_count++;
+	record_add_attr(parent_attr, attr_buf_size, SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
+	parent_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(parent_attr);
+	if (record_write(parent_dir, &parent_rec, parent_attr) != 0) {
+		printk("[SmKFS] create_record: record_write(parent_dir=%llu) failed\n", parent_dir);
+		record_free(new_id);
+		goto cleanup;
+	}
+
+	*out_record = new_id;
+	ret = 0;
+
+cleanup:
+	free(parent_attr);
+	free(new_attr);
 	journal_commit();
-    return 0;
+	return ret;
 }
 int smkfs_delete_record(uint64_t record_id) {
     uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
@@ -1241,80 +1450,76 @@ int smkfs_delete_record(uint64_t record_id) {
 }
 
 int smkfs_rename(uint64_t record_id, uint64_t new_parent, const char *new_name) {
-    uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
-    char *old_name;
-    uint64_t *old_parent_ptr;
-    uint64_t old_parent;
-    uint8_t old_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t old_parent_rec;
-    uint64_t *old_btree;
-    uint64_t new_root;
-    uint8_t new_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t new_parent_rec;
-    uint64_t *new_btree;
-    uint64_t new_root2;
+	uint8_t rec_attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+	uint8_t old_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+	uint8_t new_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+	smkfs_record_t rec, old_parent_rec, new_parent_rec;
+	uint64_t *old_parent_ptr;
+	uint64_t old_parent;
+	uint64_t *old_btree_ptr;
+	uint64_t *new_btree_ptr;
+	uint64_t new_root;
 
-    if (!mounted || !new_name || record_id == 0 || new_parent == 0) {
-        return -1;
-	}
+	if (!mounted || !new_name) return -1;
 
-    if (record_read(record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
-        return -1;
-	}
-
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_NAME, (void **)&old_name, NULL) != 0) {
-        return -1;
-	}
-
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_PARENT, (void **)&old_parent_ptr, NULL) != 0) {
-        return -1;
-	}
-    old_parent = *old_parent_ptr;
-
-    if (record_read(old_parent, &old_parent_rec, old_parent_attr, sizeof(old_parent_attr)) < 0) {
-        return -1;
-	}
-
-    if (record_find_attr(old_parent_attr, SMKFS_ATTRT_DATA, (void **)&old_btree, NULL) != 0) {
-        return -1;
-	}
-
-    new_root = *old_btree;
-    if (btree_delete(*old_btree, old_name, &new_root) != 0) {
-        return -1;
-	}
-
-    record_add_attr(old_parent_attr, sizeof(old_parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
-    if (record_write(old_parent, &old_parent_rec, old_parent_attr) != 0) {
-        return -1;
-	}
-
-    if (record_read(new_parent, &new_parent_rec, new_parent_attr, sizeof(new_parent_attr)) < 0) {
-        return -1;
-	}
-
-    if (record_find_attr(new_parent_attr, SMKFS_ATTRT_DATA, (void **)&new_btree, NULL) != 0) {
-        return -1;
-	}
-
-    new_root2 = *new_btree;
-    if (btree_insert(*new_btree, new_name, record_id, &new_root2) != 0) {
-        return -1;
-	}
-
-    record_add_attr(new_parent_attr, sizeof(new_parent_attr), SMKFS_ATTRT_DATA, &new_root2, sizeof(new_root2));
-    if (record_write(new_parent, &new_parent_rec, new_parent_attr) != 0) {
-        return -1;
-	}
-
-    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_NAME, new_name, strlen(new_name) + 1);
-    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_PARENT, &new_parent, sizeof(new_parent));
-    if (record_write(record_id, &rec, attr_buf) != 0) {
+	if (record_read(record_id, &rec, rec_attr_buf, sizeof(rec_attr_buf)) < 0) {
 		return -1;
 	}
 
-    return 0;
+	if (record_find_attr(rec_attr_buf, SMKFS_ATTRT_PARENT, (void **)&old_parent_ptr, NULL) != 0) {
+		return -1;
+	}
+	old_parent = *old_parent_ptr;
+
+	if (record_read(old_parent, &old_parent_rec, old_parent_attr, sizeof(old_parent_attr)) < 0) {
+		return -1;
+	}
+	if (record_find_attr(old_parent_attr, SMKFS_ATTRT_DATA, (void **)&old_btree_ptr, NULL) != 0) {
+		return -1;
+	}
+
+	if (record_read(new_parent, &new_parent_rec, new_parent_attr, sizeof(new_parent_attr)) < 0) {
+		return -1;
+	}
+	if (record_find_attr(new_parent_attr, SMKFS_ATTRT_DATA, (void **)&new_btree_ptr, NULL) != 0) {
+		return -1;
+	}
+
+	uint8_t old_name_buf[SMKFS_NAME_LEN];
+	void *old_name_ptr;
+	if (record_find_attr(rec_attr_buf, SMKFS_ATTRT_NAME, &old_name_ptr, NULL) != 0) {
+		return -1;
+	}
+	strncpy((char *)old_name_buf, (const char *)old_name_ptr, SMKFS_NAME_LEN - 1);
+	old_name_buf[SMKFS_NAME_LEN - 1] = '\0';
+
+	new_root = *old_btree_ptr;
+	if (btree_delete(*old_btree_ptr, (const char *)old_name_buf, &new_root) != 0) {
+		return -1;
+	}
+	record_add_attr(old_parent_attr, sizeof(old_parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
+	if (record_write(old_parent, &old_parent_rec, old_parent_attr) != 0) {
+		return -1;
+	}
+
+	new_root = *new_btree_ptr;
+	if (btree_insert(*new_btree_ptr, new_name, record_id, &new_root) != 0) {
+		return -1;
+	}
+	record_add_attr(new_parent_attr, sizeof(new_parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
+	if (old_parent != new_parent) {
+		if (record_write(new_parent, &new_parent_rec, new_parent_attr) != 0) {
+			return -1;
+		}
+	}
+
+	record_add_attr(rec_attr_buf, sizeof(rec_attr_buf), SMKFS_ATTRT_NAME, new_name, strlen(new_name) + 1);
+	record_add_attr(rec_attr_buf, sizeof(rec_attr_buf), SMKFS_ATTRT_PARENT, &new_parent, sizeof(new_parent));
+	if (record_write(record_id, &rec, rec_attr_buf) != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 int smkfs_read(uint64_t record_id, uint64_t offset, size_t len, void *buf) {
@@ -1435,12 +1640,18 @@ int smkfs_write(uint64_t record_id, uint64_t offset, size_t len, const void *buf
 	}
 
 	if (new_size != file_size) {
-        record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
-        rec.attr_count++;
-        if (record_write(record_id, &rec, attr_buf) != 0) {
-            return -1;
+		uint8_t final_attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+		smkfs_record_t final_rec;
+
+		if (record_read(record_id, &final_rec, final_attr_buf, sizeof(final_attr_buf)) < 0) {
+			return -1;
 		}
-    }
+
+		record_add_attr(final_attr_buf, sizeof(final_attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
+		if (record_write(record_id, &final_rec, final_attr_buf) != 0) {
+			return -1;
+		}
+	}
 
     return (int)len;
 }
@@ -1497,6 +1708,7 @@ int smkfs_truncate(uint64_t record_id, uint64_t new_size) {
 
     record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
     rec.attr_count++;
+	rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
     return record_write(record_id, &rec, attr_buf);
 }
 
@@ -1520,6 +1732,7 @@ int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size
 	}
 
     rec.attr_count++;
+	rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
     return record_write(record_id, &rec, attr_buf);
 }
 
@@ -1594,6 +1807,7 @@ int smkfs_open(const char *path, int flags) {
             }
         }
     }
+	printk("[OPEN] fd: %d\n", fd);
 
     return fd;
 }
@@ -1660,9 +1874,11 @@ int smkfs_seek(int fd, int64_t offset, int whence) {
 		}
 		case SMKFS_SEEK_CUR: {
 			new_offset = (int64_t)fd_table[fd].offset + offset;
+			break;
 		}
 		case SMKFS_SEEK_SET: {
 			new_offset = offset;
+			break;
 		}
 		default: {
 			return -1;
@@ -1858,7 +2074,6 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
     smkfs_superblock_t new_sb;
     smkfs_record_t root_rec;
     smkfs_btree_node_t *node;
-    smkfs_attr_header_t term;
 
 	if (total_blocks < 16) return -1;
 
@@ -1915,25 +2130,22 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
     node = (smkfs_btree_node_t *)block;
     header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
     node->parent_block = 0;
+	node->flags = SMKFS_BTN_LEAF | SMKFS_BTN_ROOT;
     node->key_count = 0;
     node->right_sibling = 0;
     header_checksum_update(&node->header, block, sizeof(smkfs_btree_node_t));
     if (write_block(btree_root, block) != 0) return -1;
 
 	memset(block, 0, sizeof(block));
-    header_init(&root_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + 2 * sizeof(smkfs_attr_header_t), 0);
+    header_init(&root_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + 2 * sizeof(smkfs_attr_header_t) + sizeof(uint64_t), 0);
     root_rec.record_id = root_block;
     root_rec.object_type = SMKFS_ROT_DIR;
     root_rec.attr_count = 2;
 
-    term.type = SMKFS_ATTRT_END;
-    term.flags = 0;
-    term.id = 0;
-    term.length = 0;
-    memcpy(block + sizeof(smkfs_record_t), &term, sizeof(term));
+    memcpy(block, &root_rec, sizeof(root_rec));
 
 	smkfs_attr_header_t *name_ah = (smkfs_attr_header_t *)(block + sizeof(smkfs_record_t));
-    name_ah->type = SMKFS_ATTRT_NAME;
+    name_ah->type = SMKFS_ATTRT_DATA;
     name_ah->flags = 0;
     name_ah->id = 0;
     name_ah->length = sizeof(uint64_t);
@@ -1945,11 +2157,12 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
     end_ah->id = 0;
     end_ah->length = 0;
 
-    root_rec.header.length = sizeof(smkfs_record_t) + 2 * sizeof(smkfs_attr_header_t) + sizeof(uint64_t);
-    header_checksum_update(&root_rec.header, block, root_rec.header.length);
+    header_checksum_update(&((smkfs_record_t *)block)->header, block, root_rec.header.length);
     if (write_block(root_block, block) != 0) return -1;
 
 	printk("[SmKFS] Formatted drive %d, %llu blocks total, %llu data blocks\n", drive, total_blocks, data_blocks);
+
+	smkfs_fsck(drive_num);
     return 0;
 }
 
@@ -2109,7 +2322,7 @@ int smkfs_dump_journal(void) {
         if (ent->operation == SMKFS_JOP_COMMIT) {
             printk("  [COMMIT]\n");
         } else if (ent->operation == SMKFS_JOP_WRITE) {
-            printk("  [WRITE %llu bytes]\n", ent->data_length / 2);
+            printk("  [WRITE %llu bytes]\n", ent->data_length);
         } else if (ent->operation == SMKFS_JOP_ALLOC) {
             printk("  [ALLOC %u blocks]\n", ent->data_length);
         } else if (ent->operation == SMKFS_JOP_FREE) {

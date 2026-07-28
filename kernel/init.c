@@ -27,6 +27,8 @@
 #include <screen/screen.h>
 #include <arch/x86/io.h>
 #include <fs/amfs.h>
+#include <fs/smkfs.h>
+#include <lib/string.h>
 #include <drivers/serial.h>
 #include <arch/x86/timer.h>
 #include <drivers/keyboard.h>
@@ -61,6 +63,7 @@ static int storage_init(void) {
     pci_device_t *dev = pci_get_first_device();
     int found_ide = 0;
     int fs_mounted = 0;
+    char drive_letter = 'A';
 
     while (dev) {
         if (dev->class_code != PCI_CLASS_MASS_STORAGE) {
@@ -98,31 +101,51 @@ static int storage_init(void) {
                 }
             
                 found_ide = 1;
+                drive_letter = (char)('A' + present_drive);
+                (void)drive_letter;
             
                 /* Try to mount existing filesystem */
-                if (amfs_mount() == 0) {
-                    printk("[storage] AmFS mounted from existing image\n");
+                if (smkfs_mount((uint8_t)present_drive) == 0) {
+                    printk("[storage] SmKFS mounted from existing image\n");
                     fs_mounted = 1;
                     break;
                 }
             
-                printk("[storage] No valid AmFS, formatting...\n");
-                if (amfs_mkfs(10 * 2048) != 0) {
-                    printk("[storage] amfs_mkfs failed\n");
+                printk("[storage] No valid SmKFS, formatting...\n");
+                uint64_t total_blocks = (10ULL * 1024 * 1024) / SMKFS_BLOCK_SIZE; // 2560
+                if (smkfs_mkfs((uint8_t)present_drive, total_blocks) != 0) {
+                    printk("[storage] smkfs_mkfs failed\n");
                     break;
                 }
             
-                if (amfs_mount() != 0) {
-                    printk("[storage] amfs_mount failed after mkfs\n");
+                if (smkfs_mount((uint8_t)present_drive) != 0) {
+                    printk("[storage] smkfs_mount failed after mkfs\n");
                     break;
                 }
             
-                if (amfs_write("/helloworld.txt", "Hello from AmitFS!\n", 19) != 0) {
-                    printk("[storage] Failed to write /helloworld.txt\n");
+                char path_hello[SMKFS_NAME_LEN];
+                char path_readme[SMKFS_NAME_LEN];
+                path_hello[0] = drive_letter;
+                path_hello[1] = ':';
+                path_hello[2] = '/';
+                strncpy(path_hello + 3, "helloworld.txt", SMKFS_NAME_LEN - 3);
+
+                path_readme[0] = drive_letter;
+                path_readme[1] = ':';
+                path_readme[2] = '/';
+                strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
+
+                int fd = smkfs_open(path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
+                if (fd < 0 || smkfs_write_file(fd, "Hello from SmKFS!\n", 19) < 0) {
+                    printk("[storage] Failed to write %s\n", path_hello);
                 }
-                if (amfs_write("/README", "AmitX Filesystem v0.1\n", 22) != 0) {
-                    printk("[storage] Failed to write /README\n");
+                if (fd >= 0) smkfs_close(fd);
+
+                fd = smkfs_open(path_readme, SMKFS_O_WRONLY | SMKFS_O_CREATE);
+                if (fd < 0 || smkfs_write_file(fd, "Shadow Kernel File System v0.1\n", 32) < 0) {
+                    printk("[storage] Failed to write %s\n", path_readme);
                 }
+                if (fd >= 0) smkfs_close(fd);
             
                 fs_mounted = 1;
                 break;
@@ -167,21 +190,61 @@ static int storage_init(void) {
     }
 
     if (fs_mounted) {
-        amfs_ls("/");
+        char root_path[4] = { drive_letter, ':', '/', '\0' };
+        smkfs_dirent_t entries[32];
+        size_t count = 0;
+
+        if (smkfs_readdir(root_path, entries, 32, &count) == 0) {
+            printk("[storage] Root directory (%zu entries):\n", count);
+            for (size_t i = 0; i < count; i++) {
+                printk("  %s\n", entries[i].name);
+            }
+        } else {
+            printk("[storage] smkfs_readdir failed on %s\n", root_path);
+        }
+
+        char path_hello[SMKFS_NAME_LEN];
+        char path_readme[SMKFS_NAME_LEN];
+        path_hello[0] = drive_letter;
+        path_hello[1] = ':';
+        path_hello[2] = '/';
+        strncpy(path_hello + 3, "helloworld.txt", SMKFS_NAME_LEN - 3);
+
+        path_readme[0] = drive_letter;
+        path_readme[1] = ':';
+        path_readme[2] = '/';
+        strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
 
         char buf[256];
         int len;
+        int fd;
 
-        len = amfs_read("/helloworld.txt", buf, sizeof(buf));
-        if (len > 0) {
-            buf[len] = '\0';
-            printk("[amfs] Read back: %s", buf);
+        fd = smkfs_open(path_hello, SMKFS_O_RDONLY);
+        if (fd >= 0) {
+            len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            if (len > 0) {
+                buf[len] = '\0';
+                printk("[storage] Read back %s: %s\n", path_hello, buf);
+            } else {
+                printk("[storage] Read back %s: error\n", path_hello);
+            }
+            smkfs_close(fd);
+        } else {
+            printk("[storage] Failed to open %s for readback\n", path_hello);
         }
 
-        len = amfs_read("/README", buf, sizeof(buf));
-        if (len > 0) {
-            buf[len] = '\0';
-            printk("[amfs] Read back: %s", buf);
+        fd = smkfs_open(path_readme, SMKFS_O_RDONLY);
+        if (fd >= 0) {
+            len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            if (len > 0) {
+                buf[len] = '\0';
+                printk("[storage] Read back %s: %s\n", path_readme, buf);
+            } else {
+                printk("[storage] Read back %s: error\n", path_readme);
+            }
+            smkfs_close(fd);
+        } else {
+            printk("[storage] Failed to open %s for readback\n", path_readme);
         }
     } else {
         printk("[storage] No filesystem available, skipping file ops\n");

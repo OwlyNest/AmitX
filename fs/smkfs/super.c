@@ -129,6 +129,8 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
     smkfs_record_t root_rec;
     smkfs_btree_node_t *node;
 
+    crc32c_test_vectors();
+
     if (total_blocks < 16) return SMKFS_ERR_INVAL;
 
     drive_num = drive;

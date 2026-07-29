@@ -47,6 +47,7 @@ int header_validate(const smkfs_header_t *h, uint16_t expected_type);
 uint32_t checksum_compute(const void *data, size_t len);
 void header_checksum_update(smkfs_header_t *h, const void *data, size_t len);
 int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len);
+void crc32c_test_vectors(void);
 
 /* --- Bitmap --- */
 void bitmap_set(uint64_t block);

@@ -222,6 +222,7 @@ static int storage_init(void) {
         fd = smkfs_open(path_hello, SMKFS_O_RDONLY);
         if (fd >= 0) {
             len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            printk("len = %d\n", len);
             if (len > 0) {
                 buf[len] = '\0';
                 printk("[storage] Read back %s: %s\n", path_hello, buf);
@@ -236,6 +237,7 @@ static int storage_init(void) {
         fd = smkfs_open(path_readme, SMKFS_O_RDONLY);
         if (fd >= 0) {
             len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            printk("len = %d\n", len);
             if (len > 0) {
                 buf[len] = '\0';
                 printk("[storage] Read back %s: %s\n", path_readme, buf);

@@ -36,9 +36,13 @@
 #include <fs/smkfs_internal.h>
 #include <lib/string.h>
 #include <screen/printk.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
+
+/* CRC32C lookup table */
+
 static const uint32_t crc32c_table[256] = {
     0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
     0x8AD958CF, 0x78B2DBCC, 0x6BE22838, 0x9989AB3B, 0x4D43CFD0, 0xBF284CD3, 0xAC78BF27, 0x5E133C24,
@@ -106,6 +110,7 @@ int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
         printk("[SmKFS] Wrong magic, expected %.4s, got %.4s\n", SMKFS_MAGIC, h->magic);
         return SMKFS_ERR_CORRUPT;
     }
+
     if (h->version != SMKFS_VERSION) {
         printk("[SmKFS] Wrong version, expected %d, got %d\n", SMKFS_VERSION, h->version);
         return SMKFS_ERR_CORRUPT;
@@ -131,6 +136,7 @@ int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len
     if (len > sizeof(tmp_buf)) {
         return SMKFS_ERR_CORRUPT;
     }
+
     memcpy(tmp_buf, data, len);
     ((smkfs_header_t *)tmp_buf)->checksum = 0;
     uint32_t computed = checksum_compute(tmp_buf, len);
@@ -138,6 +144,7 @@ int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len
     if (computed != saved) {
         return SMKFS_ERR_CORRUPT;
     }
+    
     return SMKFS_OK;
 }
 
@@ -150,10 +157,16 @@ void crc32c_test_vectors(void) {
         size_t len;
         uint32_t expected;
     } vectors[] = {
-        { "",       0,  0x00000000 },
-        { "a",      1,  0xC1D04330 },
-        { "abc",    3,  0xE2F5A725 },
-        { "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56, 0x0A29B568 },
+        { "",             0,  0x00000000},
+        { "a",            1,  0xC1D04330},
+        { "abc",          3,  0x364B3FB7},
+        { "123456789",    9,  0xE3069283},
+        { "Phonon/Shadow",13, 0x34861134},
+        { "Zhazha",       6,  0xC568066F},
+        { "Amity",        5,  0x255A2D1A},
+        { "ALRW",         4,  0x3D161DCD},
+
+        { "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56, 0x071325f5 },
         { NULL, 0, 0 }
     };
 

@@ -33,20 +33,20 @@
 
 /* --- Functions ---*/
 
-int smkfs_getattr(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
-    if (!mounted || !rec || !attr_buf || record_id == 0) {
+int smkfs_getattr(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
+    if (!mnt->mounted || !rec || !attr_buf || record_id == 0) {
         return SMKFS_ERR_INVAL;
 	}
 
-    return record_read(record_id, rec, attr_buf, buf_size);
+    return record_read(mnt, record_id, rec, attr_buf, buf_size);
 }
 
-int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size_t len) {
+int smkfs_setattr(smkfs_mount_t *mnt, uint64_t record_id, uint16_t attr_type, const void *data, size_t len) {
     uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
     smkfs_record_t rec;
 
-    if (!mounted || !data || record_id == 0) return SMKFS_ERR_INVAL;
-    if (record_read(record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
+    if (!mnt->mounted || !data || record_id == 0) return SMKFS_ERR_INVAL;
+    if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
         return SMKFS_ERR_IO;
 	}
 
@@ -56,48 +56,48 @@ int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size
 
     rec.attr_count++;
     rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
-    return record_write(record_id, &rec, attr_buf);
+    return record_write(mnt, record_id, &rec, attr_buf);
 }
 
-int smkfs_stat(const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
+int smkfs_stat(smkfs_mount_t *mnt, const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
     uint64_t record_id;
 
-    if (!mounted || !path || !rec || !attr_buf || path[1] != ':' || path[2] != '/') {
+    if (!mnt->mounted || !path || !rec || !attr_buf || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
 	}
 
-    if (path_lookup(path, &record_id) != 0) {
+    if (path_lookup(mnt, path, &record_id) != 0) {
         return SMKFS_ERR_NOTFOUND;
 	}
 
-    return smkfs_getattr(record_id, rec, attr_buf, buf_size);
+    return smkfs_getattr(mnt, record_id, rec, attr_buf, buf_size);
 }
 
-int smkfs_chmod(const char *path, uint16_t permissions) {
+int smkfs_chmod(smkfs_mount_t *mnt, const char *path, uint16_t permissions) {
     uint64_t record_id;
 
-    if (!mounted || !path || path[1] != ':' || path[2] != '/') {
+    if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
 	}
 
-    if (path_lookup(path, &record_id) != 0) {
+    if (path_lookup(mnt, path, &record_id) != 0) {
         return SMKFS_ERR_NOTFOUND;
 	}
 
-    return smkfs_setattr(record_id, SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
+    return smkfs_setattr(mnt, record_id, SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
 }
 
-int smkfs_chown(const char *path, uint32_t uid, uint32_t gid) {
+int smkfs_chown(smkfs_mount_t *mnt, const char *path, uint32_t uid, uint32_t gid) {
     uint64_t record_id;
     uint64_t owner = ((uint64_t)uid << 32) | gid;
 
-    if (!mounted || !path || path[1] != ':' || path[2] != '/') {
+    if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
 	}
 
-    if (path_lookup(path, &record_id) != 0) {
+    if (path_lookup(mnt, path, &record_id) != 0) {
         return SMKFS_ERR_NOTFOUND;
 	}
 
-    return smkfs_setattr(record_id, SMKFS_ATTRT_OWNER, &owner, sizeof(owner));
+    return smkfs_setattr(mnt, record_id, SMKFS_ATTRT_OWNER, &owner, sizeof(owner));
 }

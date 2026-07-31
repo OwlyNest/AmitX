@@ -1,5 +1,5 @@
 /*
-	* fs/smkfs/debug.c - Debug and Diagnostic Output
+	* fs/smkfs/debug.c - Debug and Diagnostic Output (G1)
 	* Author:   amity
 	* Date:     Wed Jul 29 17:39:11 2026
 	* Copyright © 2026 OwlyNest
@@ -34,39 +34,45 @@
 
 /* --- Functions ---*/
 
-int smkfs_dump_superblock(void) {
-    if (!mounted) {
+int smkfs_dump_superblock(smkfs_mount_t *mnt) {
+    if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;
     }
 
-    printk("\n=== SmKFS Superblock ===\n");
-    printk("Magic:        %.4s\n", sb.header.magic);
-    printk("Version:      %u\n", sb.header.version);
-    printk("Type:         0x%04X\n", sb.header.type);
-    printk("Length:       %u\n", sb.header.length);
-    printk("Flags:        0x%08X\n", sb.header.flags);
-    printk("Checksum:     0x%08X\n", sb.header.checksum);
-    printk("Total blocks: %llu\n", sb.total_blocks);
-    printk("Free blocks:  %llu\n", sb.free_blocks);
-    printk("Records:      %llu\n", sb.record_count);
-    printk("Next ID:      %llu\n", sb.next_record_id);
-    printk("Root record:  %llu\n", sb.root_record);
-    printk("Journal:      %llu + %llu\n", sb.journal_start, sb.journal_length);
-    printk("Bitmap:       %llu + %llu\n", sb.bitmap_start, sb.bitmap_length);
-    printk("Data start:   %llu\n", sb.data_start);
-    printk("Block size:   %u\n", sb.block_size);
-    printk("========================\n\n");
+    smkfs_superblock_t sb = mnt->sb; // Not gonna rewrite all that
+
+    printk("\n=== SmKFS Superblock (G1) ===\n");
+    printk("Magic:           %.4s\n", sb.header.magic);
+    printk("Version:         %u\n", sb.header.version);
+    printk("Type:            0x%04X\n", sb.header.type);
+    printk("Length:          %u\n", sb.header.length);
+    printk("Flags:           0x%08X\n", sb.header.flags);
+    printk("Checksum:        0x%08X\n", sb.header.checksum);
+    printk("Total blocks:    %llu\n", sb.total_blocks);
+    printk("Free blocks:     %llu\n", sb.free_blocks);
+    printk("Records:         %llu\n", sb.record_count);
+    printk("Next ID:         %llu\n", sb.next_record_id);
+    printk("Root record:     %llu\n", sb.root_record_id);
+    printk("MRT:             %llu + %llu (cap %llu, free %llu)\n", sb.mrt_start, sb.mrt_length, sb.mrt_capacity, sb.mrt_free_count);
+    printk("Journal:         %llu + %llu (head %llu, tail %llu, seq %llu)\n", sb.journal_start, sb.journal_length, sb.journal_head, sb.journal_tail, sb.journal_sequence);
+    printk("Bitmap:          %llu + %llu\n", sb.bitmap_start, sb.bitmap_length);
+    printk("Data start:      %llu\n", sb.data_start);
+    printk("Block size:      %u\n", sb.block_size);
+    printk("SB flags:        0x%08X\n", sb.flags);
+    printk("Mount count:     %u / %u\n", sb.mount_count, sb.max_mount_count);
+    printk("Volume:          %.64s\n", sb.volume_name);
+    printk("===============================\n\n");
     return SMKFS_OK;
 }
 
-int smkfs_dump_record(uint64_t record_id) {
+int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id) {
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec;
     const uint8_t *ptr;
 
-    if (!mounted || record_id == 0) return SMKFS_ERR_INVAL;
-    if (read_block(record_id, block) != 0) {
+    if (!mnt->mounted || record_id == 0) return SMKFS_ERR_INVAL;
+    if (read_block(mnt, record_id, block) != 0) {
         printk("[SmKFS] Cannot read record %llu\n", record_id);
         return SMKFS_ERR_IO;
     }
@@ -87,6 +93,8 @@ int smkfs_dump_record(uint64_t record_id) {
     printk("Record ID:  %llu\n", rec->record_id);
     printk("Obj Type:   %u\n", rec->object_type);
     printk("Attr Count: %u\n", rec->attr_count);
+    printk("Link Count: %u\n", rec->link_count);
+    printk("Generation: %llu\n", rec->generation);
 
     ptr = block + sizeof(smkfs_record_t);
     while (1) {
@@ -95,8 +103,8 @@ int smkfs_dump_record(uint64_t record_id) {
             printk("  [END]\n");
             break;
         }
-		
-        printk("  Attr %s (0x%04X), len %u: ", smkfs_attr_name(ah->type), ah->type, ah->length);
+
+        printk("  Attr %s (0x%04X, id=%u), len %u: ", smkfs_attr_name(ah->type), ah->type, ah->id, ah->length);
         smkfs_attr_debug_print(ah->type, ptr + sizeof(smkfs_attr_header_t), ah->length);
         printk("\n");
         ptr += sizeof(smkfs_attr_header_t) + ah->length;
@@ -106,25 +114,29 @@ int smkfs_dump_record(uint64_t record_id) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_journal(void) {
+int smkfs_dump_journal(smkfs_mount_t *mnt) {
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_journal_entry_t *ent;
 
-    if (!mounted) {
+    if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;
     }
 
     printk("\n=== Journal ===\n");
-    for (uint64_t i = 0; i < sb.journal_length; i++) {
-        if (read_block(sb.journal_start + i, block) != 0) continue;
+    for (uint64_t i = 0; i < mnt->sb.journal_length; i++) {
+        if (read_block(mnt, mnt->sb.journal_start + i, block) != 0) continue;
 
         ent = (smkfs_journal_entry_t *)block;
         if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != 0) {
             continue;
-		}
+        }
 
-        printk("Entry %llu: seq=%llu, op=%u, block=%llu, len=%u\n", i, ent->sequence, ent->operation, ent->target_block, ent->data_length);
+        printk("Entry %llu: seq=%llu, op=%u, block=%llu, len=%u, rec=%llu\n", i, ent->sequence, ent->operation, ent->target_block, ent->data_length, ent->record_id);
+
+        /*
+        * Sinatra and C should be mandatory!
+        */
 
         if (ent->operation == SMKFS_JOP_COMMIT) {
             printk("  [COMMIT]\n");
@@ -134,6 +146,10 @@ int smkfs_dump_journal(void) {
             printk("  [ALLOC %u blocks]\n", ent->data_length);
         } else if (ent->operation == SMKFS_JOP_FREE) {
             printk("  [FREE %u blocks]\n", ent->data_length);
+        } else if (ent->operation == SMKFS_JOP_MRT_UPDATE) {
+            printk("  [MRT UPDATE]\n");
+        } else if (ent->operation == SMKFS_JOP_CHECKPOINT) {
+            printk("  [CHECKPOINT]\n");
         }
     }
 
@@ -141,14 +157,14 @@ int smkfs_dump_journal(void) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_btree(uint64_t root_block) {
-    if (!mounted) {
+int smkfs_dump_btree(smkfs_mount_t *mnt, uint64_t root_block) {
+    if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;
     }
-	
+
     printk("\n=== B+ Tree ===\n");
-    btree_dump_recursive(root_block, 0);
+    btree_dump_recursive(mnt, root_block, 0);
     printk("===============\n\n");
     return SMKFS_OK;
 }

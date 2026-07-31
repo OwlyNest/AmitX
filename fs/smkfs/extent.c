@@ -34,10 +34,10 @@
 
 /* --- Functions ---*/
 
-int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out) {
+int extent_resolve(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out) {
     uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
     smkfs_record_t rec;
-    int attr_len = record_read(record_id, &rec, attr_buf, sizeof(attr_buf));
+    int attr_len = record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf));
     if (attr_len < 0) return attr_len;
 
     void *attr_data;
@@ -61,11 +61,11 @@ int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_extent_t *o
 /*
  * TODO: optimize for G1 multi-valued extent attributes
  */
-int extent_add(uint64_t record_id, uint64_t logical_block, uint64_t physical_block, uint32_t count) {
+int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, uint64_t physical_block, uint32_t count) {
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec = (smkfs_record_t *)block;
 
-    if (read_block(record_id, block) != 0) return SMKFS_ERR_IO;
+    if (read_block(mnt, record_id, block) != 0) return SMKFS_ERR_IO;
 
     uint8_t *attr_buf = block + sizeof(smkfs_record_t);
     size_t attr_space = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
@@ -104,15 +104,15 @@ int extent_add(uint64_t record_id, uint64_t logical_block, uint64_t physical_blo
     rec->attr_count--;
 
     header_checksum_update(&rec->header, block, rec->header.length);
-    return write_block(record_id, block);
+    return write_block(mnt, record_id, block);
 }
 
-void extent_remove_all(uint64_t record_id) {
+void extent_remove_all(smkfs_mount_t *mnt, uint64_t record_id) {
     uint8_t *block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
     if (!block) return;
 
     smkfs_record_t *rec = (smkfs_record_t *)block;
-    if (read_block(record_id, block) != 0) {
+    if (read_block(mnt, record_id, block) != 0) {
         free(block);
         return;
     }
@@ -128,7 +128,7 @@ void extent_remove_all(uint64_t record_id) {
     uint32_t num_extents = existing_len / sizeof(smkfs_extent_t);
     smkfs_extent_t *extents = (smkfs_extent_t *)existing;
     for (uint32_t i = 0; i < num_extents; i++) {
-        bitmap_free_range(extents[i].physical_block, extents[i].block_count);
+        bitmap_free_range(mnt, extents[i].physical_block, extents[i].block_count);
     }
 
     record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
@@ -143,6 +143,6 @@ void extent_remove_all(uint64_t record_id) {
     }
 
     header_checksum_update(&rec->header, block, rec->header.length);
-    write_block(record_id, block);
+    write_block(mnt, record_id, block);
     free(block);
 }

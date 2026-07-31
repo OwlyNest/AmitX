@@ -35,7 +35,7 @@
 /* --- Functions ---*/
 
 /*
-	* The central attribute organ is the single source of truth for how every
+	* The Master Attribute Table is the single source of truth for how every
 	* attribute type behaves.  Adding a new attribute to SmKFS means
 	* adding one row to the attr_registry[] table below -- nothing more.
 */
@@ -90,8 +90,7 @@ static void attr_print_extents(const void *data, size_t len) {
     const smkfs_extent_t *e = (const smkfs_extent_t *)data;
     printk("[%u extents]", n);
     for (uint32_t i = 0; i < n && i < 3; i++) {
-        printk(" {log=%llu phys=%llu cnt=%u}",
-                e[i].logical_offset, e[i].physical_block, e[i].block_count);
+        printk(" {log=%llu phys=%llu cnt=%u}", e[i].logical_offset, e[i].physical_block, e[i].block_count);
     }
     if (n > 3) printk(" ...");
 }

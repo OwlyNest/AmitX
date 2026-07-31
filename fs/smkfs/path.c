@@ -1,5 +1,5 @@
 /*
-	* fs/smkfs/path.c - Path Resolution
+	* fs/smkfs/path.c - Path Resolution (G1)
 	* Author:   amity
 	* Date:     Wed Jul 29 17:39:04 2026
 	* Copyright © 2026 OwlyNest
@@ -33,7 +33,7 @@
 
 /* --- Functions ---*/
 
-int path_lookup(const char *path, uint64_t *out_record) {
+int path_lookup(smkfs_mount_t *mnt, const char *path, uint64_t *out_record) {
     const char *p;
     char name[SMKFS_NAME_LEN];
     uint64_t current;
@@ -43,9 +43,9 @@ int path_lookup(const char *path, uint64_t *out_record) {
     if (!path || path[1] != ':' || path[2] != '/') return SMKFS_ERR_INVAL;
 
     path_drive = path[0] - 'A';
-    if (path_drive != drive_num) return SMKFS_ERR_INVAL;
+    if (path_drive != mnt->drive_num) return SMKFS_ERR_INVAL;
 
-    current = sb.root_record;
+    current = mnt->sb.root_record_id;
     p = path + 3;
 
     while (*p) {
@@ -56,12 +56,12 @@ int path_lookup(const char *path, uint64_t *out_record) {
         while (*p && *p != '/' && i < SMKFS_NAME_LEN - 1) {
             name[i++] = *p++;
         }
-		
+        
         name[i] = '\0';
 
-        if (smkfs_lookup_by_name(current, name, &current) != 0) {
+        if (smkfs_lookup_by_name(mnt, current, name, &current) != 0) {
             return SMKFS_ERR_NOTFOUND;
-		}
+        }
     }
 
     if (out_record) *out_record = current;

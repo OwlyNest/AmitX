@@ -64,6 +64,7 @@ static int storage_init(void) {
     int found_ide = 0;
     int fs_mounted = 0;
     char drive_letter = 'A';
+    smkfs_mount_t mnt;
 
     while (dev) {
         if (dev->class_code != PCI_CLASS_MASS_STORAGE) {
@@ -105,7 +106,7 @@ static int storage_init(void) {
                 (void)drive_letter;
             
                 /* Try to mount existing filesystem */
-                if (smkfs_mount((uint8_t)present_drive) == 0) {
+                if (smkfs_mount((uint8_t)present_drive, &mnt) == 0) {
                     printk("[storage] SmKFS mounted from existing image\n");
                     fs_mounted = 1;
                     break;
@@ -118,7 +119,7 @@ static int storage_init(void) {
                     break;
                 }
             
-                if (smkfs_mount((uint8_t)present_drive) != 0) {
+                if (smkfs_mount((uint8_t)present_drive, &mnt) != 0) {
                     printk("[storage] smkfs_mount failed after mkfs\n");
                     break;
                 }
@@ -135,17 +136,17 @@ static int storage_init(void) {
                 path_readme[2] = '/';
                 strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
 
-                int fd = smkfs_open(path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
-                if (fd < 0 || smkfs_write_file(fd, "Hello from SmKFS!\n", 19) < 0) {
+                int fd = smkfs_open(&mnt, path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
+                if (fd < 0 || smkfs_write_file(&mnt, fd, "Hello from SmKFS!\n", 19) < 0) {
                     printk("[storage] Failed to write %s\n", path_hello);
                 }
-                if (fd >= 0) smkfs_close(fd);
+                if (fd >= 0) smkfs_close(&mnt, fd);
 
-                fd = smkfs_open(path_readme, SMKFS_O_WRONLY | SMKFS_O_CREATE);
-                if (fd < 0 || smkfs_write_file(fd, "Shadow Kernel File System v0.1\n", 32) < 0) {
+                fd = smkfs_open(&mnt, path_readme, SMKFS_O_WRONLY | SMKFS_O_CREATE);
+                if (fd < 0 || smkfs_write_file(&mnt, fd, "Shadow Kernel File System v0.1\n", 32) < 0) {
                     printk("[storage] Failed to write %s\n", path_readme);
                 }
-                if (fd >= 0) smkfs_close(fd);
+                if (fd >= 0) smkfs_close(&mnt, fd);
             
                 fs_mounted = 1;
                 break;
@@ -194,7 +195,7 @@ static int storage_init(void) {
         smkfs_dirent_t entries[32];
         size_t count = 0;
 
-        if (smkfs_readdir(root_path, entries, 32, &count) == 0) {
+        if (smkfs_readdir(&mnt, root_path, entries, 32, &count) == 0) {
             printk("[storage] Root directory (%zu entries):\n", count);
             for (size_t i = 0; i < count; i++) {
                 printk("  %s\n", entries[i].name);
@@ -219,9 +220,9 @@ static int storage_init(void) {
         int len;
         int fd;
 
-        fd = smkfs_open(path_hello, SMKFS_O_RDONLY);
+        fd = smkfs_open(&mnt, path_hello, SMKFS_O_RDONLY);
         if (fd >= 0) {
-            len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            len = smkfs_read_file(&mnt, fd, buf, sizeof(buf) - 1);
             printk("len = %d\n", len);
             if (len > 0) {
                 buf[len] = '\0';
@@ -229,14 +230,14 @@ static int storage_init(void) {
             } else {
                 printk("[storage] Read back %s: error\n", path_hello);
             }
-            smkfs_close(fd);
+            smkfs_close(&mnt, fd);
         } else {
             printk("[storage] Failed to open %s for readback\n", path_hello);
         }
 
-        fd = smkfs_open(path_readme, SMKFS_O_RDONLY);
+        fd = smkfs_open(&mnt, path_readme, SMKFS_O_RDONLY);
         if (fd >= 0) {
-            len = smkfs_read_file(fd, buf, sizeof(buf) - 1);
+            len = smkfs_read_file(&mnt, fd, buf, sizeof(buf) - 1);
             printk("len = %d\n", len);
             if (len > 0) {
                 buf[len] = '\0';
@@ -244,7 +245,7 @@ static int storage_init(void) {
             } else {
                 printk("[storage] Read back %s: error\n", path_readme);
             }
-            smkfs_close(fd);
+            smkfs_close(&mnt, fd);
         } else {
             printk("[storage] Failed to open %s for readback\n", path_readme);
         }

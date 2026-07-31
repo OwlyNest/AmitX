@@ -138,6 +138,7 @@
 /* --- Includes --- */
 #include <stdint.h>
 #include <stddef.h>
+#include <internal/amitx_macros.h>
 
 /* --- Typedefs - Structs - Enums --- */
 
@@ -150,7 +151,8 @@ typedef struct {
     uint32_t flags;
     uint32_t checksum;
     uint32_t reserved[3];
-} smkfs_header_t;
+} __attribute__((__packed__)) smkfs_header_t;
+_Static_assert(sizeof(smkfs_header_t) == 32, "SmKFS Header size changed");
 
 /* Master Record Table entry (16B) */
 typedef struct {
@@ -158,14 +160,16 @@ typedef struct {
     uint16_t flags;               /* SMKFS_MRTF_* */
     uint16_t reserved;
     uint32_t generation;          /* Incremented on slot reuse */
-} smkfs_mrt_entry_t;
+} __attribute__((__packed__)) smkfs_mrt_entry_t;
+_Static_assert(sizeof(smkfs_mrt_entry_t) == 16, "SmKFS MRT entry size changed");
 
 /* Extent (20B) */
 typedef struct {
     uint64_t logical_offset;
     uint64_t physical_block;
     uint32_t block_count;
-} smkfs_extent_t;
+} __attribute__((__packed__)) smkfs_extent_t;
+_Static_assert(sizeof(smkfs_extent_t) == 20, "SmKFS Extent size changed");
 
 /* Attribute header (12B) */
 typedef struct {
@@ -173,7 +177,8 @@ typedef struct {
     uint16_t flags;
     uint32_t id;
     uint32_t length;
-} smkfs_attr_header_t;
+} __attribute__((__packed__)) smkfs_attr_header_t;
+_Static_assert(sizeof(smkfs_attr_header_t) == 12, "SmKFS Attribute Header size changed");
 
 /* Attribute behavior definition (in-memory only) */
 typedef struct {
@@ -192,7 +197,8 @@ typedef struct {
     uint32_t       flags;
     uint32_t       key_count;
     uint64_t       right_sibling;
-} smkfs_btree_node_t;
+} __attribute__((__packed__)) smkfs_btree_node_t;
+_Static_assert(sizeof(smkfs_btree_node_t) == 56, "B+ tree node size changed");
 
 /* In-memory leaf entry (264B) */
 typedef struct {
@@ -216,7 +222,8 @@ typedef struct {
     uint16_t        attr_count;
     uint32_t        link_count;       /* Directory entries pointing here */
     uint64_t        generation;       /* Matches MRT generation */
-} smkfs_record_t;
+} __attribute__((__packed__)) smkfs_record_t;
+_Static_assert(sizeof(smkfs_record_t) == 56, "SmKFS Record size changed");
 
 /* Journal entry v2 (62B + payload) */
 typedef struct {
@@ -226,9 +233,10 @@ typedef struct {
     uint32_t        operation;
     uint32_t        data_length;
     uint64_t        record_id;        /* Logical record for fsck */
-} smkfs_journal_entry_t;
+} __attribute__((__packed__)) smkfs_journal_entry_t;
+_Static_assert(sizeof(smkfs_journal_entry_t) == 64, "SmKFS Journal entry size changed");
 
-/* Superblock v2 (296 bytes) */
+/* Superblock v2 (312 bytes) */
 typedef struct {
     smkfs_header_t  header;
     uint64_t        total_blocks;
@@ -259,7 +267,8 @@ typedef struct {
     uint32_t        mount_count;
     uint32_t        max_mount_count;
     uint32_t        reserved[4];
-} smkfs_superblock_t;
+} __attribute__((__packed__)) smkfs_superblock_t;
+_Static_assert(sizeof(smkfs_superblock_t) == 312, "SmKFS Superblock size changed");
 
 /* On-disk directory entry (B+ tree value) (16B) */
 typedef struct {
@@ -267,7 +276,8 @@ typedef struct {
     uint32_t name_hash;     /* Fast comparison filter */
     uint16_t flags;         /* SMKFS_DENTF_* */
     uint16_t name_len;      /* Actual name length */
-} smkfs_dirent_disk_t;
+} __attribute__((__packed__)) smkfs_dirent_disk_t;
+_Static_assert(sizeof(smkfs_dirent_disk_t) == 16, "SmKFS Dirent Disk size changed");
 
 /* Directory entry (in-memory, userspace-facing, 264B) */
 typedef struct {

@@ -73,6 +73,8 @@ typedef LONG_PTR    SSIZE_T;
 
 typedef void        VOID;
 typedef void       *PVOID;
+typedef CHAR       *PCHAR;
+typedef UCHAR      *PUCHAR;
 
 typedef const void *PCVOID;
 

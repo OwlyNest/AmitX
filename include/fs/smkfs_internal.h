@@ -31,8 +31,8 @@
 /* --- Prototypes ---*/
 
 /* --- Block I/O --- */
-int read_block(smkfs_mount_t *mnt, uint64_t block, void *buf);
-int write_block(smkfs_mount_t *mnt, uint64_t block, const void *buf);
+SMKFS_STATUS read_block(smkfs_mount_t *mnt, ULONGLONG block, PVOID buf);
+SMKFS_STATUS write_block(smkfs_mount_t *mnt, ULONGLONG block, const PVOID buf);
 
 /* --- Header --- */
 void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags);
@@ -53,12 +53,12 @@ int mrt_free_entry(smkfs_mount_t *mnt, uint64_t record_id);
 int mrt_resolve(smkfs_mount_t *mnt, uint64_t record_id, uint64_t *out_physical_block, uint16_t *out_flags, uint32_t *out_generation);
 
 /* --- Bitmap --- */
-void bitmap_set(smkfs_mount_t *mnt, uint64_t block);
-void bitmap_clear(smkfs_mount_t *mnt, uint64_t block);
-int bitmap_test(smkfs_mount_t *mnt, uint64_t block);
-uint64_t bitmap_alloc_range(smkfs_mount_t *mnt, uint32_t count);
-uint64_t bitmap_alloc(smkfs_mount_t *mnt);
-void bitmap_free_range(smkfs_mount_t *mnt, uint64_t start, uint32_t count);
+VOID bitmap_set(smkfs_mount_t *mnt, ULONGLONG block);
+VOID bitmap_clear(smkfs_mount_t *mnt, ULONGLONG block);
+LONG bitmap_test(smkfs_mount_t *mnt, ULONGLONG block);
+ULONGLONG bitmap_alloc_range(smkfs_mount_t *mnt, ULONG count);
+ULONGLONG bitmap_alloc(smkfs_mount_t *mnt);
+VOID bitmap_free_range(smkfs_mount_t *mnt, ULONGLONG start, ULONG count);
 
 /* --- Record --- */
 int record_read(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size);

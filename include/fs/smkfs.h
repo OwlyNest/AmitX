@@ -266,6 +266,9 @@
  *
  *
 */
+
+typedef LONG SMKFS_STATUS;
+
 #define SMKFS_OK                0
 #define SMKFS_ERR_IO            -1
 #define SMKFS_ERR_NOMEM         -2

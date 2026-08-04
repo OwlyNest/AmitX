@@ -26,6 +26,7 @@
 #include <fs/smkfs_internal.h>
 #include <mm/heap.h>
 #include <lib/string.h>
+#include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -45,7 +46,15 @@ int record_read(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, voi
     block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
     if (!block) return SMKFS_ERR_NOMEM;
 
-    if (read_block(mnt, record_id, block) != 0) {
+
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        free(block);
+        return mrt_ret;
+    }
+    
+    if (read_block(mnt, phys_block, block) != 0) {
         free(block);
         return SMKFS_ERR_IO;
     }
@@ -123,7 +132,15 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
         return SMKFS_ERR_NOMEM;
     }
 
-    if (read_block(mnt, record_id, old_block) != 0) {
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        free(block);
+        free(old_block);
+        return mrt_ret;
+    }
+
+    if (read_block(mnt, phys_block, old_block) != 0) {
         memset(old_block, 0, SMKFS_BLOCK_SIZE);
     }
 
@@ -134,55 +151,81 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
     memcpy(block + sizeof(smkfs_record_t), attr_buf, attr_len);
     header_checksum_update(&wrec->header, block, total_len);
 
-    journal_log_write(mnt, record_id, old_block, block, total_len);
+    journal_log_write(mnt, phys_block, old_block, block, total_len);
 
-    ret = write_block(mnt, record_id, block);
+    ret = write_block(mnt, phys_block, block);
     free(block);
     free(old_block);
     return (ret == 0) ? SMKFS_OK : SMKFS_ERR_IO;
 }
 
 uint64_t record_alloc(smkfs_mount_t *mnt, uint16_t object_type) {
+    uint64_t logical_id;
+    uint64_t generation;
+    if (mrt_alloc_entry(mnt, &logical_id, &generation) != SMKFS_OK) {
+        return 0;
+    }
+
     uint64_t block = bitmap_alloc(mnt);
-    if (block == 0) return 0;
+    if (block == 0) {
+        mrt_free_entry(mnt, logical_id);
+        return 0;
+    }
+
+    if (mrt_update_entry(mnt, logical_id, block, SMKFS_MRTF_ALLOCATED) != SMKFS_OK) {
+        bitmap_clear(mnt, block);
+        mrt_free_entry(mnt, logical_id);
+        return 0;
+    }
 
     smkfs_record_t rec;
     header_init(&rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), 0);
-    rec.record_id = block;     /* G0 compat: logical ID == physical block */
+    rec.record_id = logical_id;    /* Logical ID, resolved through MRT */
     rec.object_type = object_type;
     rec.attr_count = 0;
-    rec.link_count = 1;        /* Every new record starts with one link */
-    rec.generation = 0;        /* Set by MRT in G1.5 */
+    rec.link_count = 1;
+    rec.generation = generation;
 
     smkfs_attr_header_t term;
     term.type = SMKFS_ATTRT_END;
     term.flags = 0;
     term.id = 0;
     term.length = 0;
-    record_write(mnt, block, &rec, &term);
+
+    if (record_write(mnt, logical_id, &rec, &term) != SMKFS_OK) {
+        bitmap_clear(mnt, block);
+        mrt_free_entry(mnt, logical_id);
+        return 0;
+    }
 
     mnt->sb.record_count++;
-    return block;
+    return logical_id;
 }
 
 void record_free(smkfs_mount_t *mnt, uint64_t record_id) {
     uint8_t *block;
 
+    uint64_t phys_block;
+    if (mrt_resolve(mnt, record_id, &phys_block, NULL, NULL) != SMKFS_OK) {
+        return;
+    }
+
     extent_remove_all(mnt, record_id);
 
     block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
     if (block) {
-        if (read_block(mnt, record_id, block) == 0) {
+        if (read_block(mnt, phys_block, block) == 0) {
             smkfs_record_t *rec = (smkfs_record_t *)block;
             rec->header.flags |= SMKFS_FLA_DELETED;
             header_checksum_update(&rec->header, block, rec->header.length);
-            write_block(mnt, record_id, block);
+            write_block(mnt, phys_block, block);
         }
 
         free(block);
     }
 
-    bitmap_clear(mnt, record_id);
+    bitmap_clear(mnt, phys_block);
+    mrt_free_entry(mnt, record_id);
     mnt->sb.record_count--;
 }
 

@@ -47,7 +47,7 @@ void mutex_init(mutex_t *m) {
 int mutex_trylock(mutex_t *m) {
 	if (!m) return 0;
 
-	uint32_t flags = spinlock_acquire(&m->lock);
+	ULONG flags = spinlock_acquire(&m->lock);
 	int aquired = 0;
 
 	if (!m->locked) {
@@ -63,13 +63,13 @@ int mutex_trylock(mutex_t *m) {
 	return aquired;
 }
 
-int mutex_lock(mutex_t *m, uint32_t timeout_ms) {
+int mutex_lock(mutex_t *m, ULONG timeout_ms) {
     if (!m) return 0;
 
     task_t *self = task_current();
 
     for (;;) {
-        uint32_t flags = spinlock_acquire(&m->lock);
+        ULONG flags = spinlock_acquire(&m->lock);
 
         if (!m->locked) {
             m->locked = 1;
@@ -83,7 +83,7 @@ int mutex_lock(mutex_t *m, uint32_t timeout_ms) {
             task_boost_priority(m->owner, self->cur_prio);
         }
 
-        uint32_t wait_ms = (timeout_ms == MUTEX_WAIT_FOREVER) ? TASK_NO_TIMEOUT : timeout_ms;
+        ULONG wait_ms = (timeout_ms == MUTEX_WAIT_FOREVER) ? TASK_NO_TIMEOUT : timeout_ms;
 
         /* task_block_on pushes onto m->waiters and calls schedule()
          * while we're still holding m->lock (interrupts off). Nobody
@@ -103,7 +103,7 @@ int mutex_lock(mutex_t *m, uint32_t timeout_ms) {
 void mutex_unlock(mutex_t *m) {
     if (!m) return;
 
-    uint32_t flags = spinlock_acquire(&m->lock);
+    ULONG flags = spinlock_acquire(&m->lock);
 
     if (m->owner && m->owner->cur_prio != m->owner_orig_prio) {
         task_unboost_priority(m->owner);

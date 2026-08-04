@@ -24,7 +24,7 @@
 #define MENU_H      280
 
 /* --- Includes ---*/
-#include <internal/amitx_info.h>
+#include <internal/phonon_info.h>
 #include <screen/printk.h>
 #include <ui/menu.h>
 #include <gfx/compositor.h>
@@ -36,7 +36,7 @@
 #include <gfx/window.h>
 #include <gfx/fb.h>
 #include <drivers/mouse.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <shell/cyclone.h>
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -89,8 +89,8 @@ void gfx_menu_draw(void) {
 
     /* Status bar at bottom of window */
     char text[64];
-    const char *version = AMITX_VERSION;
-    const char *date = AMITX_BUILD_DATE;
+    const char *version = PHONON_VERSION;
+    const char *date = PHONON_BUILD_DATE;
     ksnprintf(text, sizeof(text), "AmitX OS v%s (%s)", version, date);
     gfx_status_bar(&win->surface, 0, MENU_H - 24, MENU_W, text);
 }

@@ -1,39 +1,139 @@
 /*
- * include/fs/smkfs.h - SmKFS Public API Header (G1)
- * Author:   amity
- * Date:     Thu Jul 23 11:40:08 2026
- * Copyright (C) 2026 OwlyNest
- */
+    * include/fs/smkfs.h - SmKFS Public API Header (G1)
+    * Author:   amity
+    * Date:     Thu Jul 23 11:40:08 2026
+    * Copyright © 2026 OwlyNest
+*/
 
 /* --- Styling Instructions ---
- * Encoding:                      UTF-8, Unix line endings
- * Text font:                     Monospace
- * Line width:                    Max 80 characters
- * Indentation:                   Use 4 spaces
- * Brace style:                   Same line as control statement
- * Inline comments:               Column 40, wherever possible, else, whole multiple of 20
- * Section headers:               Use 3 '-' characters before and after
- * Pointer notation:              Next to variable name, not type
- * Binary operations:             Space around operator
- * Empty parameter list:          Use (void) instead of ()
- * Statements and declarations:   Max one per line
- */
+    * Encoding:                      UTF-8, Unix line endings
+    * Text font:                     Monospace
+    * Line width:                    Max 80 characters
+    * Indentation:                   Use 4 spaces
+    * Brace style:                   Same line as control statement
+    * Inline comments:               Column 40, wherever possible, else, whole multiple of 20
+    * Section headers:               Use 3 '-' characters before and after
+    * Pointer notation:              Next to variable name, not type
+    * Binary operations:             Space around operator
+    * Empty parameter list:          Use (void) instead of ()
+    * Statements and declarations:   Max one per line
+*/
 
+/*
+ * Two-hours-in-the-future-Amity:
+ *     Aww, look who's been reading Linux source code
+*/
+
+/*
+ *
+ * This file defines the global constants, structures, on-disk layout and public API of the SmKFS file system
+ *
+ * First is a set of macros used by the internal and public API.
+ *
+ * Secondly are structures, the on-disk structures are intentionally packed to ensure predictable and deterministic disk layout
+ * The cannonical header that precedes all on-disk structures is intentionally expaned to 32 Bytes to ensure alignment with any type of data that follows it
+ *
+ * Thirdly are the prototypes for the public API
+ * It is divided into four levels, level 4 being internal and not exposed in this file
+ *
+ *  Level 3 is the Kernel-interface, these functions are called by the (future) VFS.
+ *  These functions operate on structures and record_id's, not paths. 
+ *
+ *  Level 2 is the User-interface, these are functions that a user program would call
+ *  These functions operate on paths, using lookup functions to translate paths into record_id (which are translated to physical blocks by the MRT)
+ *
+ *  Level 1 is the Administrative-interface, these functions, create, check, repair and dump the file system
+ *
+*/
+/*
+ * Every "ground" (version) comes with it's own design rules:
+ *
+ * Golden Design Rules (G0)
+ *
+ * 1. Everything is a record.
+ * 2. Records consist of typed attributes.
+ * 3. Extents are the sole mechanism for non-resident data.
+ * 4. Metadata is journaled.
+ * 5. Small files remain resident whenever possible.
+ * 6. Directories are indexed using B+ Trees.
+ * 7. Allocation favors contiguous extents through delayed allocation.
+ * 8. New functionality is added through attributes, not structural revisions.
+ * 9. The on-disk format must remain understandable and debuggable.
+ * 10. Reliability takes precedence over clever optimization.
+ * 11. Everything on disk should be self-describing.
+ *
+ *
+ * Golden Design Rules (G1)
+ *
+ * 1. Everything is a record with a **logical identity**.
+ * 2. Physical location is managed by the **MRT**, never assumed by callers.
+ * 3. Attributes are **multi-valued**; type + id uniquely identifies an attribute instance.
+ * 4. **Names live in directories**, not records. Records have link counts.
+ * 5. Extents are **per-attribute instances**, not monolithic arrays.
+ * 6. Metadata changes are **atomic via journaling**; user data is not journaled.
+ * 7. The journal is **redo-only**, circular, and checkpointed.
+ * 8. The B+ tree is **generic**; directory entries are one use case.
+ * 9. Allocation is **regioned**; contiguous extents are preferred but not required.
+ * 10. All state is **per-mount**; globals are forbidden.
+ * 11. Every structure is **self-describing** with a canonical header and CRC32C.
+ * 12. **Corruption is detected early**; invalid structures panic the mount, never propagate.
+ *
+*/
+
+/* --- Macros --- */
 #ifndef __FS_SMKFS_H__
 #define __FS_SMKFS_H__
 
-/* --- Macros --- */
 
 /* Magic And Version */
 #define SMKFS_MAGIC             "SmKF"
 #define SMKFS_VERSION           2
+
+/*
+ * SMKFS Format Versions
+ * 
+ * SMKFS versions correspond to development "Grounds":
+ * 
+ *     Ground 0 → version 1
+ *     Ground 1 → version 2
+ *     Ground 2 → version 3
+ *     ...
+ * 
+ * A new Ground represents an (intentionally in)compatible filesystem
+ * format revision. Compatibility with previous Grounds is not guaranteed.
+*/
+
 #define SMKFS_NAME_LEN          256
+/*
+ * Same as Linux and Windows, with a distinction, this currently includes the entire path, not just the file name
+ * Which is a problem for later
+*/
 
 /* Block Size */
-#define SMKFS_SECTOR_SIZE       512
-#define SMKFS_BLOCK_SIZE        4096
+// #define SMKFS_SECTOR_SIZE       512
+/*
+ * Newer storage devices use 4 KiB sectors, CR-ROM's use 2 KiB, This should honestly be set by the storage device
+ * Solved, sector_size gets queried from the storage device and written to the superblock
+*/
 
-/* Structure Types */
+#define SMKFS_BLOCK_SIZE        4096
+/*
+ * The block.c I/O functions read/write a block, the storage device understands sectors,
+ * so this number is used to convert a number of blocks into a number of sectors.
+ * If block size and sector size are not divisible (powers of two) then the read/write functions fail
+ *
+*/
+
+/* Structure Types
+ *
+ * SmKFS knows a small set of on-disk structures.
+ * This structure type is stored in the header.
+ * Both sets of design rules hold "everything is a record" at the top. Which is not fully correct (yet)
+ * What holds absolute is that everything on-disk is a structure and starts with the same header
+ * A record is an on-disk structure with a logical ID, ROT (Record Object Type), and a set of attributes.
+ * This is fundamentally differrent from B+ tree nodes and the Superblock.
+ * 
+*/
 #define SMKFS_ST_SUPERBLOCK     0x0001
 #define SMKFS_ST_RECORD         0x0002
 #define SMKFS_ST_BTREE_NODE     0x0003
@@ -42,14 +142,21 @@
 #define SMKFS_ST_BITMAP         0x0006
 #define SMKFS_ST_ALLOC_META     0x0007
 #define SMKFS_ST_MRT            0x0008
+#define SMKFS_ST_MAT            0x0009
 
-/* Record Object Types */
+/* Record Object Types
+ *
+ *
+*/
 #define SMKFS_ROT_FILE          0x01
 #define SMKFS_ROT_DIR           0x02
 #define SMKFS_ROT_SYMLINK       0x03
 #define SMKFS_ROT_DEVICE        0x04
 
-/* Attribute Types */
+/* Attribute Types
+ *
+ *
+*/
 #define SMKFS_ATTRT_END         0x0000
 #define SMKFS_ATTRT_NAME        0x0001
 #define SMKFS_ATTRT_DATA        0x0002
@@ -62,33 +169,52 @@
 #define SMKFS_ATTRT_SYMLINK     0x0009
 #define SMKFS_ATTRT_DEVICE      0x000A
 
-/* Attribute Behavior Flags */
+/* Attribute Behavior Flags
+ *
+ *
+*/
 #define SMKFS_ATTRF_UNIQUE      0x0001
 #define SMKFS_ATTRF_REQUIRED    0x0002
 #define SMKFS_ATTRF_RESIDENT    0x0004
 
-/* Flags */
+/* Flags
+ *
+ *
+*/
 #define SMKFS_FLA_RESIDENT      0x00000001
 #define SMKFS_FLA_DELETED       0x00000002
 #define SMKFS_FLA_COMPRESSED    0x00000004
 #define SMKFS_FLA_ENCRYPTED     0x00000008
 
-/* MRT entry Flags */
+/* MRT entry Flags
+ *
+ *
+*/
+#define SMKFS_MRTF_FREE         UINT64_MAX
 #define SMKFS_MRTF_ALLOCATED    0x0001
 #define SMKFS_MRTF_OVERFLOW     0x0002
 #define SMKFS_MRTF_DELETED      0x0004
 
-/* B+ Tree Nodes */
+/* B+ Tree Nodes
+ *
+ *
+*/
 #define SMKFS_BTR_MAX_KEY       255
 #define SMKFS_BTN_LEAF          0x1
 #define SMKFS_BTN_ROOT          0x2
 
-/* Directory ENntry Flags */
+/* Directory ENntry Flags
+ *
+ *
+*/
 #define SMKFS_DENTF_NORMAL      0x0000
 #define SMKFS_DENTF_DOT         0x0001
 #define SMKFS_DENTF_DOTDOT      0x0002
 
-/* Journal OPerations */
+/* Journal OPerations
+ *
+ *
+*/
 #define SMKFS_JOP_WRITE         1
 #define SMKFS_JOP_ALLOC         2
 #define SMKFS_JOP_FREE          3
@@ -96,14 +222,23 @@
 #define SMKFS_JOP_MRT_UPDATE    5
 #define SMKFS_JOP_CHECKPOINT    6
 
-/* Superblock Flags */
+/* Superblock Flags
+ *
+ *
+*/
 #define SMKFS_SBF_CLEAN         0x00000001
 #define SMKFS_SBF_ERRORS        0x00000002
 
-/* File Descriptor */
+/* File Descriptor
+ *
+ *
+*/
 #define SMKFS_FD_MAX            16
 
-/* Open flags */
+/* Open flags
+ *
+ *
+*/
 #define SMKFS_O_RDONLY          0x0000
 #define SMKFS_O_WRONLY          0x0001
 #define SMKFS_O_RDWR            0x0002
@@ -111,17 +246,26 @@
 #define SMKFS_O_TRUNC           0x0008
 #define SMKFS_O_APPEND          0x0010
 
-/* SEEK flags */
+/* SEEK flags
+ *
+ *
+*/
 #define SMKFS_SEEK_SET          0
 #define SMKFS_SEEK_CUR          1
 #define SMKFS_SEEK_END          2
 
-/* Permissions */
+/* Permissions
+ *
+ *
+*/
 #define SMKFS_PERM_WRITE        0x0080
 #define SMKFS_PERM_EXEC         0x0040
 #define SMKFS_PERM_READ         0x0100
 
-/* Error Codes */
+/* Error Codes
+ *
+ *
+*/
 #define SMKFS_OK                0
 #define SMKFS_ERR_IO            -1
 #define SMKFS_ERR_NOMEM         -2
@@ -134,34 +278,106 @@
 #define SMKFS_ERR_ROFS          -9
 #define SMKFS_ERR_JOURNAL       -10
 #define SMKFS_ERR_TOO_BIG       -11
+#define SMKFS_ERR_NOT_YET_BOUND -12
 
 /* --- Includes --- */
 #include <stdint.h>
 #include <stddef.h>
-#include <internal/amitx_macros.h>
+#include <internal/phonon_macros.h>
 
 /* --- Typedefs - Structs - Enums --- */
 
-/* Canonical header (32B) */
+/*
+ * SMKFS canonical object header.
+ *
+ * Persistent on-disk structure; exactly 32 bytes.
+ *
+ * This structure is part of the on-disk format and MUST NOT change
+ * without a filesystem format version change.
+ *
+ * All multi-byte integer fields are stored in little-endian byte order.
+ * The structure is exactly 32 bytes.
+ *
+ * Layout:
+ *   0x00  magic[4]      Object signature ("SmKF")
+ *   0x04  version       SMKFS format version
+ *   0x06  type          Object type (SMKFS_ST_*)
+ *   0x08  length        Size of the object payload, excluding this header
+ *   0x0C  flags         Object-specific flags
+ *   0x10  checksum      CRC32C checksum
+ *   0x14  reserved[3]   Reserved; MUST be written as zero and ignored
+ *
+ * The total serialized object size is:
+ *
+ *     sizeof(smkfs_header_t) + header.length
+ *
+ * `length` is the size of the data following this header. It is NOT
+ * the size of the complete object and is unrelated to a file's logical
+ * size (which is stored in the FSIZE attribute).
+ *
+ * Every persistent SMKFS structure begins with this header. The header
+ * allows the filesystem to identify the structure type, validate its
+ * version, determine its serialized size, and verify its contents.
+ *
+ * Currently defined structure types include:
+ *   - Superblock
+ *   - Record
+ *   - B+ tree node
+ *   - Journal header
+ *   - Journal entry
+ *   - Bitmap
+ *   - Allocated metadata
+ *   - Master Record Table
+ *   - Master Attribute Table
+ *
+ *
+ * Might be important to clarify the difference between "Structure" "Record" and "File"
+ * Going NT-Style and declaring "everything is a Record" might be easiest.
+ * Or I formalize what a Structure is... extra complexity. Yay!
+*/
 typedef struct {
-    char     magic[4];
-    uint16_t version;
-    uint16_t type;
-    uint32_t length;
-    uint32_t flags;
-    uint32_t checksum;
-    uint32_t reserved[3];
+    /*  0 */ char     magic[4];    /* SMKFS magic: "SmKF" (SMKFS_MAGIC) */
+    /*  4 */ uint16_t version;     /* On-disk format version (SMKFS_VERSION) */
+    /*  6 */ uint16_t type;        /* Structure type (SMKFS_ST_*) */
+    /*  8 */ uint32_t length;      /* Payload length in bytes; excludes header */
+    /* 12 */ uint32_t flags;       /* Structure-specific flags */
+    /* 16 */ uint32_t checksum;    /* CRC32C(header with checksum field zeroed) */
+    /* 20 */ uint32_t reserved[3]; /* Reserved; MUST be zero */
 } __attribute__((__packed__)) smkfs_header_t;
-_Static_assert(sizeof(smkfs_header_t) == 32, "SmKFS Header size changed");
 
-/* Master Record Table entry (16B) */
+_Static_assert(sizeof(smkfs_header_t) == 32, "SMKFS header size changed");
+
+/*
+ * Master Record Table entry.
+ *
+ * Persistent on-disk structure; exactly 16 bytes.
+ *
+ * Each entry describes the physical location and allocation state of
+ * an MRT slot. An entry with physical_block == UINT64_MAX represents an
+ * unallocated/free slot. 
+ * Physical block 0 is permanently reserved for the superblock and will never appear as an MRT entry's physical_block.
+ *
+ * Using UINT64_MAX as unallocated can only accidentally write to the block at 64 ZiB. 
+ *
+ * `generation` is incremented when the MRT slot is reused. This allows
+ * code using MRT references to distinguish a current occupant from a
+ * previous occupant of the same slot.
+ *
+ * `reserved` is reserved for future use and MUST be written as zero.
+ *
+ * The physical block value 0 is reserved for the Superblock and
+ * therefore MUST NOT identify an allocated MRT entry. Unallocated will be -1 (UINT64_MAX).
+*/
+
 typedef struct {
-    uint64_t physical_block;      /* 0 = unallocated / free slot */
-    uint16_t flags;               /* SMKFS_MRTF_* */
-    uint16_t reserved;
-    uint32_t generation;          /* Incremented on slot reuse */
+    /*  0 */ uint64_t physical_block; /* UINT64_MAX = no block assigned.
+                                         Block 0 is the Superblock and is always
+                                         a valid physical block reference. */
+    /*  8 */ uint16_t flags;          /* SMKFS_MRTF_* */
+    /* 10 */ uint16_t reserved;       /* Reserved; MUST be zero */
+    /* 12 */ uint32_t generation;     /* Incremented on slot reuse */
 } __attribute__((__packed__)) smkfs_mrt_entry_t;
-_Static_assert(sizeof(smkfs_mrt_entry_t) == 16, "SmKFS MRT entry size changed");
+_Static_assert(sizeof(smkfs_mrt_entry_t) == 16, "SMKFS MRT entry size changed");
 
 /* Extent (20B) */
 typedef struct {
@@ -213,7 +429,6 @@ typedef struct {
     uint8_t  prefix_len;
 } smkfs_btree_index_entry_t;
 
-
 /* Record header v2 (56B) */
 typedef struct {
     smkfs_header_t  header;
@@ -225,7 +440,7 @@ typedef struct {
 } __attribute__((__packed__)) smkfs_record_t;
 _Static_assert(sizeof(smkfs_record_t) == 56, "SmKFS Record size changed");
 
-/* Journal entry v2 (62B + payload) */
+/* Journal entry v2 (64B) */
 typedef struct {
     smkfs_header_t  header;
     uint64_t        sequence;
@@ -241,6 +456,7 @@ typedef struct {
     smkfs_header_t  header;
     uint64_t        total_blocks;
     uint64_t        free_blocks;
+    uint64_t        sector_size;
     uint64_t        record_count;
     uint64_t        next_record_id;   /* Next free MRT slot */
     uint64_t        mrt_start;
@@ -268,7 +484,7 @@ typedef struct {
     uint32_t        max_mount_count;
     uint32_t        reserved[4];
 } __attribute__((__packed__)) smkfs_superblock_t;
-_Static_assert(sizeof(smkfs_superblock_t) == 312, "SmKFS Superblock size changed");
+_Static_assert(sizeof(smkfs_superblock_t) == 320, "SmKFS Superblock size changed");
 
 /* On-disk directory entry (B+ tree value) (16B) */
 typedef struct {
@@ -349,7 +565,7 @@ int smkfs_chmod(smkfs_mount_t *mnt, const char *path, uint16_t permissions); /* 
 int smkfs_chown(smkfs_mount_t *mnt, const char *path, uint32_t uid, uint32_t gid); /* Done */
 
 /* ~~~ Level 1: Admin ~~~ */
-int smkfs_mkfs(uint8_t drive, uint64_t total_blocks); /* Done */
+int smkfs_mkfs(uint8_t drive, uint64_t total_blocks, uint64_t sector_size); /* Done */
 int smkfs_fsck(uint8_t drive); /* Done */
 int smkfs_dump_superblock(smkfs_mount_t *mnt); /* Done */
 int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id); /* Done */

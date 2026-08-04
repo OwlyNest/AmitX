@@ -1,5 +1,5 @@
 /*
-	* hw/ide.h - [Enter description]
+	* hw/ide.h - ATA/ATAPI IDE controller driver interface
 	* Author:   amity
 	* Date:     Thu Jun 11 15:08:13 2026
 	* Copyright © 2026 OwlyNest
@@ -46,6 +46,11 @@
 #define IDE_CMD_IDENTIFY        0xEC
 #define IDE_CMD_CACHE_FLUSH     0xE7
 
+/* --- Commands (LBA48) --- */
+#define IDE_CMD_READ_SECTORS_EXT   0x24
+#define IDE_CMD_WRITE_SECTORS_EXT  0x34
+#define IDE_CMD_CACHE_FLUSH_EXT    0xEA
+
 /* --- Status bits --- */
 #define IDE_STATUS_ERR       0x01
 #define IDE_STATUS_DRQ       0x08
@@ -62,11 +67,71 @@
 
 /* --- Typedefs - Structs - Enums ---*/
 
+typedef struct {
+    uint16_t general_config;               // Word 0
+    uint16_t reserved1[9];                 // Words 1-9
+    uint16_t serial_number[10];            // Words 10-19
+    uint16_t reserved2[3];                 // Words 20-22
+    uint16_t firmware_revision[4];         // Words 23-26
+    uint16_t model_number[20];             // Words 27-46
+    uint16_t reserved3a[2];                // Words 47-48
+    uint16_t capabilities;                 // Word 49
+    uint16_t reserved3b[3];                // Words 50-52
+    uint16_t field_validity;               // Word 53
+    uint16_t reserved3c[6];                // Words 54-59
+    uint32_t total_lba28_sectors;          // Words 60-61
+    uint16_t reserved4a[18];               // Words 62-79
+    uint16_t major_version;                // Word 80
+    uint16_t minor_version;                // Word 81
+    uint16_t command_set_supported[3];     // Words 82-84
+    uint16_t command_set_enabled[3];       // Words 85-87
+    uint16_t ultra_dma_modes;              // Word 88
+    uint16_t reserved4b[11];               // Words 89-99
+    uint64_t total_lba48_sectors;          // Words 100-103
+    uint16_t reserved4c[2];                // Words 104-105
+
+    // Word 106: Physical / Logical sector size configuration
+    struct {
+        uint16_t logical_sectors_per_physical : 4; // Bits 0-3: 2^X multiplier
+        uint16_t reserved                     : 8; // Bits 4-11
+        uint16_t logical_sector_longer_512    : 1; // Bit 12
+        uint16_t physical_sector_longer_logical:1; // Bit 13
+        uint16_t must_be_zero                 : 1; // Bit 14
+        uint16_t must_be_one                  : 1; // Bit 15
+    } sector_size_config;
+
+    uint16_t reserved5[10];                // Words 107-116
+    uint32_t logical_sector_size_words;    // Words 117-118
+    uint16_t reserved6[137];               // Words 119-255
+
+    // --- Computed / cached fields (NOT part of raw ATA data) ---
+    uint32_t logical_sz;
+    uint32_t physical_sz;
+} __attribute__((__packed__)) ide_identify_t;
+
+/* --- Capability helpers --- */
+#define IDE_CAP_LBA          0x0200        // Word 49 bit 9
+#define IDE_CAP_DMA          0x0100        // Word 49 bit 8
+
+#define IDE_VALID_CMDSET(w)  (((w) & 0xC000) == 0x4000)
+#define IDE_CMDSET_LBA48     0x0400        // Word 83/86/87 bit 10
+
+static inline int ide_supports_lba48(const ide_identify_t *info) {
+    return IDE_VALID_CMDSET(info->command_set_supported[1]) && (info->command_set_supported[1] & IDE_CMDSET_LBA48);
+}
+
+static inline int ide_lba48_enabled(const ide_identify_t *info) {
+    return IDE_VALID_CMDSET(info->command_set_enabled[1]) && (info->command_set_enabled[1] & IDE_CMDSET_LBA48);
+}
+
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
 void ide_init(uint16_t data_base, uint16_t ctrl_base);
-int ide_identify(uint8_t drive, uint16_t* buf);
-int ide_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t* buf);
-int ide_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, const uint16_t* buf);
+int ide_identify(uint8_t drive, ide_identify_t *info);
+void ide_dump_identify(ide_identify_t *info);
+int ide_read_sectors(uint8_t drive, uint32_t lba, uint16_t count, uint16_t *buf);
+int ide_write_sectors(uint8_t drive, uint32_t lba, uint16_t count, const uint16_t *buf);
+int ide_read_sectors_ext(uint8_t drive, uint64_t lba, uint16_t count, uint16_t *buf);
+int ide_write_sectors_ext(uint8_t drive, uint64_t lba, uint16_t count, const uint16_t *buf);
 #endif

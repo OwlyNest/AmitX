@@ -25,7 +25,7 @@
 #include <exec/amx2.h>
 #include <lib/string.h>
 #include <screen/printk.h>
-#include <internal/amitx_macros.h>
+#include <internal/phonon_macros.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/

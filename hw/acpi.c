@@ -10,7 +10,7 @@
 #include <arch/x86/io.h>
 #include <lib/string.h>
 #include <screen/printk.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <stdint.h>
 #include "acpi.h"                      /* ACPICA — kept out of hw/acpi.h */
 

@@ -48,7 +48,7 @@
 #include <screen/printk.h>
 #include <drivers/mouse.h>
 #include <kernel/kernel.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 /* --- Typedefs - Structs - Enums ---*/
@@ -86,15 +86,17 @@ static int storage_init(void) {
                 /* QEMU disk is on primary channel */
                 ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
             
-                uint16_t identify[256];
+                ide_identify_t identify;
                 int present_drive = -1;
             
                 for (int drive = 0; drive < 2; drive++) {
-                    if (ide_identify(drive, identify) == 0) {
+                    if (ide_identify(drive, &identify) == 0) {
                         present_drive = drive;
                         break;
                     }
                 }
+                
+                ide_dump_identify(&identify);
             
                 if (present_drive < 0) {
                     printk("[storage] No drive on primary channel\n");
@@ -113,8 +115,16 @@ static int storage_init(void) {
                 }
             
                 printk("[storage] No valid SmKFS, formatting...\n");
-                uint64_t total_blocks = (10ULL * 1024 * 1024) / SMKFS_BLOCK_SIZE; // 2560
-                if (smkfs_mkfs((uint8_t)present_drive, total_blocks) != 0) {
+                uint64_t total_sectors;
+
+                if (ide_supports_lba48(&identify)) {
+                    total_sectors = identify.total_lba48_sectors;
+                } else {
+                    total_sectors = identify.total_lba28_sectors;
+                }
+
+                uint64_t total_blocks = total_sectors / (SMKFS_BLOCK_SIZE / identify.logical_sz); // 2560
+                if (smkfs_mkfs((uint8_t)present_drive, total_blocks, identify.logical_sz) != SMKFS_OK) {
                     printk("[storage] smkfs_mkfs failed\n");
                     break;
                 }
@@ -123,9 +133,16 @@ static int storage_init(void) {
                     printk("[storage] smkfs_mount failed after mkfs\n");
                     break;
                 }
+
+                if (smkfs_mkdir(&mnt, "A:/docs") != SMKFS_OK) {
+                    printk("mkdir failed\n");
+                }
+
+                printk("created directory\n");
             
                 char path_hello[SMKFS_NAME_LEN];
                 char path_readme[SMKFS_NAME_LEN];
+                char path_nested[SMKFS_NAME_LEN];
                 path_hello[0] = drive_letter;
                 path_hello[1] = ':';
                 path_hello[2] = '/';
@@ -135,6 +152,11 @@ static int storage_init(void) {
                 path_readme[1] = ':';
                 path_readme[2] = '/';
                 strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
+
+                path_nested[0] = drive_letter;
+                path_nested[1] = ':';
+                path_nested[2] = '/';
+                strncpy(path_nested + 3, "docs/nested.txt", SMKFS_NAME_LEN - 3);
 
                 int fd = smkfs_open(&mnt, path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
                 if (fd < 0 || smkfs_write_file(&mnt, fd, "Hello from SmKFS!\n", 19) < 0) {
@@ -147,7 +169,15 @@ static int storage_init(void) {
                     printk("[storage] Failed to write %s\n", path_readme);
                 }
                 if (fd >= 0) smkfs_close(&mnt, fd);
-            
+
+                fd = smkfs_open(&mnt, path_nested, SMKFS_O_WRONLY | SMKFS_O_CREATE);
+                if (fd < 0 || smkfs_write_file(&mnt, fd, "nested file\n", 12) < 0) {
+                    printk("[storage] Failed to write %s\n", path_nested);
+                }
+                if (fd >= 0) smkfs_close(&mnt, fd);
+
+                smkfs_rmdir(&mnt, "A:/docs");
+                
                 fs_mounted = 1;
                 break;
             }
@@ -204,8 +234,18 @@ static int storage_init(void) {
             printk("[storage] smkfs_readdir failed on %s\n", root_path);
         }
 
+        if (smkfs_readdir(&mnt, "A:/docs", entries, 32, &count) == 0) {
+            printk("[storage] Docs directory (%zu entries):\n", count);
+            for (size_t i = 0; i < count; i++) {
+                printk("  %s\n", entries[i].name);
+            }
+        } else {
+            printk("[storage] smkfs_readdir failed on %s\n", root_path);
+        }
+
         char path_hello[SMKFS_NAME_LEN];
         char path_readme[SMKFS_NAME_LEN];
+        char path_nested[SMKFS_NAME_LEN];
         path_hello[0] = drive_letter;
         path_hello[1] = ':';
         path_hello[2] = '/';
@@ -215,6 +255,11 @@ static int storage_init(void) {
         path_readme[1] = ':';
         path_readme[2] = '/';
         strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
+
+        path_nested[0] = drive_letter;
+        path_nested[1] = ':';
+        path_nested[2] = '/';
+        strncpy(path_nested + 3, "docs/nested.txt", SMKFS_NAME_LEN - 3);
 
         char buf[256];
         int len;
@@ -248,6 +293,21 @@ static int storage_init(void) {
             smkfs_close(&mnt, fd);
         } else {
             printk("[storage] Failed to open %s for readback\n", path_readme);
+        }
+
+        fd = smkfs_open(&mnt, path_nested, SMKFS_O_RDONLY);
+        if (fd >= 0) {
+            len = smkfs_read_file(&mnt, fd, buf, sizeof(buf) - 1);
+            printk("len = %d\n", len);
+            if (len > 0) {
+                buf[len] = '\0';
+                printk("[storage] Read back %s: %s\n", path_nested, buf);
+            } else {
+                printk("[storage] Read back %s: error\n", path_nested);
+            }
+            smkfs_close(&mnt, fd);
+        } else {
+            printk("[storage] Failed to open %s for readback\n", path_nested);
         }
     } else {
         printk("[storage] No filesystem available, skipping file ops\n");

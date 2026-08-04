@@ -22,8 +22,8 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
-#include <internal/amitx_consts.h>
-#include <internal/amitx_macros.h>
+#include <internal/phonon_consts.h>
+#include <internal/phonon_macros.h>
 #include <arch/x86/idt.h>
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>

@@ -21,6 +21,7 @@
 
 /* --- Macros ---*/
 // From Google I guess, someone copied it on stackoverflow
+#include "internal/phonon_types.h"
 #define ARRAY_SIZE(a)                               \
   ((sizeof(a) / sizeof(*(a))) /                     \
   (size_t)(!(sizeof(a) % sizeof(*(a)))))
@@ -36,7 +37,7 @@
 cpu_info_t info = { 0 };
 cpuid_raw_db_t db = { 0 };
 
-static const uint32_t simple_basic[] = {
+static const ULONG simple_basic[] = {
     0x00000001,
     0x00000002,
     0x00000003,
@@ -48,7 +49,7 @@ static const uint32_t simple_basic[] = {
     0x00000016
 };
 
-static const uint32_t simple_extended[] = {
+static const ULONG simple_extended[] = {
     0x80000001,
     0x80000002,
     0x80000003,
@@ -69,8 +70,8 @@ static const uint32_t simple_extended[] = {
     0x80000021,
 };
 /* --- Prototypes ---*/
-static inline void cpuid_exec(cpuid_raw_db_t *db, uint32_t leaf, uint32_t subleaf);
-static inline void u32_to_bytes(uint32_t val, char *buf);
+static inline void cpuid_exec(cpuid_raw_db_t *db, ULONG leaf, ULONG subleaf);
+static inline void u32_to_bytes(ULONG val, CHAR *buf);
 
 /* --- Functions ---*/
 
@@ -85,7 +86,7 @@ static inline void u32_to_bytes(uint32_t val, char *buf);
  ========================================================================== */
 int cpuid_available(void) {
 #ifdef __x86_64__
-    uint64_t orig, mod;
+    ULONGLONG orig, mod;
 
     __asm__ __volatile__ (
         "pushfq\n\t"                    // Save RFLAGS
@@ -106,7 +107,7 @@ int cpuid_available(void) {
 
     return (mod & 0x00200000) != 0;
 #else
-    uint32_t orig, mod;
+    ULONG orig, mod;
 
     __asm__ __volatile__ (
         "pushfl\n\t"                    // Save EFLAGS
@@ -136,8 +137,8 @@ int cpuid_available(void) {
  * Find raw CPUID data by leaf and subleaf                                  *
  *                                                                          *
  ========================================================================== */
-static const cpuid_raw_t *cpuid_raw_find(const cpuid_raw_db_t *db, uint32_t leaf, uint32_t subleaf) {
-	for (uint32_t i = 0; i < db->count; i++) {
+static const cpuid_raw_t *cpuid_raw_find(const cpuid_raw_db_t *db, ULONG leaf, ULONG subleaf) {
+	for (ULONG i = 0; i < db->count; i++) {
 		cpuid_raw_t raw = db->entries[i];
 		if (raw.leaf == leaf && raw.subleaf == subleaf) {
 			return &db->entries[i]; /* return raw; makes clangd upset */
@@ -153,10 +154,10 @@ static const cpuid_raw_t *cpuid_raw_find(const cpuid_raw_db_t *db, uint32_t leaf
  * Execute CPUID with EAX=leaf, ECX=subleaf and return all four registers   *
  *                                                                          *
  ========================================================================== */
-static inline void cpuid_exec(cpuid_raw_db_t *db, uint32_t leaf, uint32_t subleaf) {
-	uint32_t in_subleaf = subleaf;
+static inline void cpuid_exec(cpuid_raw_db_t *db, ULONG leaf, ULONG subleaf) {
+	ULONG in_subleaf = subleaf;
 #ifdef __x86_64__
-        uint32_t ra, rb, rc, rd;
+        ULONG ra, rb, rc, rd;
 		rc = subleaf;
     
         __asm__ __volatile__ (
@@ -178,7 +179,7 @@ static inline void cpuid_exec(cpuid_raw_db_t *db, uint32_t leaf, uint32_t sublea
 			.edx = rd
 		};
 #else
-        uint32_t ra, rb, rc, rd;
+        ULONG ra, rb, rc, rd;
 		rc = subleaf;
     
         __asm__ __volatile__ (
@@ -206,14 +207,14 @@ static inline void cpuid_exec(cpuid_raw_db_t *db, uint32_t leaf, uint32_t sublea
  *                                                                          *
  * u32_to_bytes()                                                           *
  *                                                                          *
- * Convert a little-endian uint32_t to 4 bytes                              *
+ * Convert a little-endian ULONG to 4 CHAR's                              *
  *                                                                          *
  ========================================================================== */
-static inline void u32_to_bytes(uint32_t val, char *buf) {
-    buf[0] = (char)(val & 0xFF);
-    buf[1] = (char)((val >> 8)  & 0xFF);
-    buf[2] = (char)((val >> 16) & 0xFF);
-    buf[3] = (char)((val >> 24) & 0xFF);
+static inline void u32_to_bytes(ULONG val, CHAR *buf) {
+    buf[0] = (CHAR)(val & 0xFF);
+    buf[1] = (CHAR)((val >> 8)  & 0xFF);
+    buf[2] = (CHAR)((val >> 16) & 0xFF);
+    buf[3] = (CHAR)((val >> 24) & 0xFF);
 }
 
 /* ==========================================================================
@@ -225,13 +226,14 @@ static inline void u32_to_bytes(uint32_t val, char *buf) {
  ========================================================================== */
 void cpuid_raw_pass(void) {
 	cpuid_exec(&db, 0x00000000, 0);
-	uint32_t max_basic = cpuid_raw_find(&db, 0, 0)->eax;
+	ULONG max_basic = cpuid_raw_find(&db, 0, 0)->eax;
     for (size_t i = 0; i < ARRAY_SIZE(simple_basic); i++) {
         if (max_basic >= simple_basic[i]) {
             cpuid_exec(&db, simple_basic[i], 0);
         }
     }
-    for (uint32_t idx = 0;; idx++) {
+
+    for (ULONG idx = 0;; idx++) {
         cpuid_exec(&db, 4, idx);
     
         if ((cpuid_raw_find(&db, 4, idx)->eax & 0x1F) == 0) {
@@ -240,15 +242,15 @@ void cpuid_raw_pass(void) {
     }
 
     cpuid_exec(&db, 0x00000007, 0);
-    for (uint32_t idx = 1; idx <= cpuid_raw_find(&db, 7, 0)->eax; idx++) {
+    for (ULONG idx = 1; idx <= cpuid_raw_find(&db, 7, 0)->eax; idx++) {
         cpuid_exec(&db, 7, idx);
     }
 
-    for (uint32_t idx = 0;; idx++) {
+    for (ULONG idx = 0;; idx++) {
         cpuid_exec(&db, 0x0B, idx);
     
-        uint32_t ecx = cpuid_raw_find(&db, 0x0B, idx)->ecx;
-        uint32_t level_type = (ecx >> 8) & 0xFF;
+        ULONG ecx = cpuid_raw_find(&db, 0x0B, idx)->ecx;
+        ULONG level_type = (ecx >> 8) & 0xFF;
     
         if (level_type == 0) {
             break;
@@ -258,8 +260,8 @@ void cpuid_raw_pass(void) {
 	cpuid_exec(&db, 0x0D, 0);
     cpuid_exec(&db, 0x0D, 1);
     const cpuid_raw_t *leaf = cpuid_raw_find(&db, 0x0D, 0);
-    uint64_t bitmap = ((uint64_t)leaf->edx << 32) | leaf->eax;
-    for (uint32_t i = 2; i < 64; i++) {
+    ULONGLONG bitmap = ((ULONGLONG)leaf->edx << 32) | leaf->eax;
+    for (ULONG i = 2; i < 64; i++) {
         if (bitmap & (1ULL << i)) {
             cpuid_exec(&db, 0x0D, i);
         }
@@ -267,15 +269,15 @@ void cpuid_raw_pass(void) {
 
     
 	cpuid_exec(&db, 0x80000000, 0);
-	uint32_t max_extended = cpuid_raw_find(&db, 0x80000000, 0)->eax;
-    for (size_t i = 0; i < ARRAY_SIZE(simple_extended); i++) {
+	ULONG max_extended = cpuid_raw_find(&db, 0x80000000, 0)->eax;
+    for (SIZE_T i = 0; i < ARRAY_SIZE(simple_extended); i++) {
         if (max_extended >= simple_extended[i]) {
             cpuid_exec(&db, simple_extended[i], 0);
         }
     }
 
     if (max_extended >= 0x8000001D) {
-        for (uint32_t idx = 0;; idx++) {
+        for (ULONG idx = 0;; idx++) {
             cpuid_exec(&db, 0x8000001D, idx);
         
             if ((cpuid_raw_find(&db, 0x8000001D, idx)->eax & 0x1F) == 0) {
@@ -298,7 +300,7 @@ void cpuid_dump_db(void) {
      * User can read, I think, probably
     */
     printk("Leaf       Sub EAX        EBX        ECX        EDX\n");
-    for (uint32_t idx = 0; idx < db.count; idx++) {
+    for (ULONG idx = 0; idx < db.count; idx++) {
         const cpuid_raw_t *leaf = &db.entries[idx];
         printk("%#010x %-3u %#010x %#010x %#010x %#010x\n",
             leaf->leaf,
@@ -315,9 +317,9 @@ void cpuid_dump_db(void) {
 static void cpuid_decode_vendor(cpuid_raw_db_t *db, cpu_info_t *info) {
     const cpuid_raw_t *leaf = cpuid_raw_find(db, 0, 0);
 
-    u32_to_bytes(leaf->ebx, &info->vendor[0]);
-    u32_to_bytes(leaf->edx, &info->vendor[4]);
-    u32_to_bytes(leaf->ecx, &info->vendor[8]);
+    u32_to_bytes(leaf->ebx, (CHAR *)&info->vendor[0]);
+    u32_to_bytes(leaf->edx, (CHAR *)&info->vendor[4]);
+    u32_to_bytes(leaf->ecx, (CHAR *)&info->vendor[8]);
     info->vendor[12] = '\0';
 }
 
@@ -335,10 +337,10 @@ static void cpuid_decode_brand(cpuid_raw_db_t *db, cpu_info_t *info) {
     for (int i = 0; i < 3; i++) {
         const cpuid_raw_t *brand_leaf = cpuid_raw_find(db, 0x80000002 + i, 0);
 
-        u32_to_bytes(brand_leaf->eax, &info->brand[i * 16 + 0]);
-        u32_to_bytes(brand_leaf->ebx, &info->brand[i * 16 + 4]);
-        u32_to_bytes(brand_leaf->ecx, &info->brand[i * 16 + 8]);
-        u32_to_bytes(brand_leaf->edx, &info->brand[i * 16 + 12]);
+        u32_to_bytes(brand_leaf->eax, (CHAR *)&info->brand[i * 16 + 0]);
+        u32_to_bytes(brand_leaf->ebx, (CHAR *)&info->brand[i * 16 + 4]);
+        u32_to_bytes(brand_leaf->ecx, (CHAR *)&info->brand[i * 16 + 8]);
+        u32_to_bytes(brand_leaf->edx, (CHAR *)&info->brand[i * 16 + 12]);
     }
     info->brand[48] = '\0';
 }
@@ -354,23 +356,23 @@ static void cpuid_decode_psn(cpuid_raw_db_t *db, cpu_info_t *info) {
 static void cpuid_decode_proc(cpuid_raw_db_t *db, cpuid_proc_info_t *info) {
     const cpuid_raw_t *leaf1 = cpuid_raw_find(db, 1, 0);
 
-    info->stepping      = (uint8_t)( leaf1->eax        & 0x0F);
-    info->model         = (uint8_t)((leaf1->eax >> 4)  & 0x0F);
-    info->family        = (uint8_t)((leaf1->eax >> 8)  & 0x0F);
-    info->proc_type     = (uint8_t)((leaf1->eax >> 12) & 0x03);
-    info->ext_model     = (uint8_t)((leaf1->eax >> 16) & 0x0F);
-    info->ext_family    = (uint8_t)((leaf1->eax >> 20) & 0xFF);
+    info->stepping      = (BYTE)( leaf1->eax        & 0x0F);
+    info->model         = (BYTE)((leaf1->eax >> 4)  & 0x0F);
+    info->family        = (BYTE)((leaf1->eax >> 8)  & 0x0F);
+    info->proc_type     = (BYTE)((leaf1->eax >> 12) & 0x03);
+    info->ext_model     = (BYTE)((leaf1->eax >> 16) & 0x0F);
+    info->ext_family    = (BYTE)((leaf1->eax >> 20) & 0xFF);
 
-    info->brand_index       = (uint8_t)(leaf1->ebx & 0xFF);
-    info->clflush_line_size = (uint8_t)(((leaf1->ebx >> 8) & 0xFF) * 8);
-    info->max_logical_ids   = (uint8_t)((leaf1->ebx >> 16) & 0xFF);
+    info->brand_index       = (BYTE)(leaf1->ebx & 0xFF);
+    info->clflush_line_size = (BYTE)(((leaf1->ebx >> 8) & 0xFF) * 8);
+    info->max_logical_ids   = (BYTE)((leaf1->ebx >> 16) & 0xFF);
     info->initial_apic_id   = (leaf1->ebx >> 24) & 0xFF;
 
     // Intel/AMD display rules: if family == 6 or 15, display model
     // is (ext_model << 4) + model. If family == 15, display family
     // is ext_family + family.
-    uint32_t family = info->family;
-    uint32_t model  = info->model;
+    ULONG family = info->family;
+    ULONG model  = info->model;
 
     if (family == 0x06 || family == 0x0F) {
         model = (info->ext_model << 4) | info->model;
@@ -379,82 +381,82 @@ static void cpuid_decode_proc(cpuid_raw_db_t *db, cpuid_proc_info_t *info) {
         family = info->ext_family + info->family;
     }
 
-    info->display_model  = (uint8_t)model;
-    info->display_family = (uint8_t)family;
+    info->display_model  = (BYTE)model;
+    info->display_family = (BYTE)family;
 }
 
 static void cpuid_decode_feat(cpuid_raw_db_t *db, cpuid_feat_t *info) {
 
     const cpuid_raw_t *leaf = cpuid_raw_find(db, 1, 0);
 
-    uint32_t ecx = leaf->ecx;
-    uint32_t edx = leaf->edx;
+    ULONG ecx = leaf->ecx;
+    ULONG edx = leaf->edx;
 
-    info->fpu = (uint8_t)((edx >> 0) & 0x01);
-    info->vme = (uint8_t)((edx >> 1) & 0x01);
-    info->de = (uint8_t)((edx >> 2) & 0x01);
-    info->pse = (uint8_t)((edx >> 3) & 0x01);
-    info->tsc = (uint8_t)((edx >> 4) & 0x01);
-    info->msr = (uint8_t)((edx >> 5) & 0x01);
-    info->pae = (uint8_t)((edx >> 6) & 0x01);
-    info->mce = (uint8_t)((edx >> 7) & 0x01);
-    info->cx8 = (uint8_t)((edx >> 8) & 0x01);
-    info->apic = (uint8_t)((edx >> 9) & 0x01);
+    info->fpu = (BYTE)((edx >> 0) & 0x01);
+    info->vme = (BYTE)((edx >> 1) & 0x01);
+    info->de = (BYTE)((edx >> 2) & 0x01);
+    info->pse = (BYTE)((edx >> 3) & 0x01);
+    info->tsc = (BYTE)((edx >> 4) & 0x01);
+    info->msr = (BYTE)((edx >> 5) & 0x01);
+    info->pae = (BYTE)((edx >> 6) & 0x01);
+    info->mce = (BYTE)((edx >> 7) & 0x01);
+    info->cx8 = (BYTE)((edx >> 8) & 0x01);
+    info->apic = (BYTE)((edx >> 9) & 0x01);
     
-    info->sep = (uint8_t)((edx >> 11) & 0x01);
-    info->mtrr = (uint8_t)((edx >> 12) & 0x01);
-    info->pge = (uint8_t)((edx >> 13) & 0x01);
-    info->mca = (uint8_t)((edx >> 14) & 0x01);
-    info->cmov = (uint8_t)((edx >> 15) & 0x01);
-    info->pat = (uint8_t)((edx >> 16) & 0x01);
-    info->pse36 = (uint8_t)((edx >> 17) & 0x01);
-    info->psn = (uint8_t)((edx >> 18) & 0x01);
-    info->clfsh = (uint8_t)((edx >> 19) & 0x01);
-    info->nx = (uint8_t)((edx >> 20) & 0x01);
-    info->ds = (uint8_t)((edx >> 21) & 0x01);
-    info->acpi = (uint8_t)((edx >> 22) & 0x01);
-    info->mmx = (uint8_t)((edx >> 23) & 0x01);
-    info->fxsr = (uint8_t)((edx >> 24) & 0x01);
-    info->sse = (uint8_t)((edx >> 25) & 0x01);
-    info->sse2 = (uint8_t)((edx >> 26) & 0x01);
-    info->ss = (uint8_t)((edx >> 27) & 0x01);
-    info->htt = (uint8_t)((edx >> 28) & 0x01);
-    info->tm = (uint8_t)((edx >> 29) & 0x01);
-    info->ia64 = (uint8_t)((edx >> 30) & 0x01);
-    info->pbe = (uint8_t)((edx >> 31) & 0x01);
+    info->sep = (BYTE)((edx >> 11) & 0x01);
+    info->mtrr = (BYTE)((edx >> 12) & 0x01);
+    info->pge = (BYTE)((edx >> 13) & 0x01);
+    info->mca = (BYTE)((edx >> 14) & 0x01);
+    info->cmov = (BYTE)((edx >> 15) & 0x01);
+    info->pat = (BYTE)((edx >> 16) & 0x01);
+    info->pse36 = (BYTE)((edx >> 17) & 0x01);
+    info->psn = (BYTE)((edx >> 18) & 0x01);
+    info->clfsh = (BYTE)((edx >> 19) & 0x01);
+    info->nx = (BYTE)((edx >> 20) & 0x01);
+    info->ds = (BYTE)((edx >> 21) & 0x01);
+    info->acpi = (BYTE)((edx >> 22) & 0x01);
+    info->mmx = (BYTE)((edx >> 23) & 0x01);
+    info->fxsr = (BYTE)((edx >> 24) & 0x01);
+    info->sse = (BYTE)((edx >> 25) & 0x01);
+    info->sse2 = (BYTE)((edx >> 26) & 0x01);
+    info->ss = (BYTE)((edx >> 27) & 0x01);
+    info->htt = (BYTE)((edx >> 28) & 0x01);
+    info->tm = (BYTE)((edx >> 29) & 0x01);
+    info->ia64 = (BYTE)((edx >> 30) & 0x01);
+    info->pbe = (BYTE)((edx >> 31) & 0x01);
 
-    info->sse3 = (uint8_t)((ecx >> 0) & 0x01);
-    info->pclmulqdq = (uint8_t)((ecx >> 1) & 0x01);
-    info->dtes64 = (uint8_t)((ecx >> 2) & 0x01);
-    info->monitor = (uint8_t)((ecx >> 3) & 0x01);
-    info->ds_cpl = (uint8_t)((ecx >> 4) & 0x01);
-    info->vmx = (uint8_t)((ecx >> 5) & 0x01);
-    info->smx = (uint8_t)((ecx >> 6) & 0x01);
-    info->est = (uint8_t)((ecx >> 7) & 0x01);
-    info->tm2 = (uint8_t)((ecx >> 8) & 0x01);
-    info->ssse3 = (uint8_t)((ecx >> 9) & 0x01);
-    info->cntx_id = (uint8_t)((ecx >> 10) & 0x01);
-    info->sdbg = (uint8_t)((ecx >> 11) & 0x01);
-    info->fma = (uint8_t)((ecx >> 12) & 0x01);
-    info->cx16 = (uint8_t)((ecx >> 13) & 0x01);
-    info->xtpr = (uint8_t)((ecx >> 14) & 0x01);
-    info->pdcm = (uint8_t)((ecx >> 15) & 0x01);
+    info->sse3 = (BYTE)((ecx >> 0) & 0x01);
+    info->pclmulqdq = (BYTE)((ecx >> 1) & 0x01);
+    info->dtes64 = (BYTE)((ecx >> 2) & 0x01);
+    info->monitor = (BYTE)((ecx >> 3) & 0x01);
+    info->ds_cpl = (BYTE)((ecx >> 4) & 0x01);
+    info->vmx = (BYTE)((ecx >> 5) & 0x01);
+    info->smx = (BYTE)((ecx >> 6) & 0x01);
+    info->est = (BYTE)((ecx >> 7) & 0x01);
+    info->tm2 = (BYTE)((ecx >> 8) & 0x01);
+    info->ssse3 = (BYTE)((ecx >> 9) & 0x01);
+    info->cntx_id = (BYTE)((ecx >> 10) & 0x01);
+    info->sdbg = (BYTE)((ecx >> 11) & 0x01);
+    info->fma = (BYTE)((ecx >> 12) & 0x01);
+    info->cx16 = (BYTE)((ecx >> 13) & 0x01);
+    info->xtpr = (BYTE)((ecx >> 14) & 0x01);
+    info->pdcm = (BYTE)((ecx >> 15) & 0x01);
     // reserved
-    info->pcid = (uint8_t)((ecx >> 17) & 0x01);
-    info->dca = (uint8_t)((ecx >> 18) & 0x01);
-    info->sse4_1 = (uint8_t)((ecx >> 19) & 0x01);
-    info->sse4_2 = (uint8_t)((ecx >> 20) & 0x01);
-    info->x2apic = (uint8_t)((ecx >> 21) & 0x01);
-    info->movbe = (uint8_t)((ecx >> 22) & 0x01);
-    info->popcnt = (uint8_t)((ecx >> 23) & 0x01);
-    info->tsc_deadline = (uint8_t)((ecx >> 24) & 0x01);
-    info->aes_ni = (uint8_t)((ecx >> 25) & 0x01);
-    info->xsave = (uint8_t)((ecx >> 26) & 0x01);
-    info->osxsave = (uint8_t)((ecx >> 27) & 0x01);
-    info->avx = (uint8_t)((ecx >> 28) & 0x01);
-    info->f16c = (uint8_t)((ecx >> 29) & 0x01);
-    info->rdrnd = (uint8_t)((ecx >> 30) & 0x01);
-    info->hypervisor = (uint8_t)((ecx >> 31) & 0x01);
+    info->pcid = (BYTE)((ecx >> 17) & 0x01);
+    info->dca = (BYTE)((ecx >> 18) & 0x01);
+    info->sse4_1 = (BYTE)((ecx >> 19) & 0x01);
+    info->sse4_2 = (BYTE)((ecx >> 20) & 0x01);
+    info->x2apic = (BYTE)((ecx >> 21) & 0x01);
+    info->movbe = (BYTE)((ecx >> 22) & 0x01);
+    info->popcnt = (BYTE)((ecx >> 23) & 0x01);
+    info->tsc_deadline = (BYTE)((ecx >> 24) & 0x01);
+    info->aes_ni = (BYTE)((ecx >> 25) & 0x01);
+    info->xsave = (BYTE)((ecx >> 26) & 0x01);
+    info->osxsave = (BYTE)((ecx >> 27) & 0x01);
+    info->avx = (BYTE)((ecx >> 28) & 0x01);
+    info->f16c = (BYTE)((ecx >> 29) & 0x01);
+    info->rdrnd = (BYTE)((ecx >> 30) & 0x01);
+    info->hypervisor = (BYTE)((ecx >> 31) & 0x01);
 }
 
 /* ==========================================================================
@@ -465,181 +467,181 @@ static void cpuid_decode_feat(cpuid_raw_db_t *db, cpuid_feat_t *info) {
  *                                                                          *
  ========================================================================== */
 static void cpuid_decode_ext_feat(cpuid_raw_db_t *db, cpuid_ext_feat_t *info) {
-    uint32_t ecx, edx;
+    ULONG ecx, edx;
 
     const cpuid_raw_t *leaf = cpuid_raw_find(db, 0x80000001, 0);
     ecx = leaf->ecx;
     edx = leaf->edx;
 
-    info->fpu = (uint8_t)((edx >> 0) & 0x01);
-    info->vme = (uint8_t)((edx >> 1) & 0x01);
-    info->de = (uint8_t)((edx >> 2) & 0x01);
-    info->pse = (uint8_t)((edx >> 3) & 0x01);
-    info->tsc = (uint8_t)((edx >> 4) & 0x01);
-    info->msr = (uint8_t)((edx >> 5) & 0x01);
-    info->pae = (uint8_t)((edx >> 6) & 0x01);
-    info->mce = (uint8_t)((edx >> 7) & 0x01);
-    info->cx8 = (uint8_t)((edx >> 8) & 0x01);
-    info->apic = (uint8_t)((edx >> 9) & 0x01);
-    info->syscall_k6 = (uint8_t)((edx >> 10) & 0x01);
-    info->syscall = (uint8_t)((edx >> 11) & 0x01);
-    info->mtrr = (uint8_t)((edx >> 12) & 0x01);
-    info->pge = (uint8_t)((edx >> 13) & 0x01);
-    info->mca = (uint8_t)((edx >> 14) & 0x01);
-    info->cmov = (uint8_t)((edx >> 15) & 0x01);
-    info->pat = (uint8_t)((edx >> 16) & 0x01);
-    info->pse36 = (uint8_t)((edx >> 17) & 0x01);
-    info->ecc_k7 = (uint8_t)((edx >> 18) & 0x01);
-    info->ecc = (uint8_t)((edx >> 19) & 0x01);
-    info->nx = (uint8_t)((edx >> 20) & 0x01);
-    info->sem = (uint8_t)((edx >> 21) & 0x01);
-    info->mmxext = (uint8_t)((edx >> 22) & 0x01);
-    info->mmx = (uint8_t)((edx >> 23) & 0x01);
-    info->fxsr = (uint8_t)((edx >> 24) & 0x01);
-    info->fxsr_opt = (uint8_t)((edx >> 25) & 0x01);
-    info->pdpe1gb = (uint8_t)((edx >> 26) & 0x01);
-    info->rdtscp = (uint8_t)((edx >> 27) & 0x01);
-    info->rex32_k8 = (uint8_t)((edx >> 28) & 0x01);
-    info->lm = (uint8_t)((edx >> 29) & 0x01);
-    info->tdnowext = (uint8_t)((edx >> 30) & 0x01);
-    info->tdnow = (uint8_t)((edx >> 31) & 0x01);
+    info->fpu = (BYTE)((edx >> 0) & 0x01);
+    info->vme = (BYTE)((edx >> 1) & 0x01);
+    info->de = (BYTE)((edx >> 2) & 0x01);
+    info->pse = (BYTE)((edx >> 3) & 0x01);
+    info->tsc = (BYTE)((edx >> 4) & 0x01);
+    info->msr = (BYTE)((edx >> 5) & 0x01);
+    info->pae = (BYTE)((edx >> 6) & 0x01);
+    info->mce = (BYTE)((edx >> 7) & 0x01);
+    info->cx8 = (BYTE)((edx >> 8) & 0x01);
+    info->apic = (BYTE)((edx >> 9) & 0x01);
+    info->syscall_k6 = (BYTE)((edx >> 10) & 0x01);
+    info->syscall = (BYTE)((edx >> 11) & 0x01);
+    info->mtrr = (BYTE)((edx >> 12) & 0x01);
+    info->pge = (BYTE)((edx >> 13) & 0x01);
+    info->mca = (BYTE)((edx >> 14) & 0x01);
+    info->cmov = (BYTE)((edx >> 15) & 0x01);
+    info->pat = (BYTE)((edx >> 16) & 0x01);
+    info->pse36 = (BYTE)((edx >> 17) & 0x01);
+    info->ecc_k7 = (BYTE)((edx >> 18) & 0x01);
+    info->ecc = (BYTE)((edx >> 19) & 0x01);
+    info->nx = (BYTE)((edx >> 20) & 0x01);
+    info->sem = (BYTE)((edx >> 21) & 0x01);
+    info->mmxext = (BYTE)((edx >> 22) & 0x01);
+    info->mmx = (BYTE)((edx >> 23) & 0x01);
+    info->fxsr = (BYTE)((edx >> 24) & 0x01);
+    info->fxsr_opt = (BYTE)((edx >> 25) & 0x01);
+    info->pdpe1gb = (BYTE)((edx >> 26) & 0x01);
+    info->rdtscp = (BYTE)((edx >> 27) & 0x01);
+    info->rex32_k8 = (BYTE)((edx >> 28) & 0x01);
+    info->lm = (BYTE)((edx >> 29) & 0x01);
+    info->tdnowext = (BYTE)((edx >> 30) & 0x01);
+    info->tdnow = (BYTE)((edx >> 31) & 0x01);
 
-    info->lahf_lm = (uint8_t)((ecx >> 0) & 0x01);
-    info->cmp_legacy = (uint8_t)((ecx >> 1) & 0x01);
-    info->svm = (uint8_t)((ecx >> 2) & 0x01);
-    info->extapic = (uint8_t)((ecx >> 3) & 0x01);
-    info->cr8_legacy = (uint8_t)((ecx >> 4) & 0x01);
-    info->abm = (uint8_t)((ecx >> 5) & 0x01);
-    info->sse4a = (uint8_t)((ecx >> 6) & 0x01);
-    info->misalignsse = (uint8_t)((ecx >> 7) & 0x01);
-    info->tdnowprefetch = (uint8_t)((ecx >> 8) & 0x01);
-    info->osvw = (uint8_t)((ecx >> 9) & 0x01);
-    info->ibs = (uint8_t)((ecx >> 10) & 0x01);
-    info->xop = (uint8_t)((ecx >> 11) & 0x01);
-    info->skinit = (uint8_t)((ecx >> 12) & 0x01);
-    info->wdt = (uint8_t)((ecx >> 13) & 0x01);
-    info->tbm0 = (uint8_t)((ecx >> 14) & 0x01);
-    info->lwp = (uint8_t)((ecx >> 15) & 0x01);
-    info->fma4 = (uint8_t)((ecx >> 16) & 0x01);
-    info->tce = (uint8_t)((ecx >> 17) & 0x01);
-    info->cvt16 = (uint8_t)((ecx >> 18) & 0x01);
-    info->nodeid_msr = (uint8_t)((ecx >> 19) & 0x01);
+    info->lahf_lm = (BYTE)((ecx >> 0) & 0x01);
+    info->cmp_legacy = (BYTE)((ecx >> 1) & 0x01);
+    info->svm = (BYTE)((ecx >> 2) & 0x01);
+    info->extapic = (BYTE)((ecx >> 3) & 0x01);
+    info->cr8_legacy = (BYTE)((ecx >> 4) & 0x01);
+    info->abm = (BYTE)((ecx >> 5) & 0x01);
+    info->sse4a = (BYTE)((ecx >> 6) & 0x01);
+    info->misalignsse = (BYTE)((ecx >> 7) & 0x01);
+    info->tdnowprefetch = (BYTE)((ecx >> 8) & 0x01);
+    info->osvw = (BYTE)((ecx >> 9) & 0x01);
+    info->ibs = (BYTE)((ecx >> 10) & 0x01);
+    info->xop = (BYTE)((ecx >> 11) & 0x01);
+    info->skinit = (BYTE)((ecx >> 12) & 0x01);
+    info->wdt = (BYTE)((ecx >> 13) & 0x01);
+    info->tbm0 = (BYTE)((ecx >> 14) & 0x01);
+    info->lwp = (BYTE)((ecx >> 15) & 0x01);
+    info->fma4 = (BYTE)((ecx >> 16) & 0x01);
+    info->tce = (BYTE)((ecx >> 17) & 0x01);
+    info->cvt16 = (BYTE)((ecx >> 18) & 0x01);
+    info->nodeid_msr = (BYTE)((ecx >> 19) & 0x01);
     // reserved
-    info->tbm = (uint8_t)((ecx >> 21) & 0x01);
-    info->topoext = (uint8_t)((ecx >> 22) & 0x01);
-    info->perfctr_core = (uint8_t)((ecx >> 23) & 0x01);
-    info->perfctr_nb = (uint8_t)((ecx >> 24) & 0x01);
-    info->StreamPerfMon = (uint8_t)((ecx >> 25) & 0x01);
-    info->dbx = (uint8_t)((ecx >> 26) & 0x01);
-    info->perftsc = (uint8_t)((ecx >> 27) & 0x01);
-    info->pcx_l2i_l3 = (uint8_t)((ecx >> 28) & 0x01);
-    info->monitorx = (uint8_t)((ecx >> 29) & 0x01);
-    info->addr_mask_ext = (uint8_t)((ecx >> 30) & 0x01);
+    info->tbm = (BYTE)((ecx >> 21) & 0x01);
+    info->topoext = (BYTE)((ecx >> 22) & 0x01);
+    info->perfctr_core = (BYTE)((ecx >> 23) & 0x01);
+    info->perfctr_nb = (BYTE)((ecx >> 24) & 0x01);
+    info->StreamPerfMon = (BYTE)((ecx >> 25) & 0x01);
+    info->dbx = (BYTE)((ecx >> 26) & 0x01);
+    info->perftsc = (BYTE)((ecx >> 27) & 0x01);
+    info->pcx_l2i_l3 = (BYTE)((ecx >> 28) & 0x01);
+    info->monitorx = (BYTE)((ecx >> 29) & 0x01);
+    info->addr_mask_ext = (BYTE)((ecx >> 30) & 0x01);
     //reserved
 }
 
 static void cpuid_decode_feat7(cpuid_raw_db_t *db, cpuid_feat7_t *info) {
-    uint32_t eax, ebx, ecx, edx;
+    ULONG eax, ebx, ecx, edx;
     /* --- Sub Leaf 0 --- */
     const cpuid_raw_t *leaf70 = cpuid_raw_find(db, 7, 0);
     ebx = leaf70->ebx;
     ecx = leaf70->ecx;
     edx = leaf70->edx;
     // EBX
-    info->fsgsbase = (uint8_t)((ebx >> 0) & 0x01);
-    info->tsc_adjust = (uint8_t)((ebx >> 1) & 0x01);
-    info->sgx = (uint8_t)((ebx >> 2) & 0x01);
-    info->bmi1 = (uint8_t)((ebx >> 3) & 0x01);
-    info->hle = (uint8_t)((ebx >> 4) & 0x01);
-    info->avx2 = (uint8_t)((ebx >> 5) & 0x01);
-    info->fdp_excptn_only = (uint8_t)((ebx >> 6) & 0x01);
-    info->smep = (uint8_t)((ebx >> 7) & 0x01);
-    info->bmi2 = (uint8_t)((ebx >> 8) & 0x01);
-    info->erms = (uint8_t)((ebx >> 9) & 0x01);
-    info->invpcid = (uint8_t)((ebx >> 10) & 0x01);
-    info->rtm = (uint8_t)((ebx >> 11) & 0x01);
-    info->rdt_m_pqm = (uint8_t)((ebx >> 12) & 0x01);
-    info->fcs_fds_deprecation = (uint8_t)((ebx >> 13) & 0x01);
-    info->mpx = (uint8_t)((ebx >> 14) & 0x01);
-    info->rdt_a_pqe = (uint8_t)((ebx >> 15) & 0x01);
-    info->avx512_f = (uint8_t)((ebx >> 16) & 0x01);
-    info->avx512_dq = (uint8_t)((ebx >> 17) & 0x01);
-    info->rdseed = (uint8_t)((ebx >> 18) & 0x01);
-    info->adx = (uint8_t)((ebx >> 19) & 0x01);
-    info->smap = (uint8_t)((ebx >> 20) & 0x01);
-    info->avx512_ifma = (uint8_t)((ebx >> 21) & 0x01);
-    info->pmcommit = (uint8_t)((ebx >> 22) & 0x01);
-    info->clflushopt = (uint8_t)((ebx >> 23) & 0x01);
-    info->clwb = (uint8_t)((ebx >> 24) & 0x01);
-    info->pt = (uint8_t)((ebx >> 25) & 0x01);
-    info->avx512_pf = (uint8_t)((ebx >> 26) & 0x01);
-    info->avx512_er = (uint8_t)((ebx >> 27) & 0x01);
-    info->avx512_cd = (uint8_t)((ebx >> 28) & 0x01);
-    info->sha = (uint8_t)((ebx >> 29) & 0x01);
-    info-> avx512_bw = (uint8_t)((ebx >> 30) & 0x01);
-    info->avx512_vl = (uint8_t)((ebx >> 31) & 0x01);
+    info->fsgsbase = (BYTE)((ebx >> 0) & 0x01);
+    info->tsc_adjust = (BYTE)((ebx >> 1) & 0x01);
+    info->sgx = (BYTE)((ebx >> 2) & 0x01);
+    info->bmi1 = (BYTE)((ebx >> 3) & 0x01);
+    info->hle = (BYTE)((ebx >> 4) & 0x01);
+    info->avx2 = (BYTE)((ebx >> 5) & 0x01);
+    info->fdp_excptn_only = (BYTE)((ebx >> 6) & 0x01);
+    info->smep = (BYTE)((ebx >> 7) & 0x01);
+    info->bmi2 = (BYTE)((ebx >> 8) & 0x01);
+    info->erms = (BYTE)((ebx >> 9) & 0x01);
+    info->invpcid = (BYTE)((ebx >> 10) & 0x01);
+    info->rtm = (BYTE)((ebx >> 11) & 0x01);
+    info->rdt_m_pqm = (BYTE)((ebx >> 12) & 0x01);
+    info->fcs_fds_deprecation = (BYTE)((ebx >> 13) & 0x01);
+    info->mpx = (BYTE)((ebx >> 14) & 0x01);
+    info->rdt_a_pqe = (BYTE)((ebx >> 15) & 0x01);
+    info->avx512_f = (BYTE)((ebx >> 16) & 0x01);
+    info->avx512_dq = (BYTE)((ebx >> 17) & 0x01);
+    info->rdseed = (BYTE)((ebx >> 18) & 0x01);
+    info->adx = (BYTE)((ebx >> 19) & 0x01);
+    info->smap = (BYTE)((ebx >> 20) & 0x01);
+    info->avx512_ifma = (BYTE)((ebx >> 21) & 0x01);
+    info->pmcommit = (BYTE)((ebx >> 22) & 0x01);
+    info->clflushopt = (BYTE)((ebx >> 23) & 0x01);
+    info->clwb = (BYTE)((ebx >> 24) & 0x01);
+    info->pt = (BYTE)((ebx >> 25) & 0x01);
+    info->avx512_pf = (BYTE)((ebx >> 26) & 0x01);
+    info->avx512_er = (BYTE)((ebx >> 27) & 0x01);
+    info->avx512_cd = (BYTE)((ebx >> 28) & 0x01);
+    info->sha = (BYTE)((ebx >> 29) & 0x01);
+    info-> avx512_bw = (BYTE)((ebx >> 30) & 0x01);
+    info->avx512_vl = (BYTE)((ebx >> 31) & 0x01);
     // ECX
-    info->prefetchwt1 = (uint8_t)((ecx >> 0) & 0x01);
-    info->avx512_vbmi = (uint8_t)((ecx >> 1) & 0x01);
-    info->umip = (uint8_t)((ecx >> 2) & 0x01);
-    info->pku = (uint8_t)((ecx >> 3) & 0x01);
-    info->ospke = (uint8_t)((ecx >> 4) & 0x01);
-    info->waitpkg = (uint8_t)((ecx >> 5) & 0x01);
-    info->avx512_vmbi2 = (uint8_t)((ecx >> 6) & 0x01);
-    info->cet_ss = (uint8_t)((ecx >> 7) & 0x01);
-    info->gfni = (uint8_t)((ecx >> 8) & 0x01);
-    info->vaes = (uint8_t)((ecx >> 9) & 0x01);
-    info->vpclmulqdq = (uint8_t)((ecx >> 10) & 0x01);
-    info->avx512_vnni = (uint8_t)((ecx >> 11) & 0x01);
-    info->avx512_bitalg = (uint8_t)((ecx >> 12) & 0x01);
-    info->tme_en = (uint8_t)((ecx >> 13) & 0x01);
-    info->avx512_vpopcntdq = (uint8_t)((ecx >> 14) & 0x01);
-    info->fzm = (uint8_t)((ecx >> 15) & 0x01);
-    info->la57 = (uint8_t)((ecx >> 16) & 0x01);
-    info->mawau = (uint32_t)((ecx >> 17) & 0x1F);
-    info->rdpid = (uint8_t)((ecx >> 22) & 0x01);
-    info->kl = (uint8_t)((ecx >> 23) & 0x01);
-    info->bus_lock_detect = (uint8_t)((ecx >> 24) & 0x01);
-    info->cldemote = (uint8_t)((ecx >> 25) & 0x01);
-    info->mprr = (uint8_t)((ecx >> 26) & 0x01);
-    info->movdiri = (uint8_t)((ecx >> 27) & 0x01);
-    info->movdir64b = (uint8_t)((ecx >> 28) & 0x01);
-    info->enqcmd = (uint8_t)((ecx >> 29) & 0x01);
-    info->sgx_lc = (uint8_t)((ecx >> 30) & 0x01);
-    info->pks4 = (uint8_t)((ecx >> 31) & 0x01);
+    info->prefetchwt1 = (BYTE)((ecx >> 0) & 0x01);
+    info->avx512_vbmi = (BYTE)((ecx >> 1) & 0x01);
+    info->umip = (BYTE)((ecx >> 2) & 0x01);
+    info->pku = (BYTE)((ecx >> 3) & 0x01);
+    info->ospke = (BYTE)((ecx >> 4) & 0x01);
+    info->waitpkg = (BYTE)((ecx >> 5) & 0x01);
+    info->avx512_vmbi2 = (BYTE)((ecx >> 6) & 0x01);
+    info->cet_ss = (BYTE)((ecx >> 7) & 0x01);
+    info->gfni = (BYTE)((ecx >> 8) & 0x01);
+    info->vaes = (BYTE)((ecx >> 9) & 0x01);
+    info->vpclmulqdq = (BYTE)((ecx >> 10) & 0x01);
+    info->avx512_vnni = (BYTE)((ecx >> 11) & 0x01);
+    info->avx512_bitalg = (BYTE)((ecx >> 12) & 0x01);
+    info->tme_en = (BYTE)((ecx >> 13) & 0x01);
+    info->avx512_vpopcntdq = (BYTE)((ecx >> 14) & 0x01);
+    info->fzm = (BYTE)((ecx >> 15) & 0x01);
+    info->la57 = (BYTE)((ecx >> 16) & 0x01);
+    info->mawau = (DWORD)((ecx >> 17) & 0x1F);
+    info->rdpid = (BYTE)((ecx >> 22) & 0x01);
+    info->kl = (BYTE)((ecx >> 23) & 0x01);
+    info->bus_lock_detect = (BYTE)((ecx >> 24) & 0x01);
+    info->cldemote = (BYTE)((ecx >> 25) & 0x01);
+    info->mprr = (BYTE)((ecx >> 26) & 0x01);
+    info->movdiri = (BYTE)((ecx >> 27) & 0x01);
+    info->movdir64b = (BYTE)((ecx >> 28) & 0x01);
+    info->enqcmd = (BYTE)((ecx >> 29) & 0x01);
+    info->sgx_lc = (BYTE)((ecx >> 30) & 0x01);
+    info->pks4 = (BYTE)((ecx >> 31) & 0x01);
     // EDX
-    info->sgx_term = (uint8_t)((edx >> 0) & 0x01);
-    info->sgx_keys = (uint8_t)((edx >> 1) & 0x01);
-    info->avx512_4vnniw = (uint8_t)((edx >> 2) & 0x01);
-    info->avx512_4fmaps = (uint8_t)((edx >> 3) & 0x01);
-    info->fsrm = (uint8_t)((edx >> 4) & 0x01);
-    info->uintr = (uint8_t)((edx >> 5) & 0x01);
+    info->sgx_term = (BYTE)((edx >> 0) & 0x01);
+    info->sgx_keys = (BYTE)((edx >> 1) & 0x01);
+    info->avx512_4vnniw = (BYTE)((edx >> 2) & 0x01);
+    info->avx512_4fmaps = (BYTE)((edx >> 3) & 0x01);
+    info->fsrm = (BYTE)((edx >> 4) & 0x01);
+    info->uintr = (BYTE)((edx >> 5) & 0x01);
     // reserved
     // reserved
-    info->avx512_vp2intersect = (uint8_t)((edx >> 8) & 0x01);
-    info->srbds_ctrl = (uint8_t)((edx >> 9) & 0x01);
-    info->md_clear = (uint8_t)((edx >> 10) & 0x01);
-    info->rtm_always_abort = (uint8_t)((edx >> 11) & 0x01);
+    info->avx512_vp2intersect = (BYTE)((edx >> 8) & 0x01);
+    info->srbds_ctrl = (BYTE)((edx >> 9) & 0x01);
+    info->md_clear = (BYTE)((edx >> 10) & 0x01);
+    info->rtm_always_abort = (BYTE)((edx >> 11) & 0x01);
     // reserved
-    info->rtm_force_abort = (uint8_t)((edx >> 13) & 0x01);
-    info->serialize = (uint8_t)((edx >> 14) & 0x01);
-    info->hybrid = (uint8_t)((edx >> 15) & 0x01);
-    info->tsxldtrk = (uint8_t)((edx >> 16) & 0x01);
+    info->rtm_force_abort = (BYTE)((edx >> 13) & 0x01);
+    info->serialize = (BYTE)((edx >> 14) & 0x01);
+    info->hybrid = (BYTE)((edx >> 15) & 0x01);
+    info->tsxldtrk = (BYTE)((edx >> 16) & 0x01);
     // reserved
-    info->pconfig = (uint8_t)((edx >> 18) & 0x01);
-    info->lbr = (uint8_t)((edx >> 19) & 0x01);
-    info->cet_ibt = (uint8_t)((edx >> 20) & 0x01);
+    info->pconfig = (BYTE)((edx >> 18) & 0x01);
+    info->lbr = (BYTE)((edx >> 19) & 0x01);
+    info->cet_ibt = (BYTE)((edx >> 20) & 0x01);
     // reserved
-    info->iamx_bf16 = (uint8_t)((edx >> 22) & 0x01);
-    info->avx512_fp16 = (uint8_t)((edx >> 23) & 0x01);
-    info->iamx_tile = (uint8_t)((edx >> 24) & 0x01);
-    info->iamx_int8 = (uint8_t)((edx >> 25) & 0x01);
-    info->spec_ctrl = (uint8_t)((edx >> 26) & 0x01);
-    info->stibp = (uint8_t)((edx >> 27) & 0x01);
-    info->l1d_flush = (uint8_t)((edx >> 28) & 0x01);
-    info->arch_capabilities = (uint8_t)((edx >> 29) & 0x01);
-    info->core_capabilities = (uint8_t)((edx >> 30) & 0x01);
-    info->ssbd = (uint8_t)((edx >> 31) & 0x01);
+    info->iamx_bf16 = (BYTE)((edx >> 22) & 0x01);
+    info->avx512_fp16 = (BYTE)((edx >> 23) & 0x01);
+    info->iamx_tile = (BYTE)((edx >> 24) & 0x01);
+    info->iamx_int8 = (BYTE)((edx >> 25) & 0x01);
+    info->spec_ctrl = (BYTE)((edx >> 26) & 0x01);
+    info->stibp = (BYTE)((edx >> 27) & 0x01);
+    info->l1d_flush = (BYTE)((edx >> 28) & 0x01);
+    info->arch_capabilities = (BYTE)((edx >> 29) & 0x01);
+    info->core_capabilities = (BYTE)((edx >> 30) & 0x01);
+    info->ssbd = (BYTE)((edx >> 31) & 0x01);
     /* --- Sub Leaf 1 --- */
     const cpuid_raw_t *leaf71 = cpuid_raw_find(db, 7, 1);
     if (leaf71 == NULL) {
@@ -650,45 +652,43 @@ static void cpuid_decode_feat7(cpuid_raw_db_t *db, cpuid_feat7_t *info) {
     ecx = leaf71->ecx;
     edx = leaf71->edx;
     // EAX
-    info->sha512 = (uint8_t)((eax >> 0) & 0x01);
-    info->sm3 = (uint8_t)((eax >> 1) & 0x01);
-    info->sm4 = (uint8_t)((eax >> 2) & 0x01);
-    info->rao_int = (uint8_t)((eax >> 3) & 0x01);
-    info->amx_vnni = (uint8_t)((eax >> 4) & 0x01);
-    info->avx512_bf16 = (uint8_t)((eax >> 5) & 0x01);
-    info->lass = (uint8_t)((eax >> 6) & 0x01);
-    info->cmpccxadd = (uint8_t)((eax >> 7) & 0x01);
-    info->archperfmonext = (uint8_t)((eax >> 8) & 0x01);
-    info->dedup = (uint8_t)((eax >> 9) & 0x01);
-    info->fzrm = (uint8_t)((eax >> 10) & 0x01);
-    info->fsrs = (uint8_t)((eax >> 11) & 0x01);
-    info->rsrcs = (uint8_t)((eax >> 12) & 0x01);
+    info->sha512 = (BYTE)((eax >> 0) & 0x01);
+    info->sm3 = (BYTE)((eax >> 1) & 0x01);
+    info->sm4 = (BYTE)((eax >> 2) & 0x01);
+    info->rao_int = (BYTE)((eax >> 3) & 0x01);
+    info->amx_vnni = (BYTE)((eax >> 4) & 0x01);
+    info->avx512_bf16 = (BYTE)((eax >> 5) & 0x01);
+    info->lass = (BYTE)((eax >> 6) & 0x01);
+    info->cmpccxadd = (BYTE)((eax >> 7) & 0x01);
+    info->archperfmonext = (BYTE)((eax >> 8) & 0x01);
+    info->dedup = (BYTE)((eax >> 9) & 0x01);
+    info->fzrm = (BYTE)((eax >> 10) & 0x01);
+    info->fsrs = (BYTE)((eax >> 11) & 0x01);
+    info->rsrcs = (BYTE)((eax >> 12) & 0x01);
     // reserved
     // reserved
     // reserved
     // reserved
-    info->fred = (uint8_t)((eax >> 17) & 0x01);
-    info->lkgs = (uint8_t)((eax >> 18) & 0x01);
-    info->wrmsrns = (uint8_t)((eax >> 19) & 0x01);
-    info->nmi_src = (uint8_t)((eax >> 20) & 0x01);
-    info->iamx_fp16 = (uint8_t)((eax >> 21) & 0x01);
-    info->hreset = (uint8_t)((eax >> 22) & 0x01);
-    info->avx_ifma = (uint8_t)((eax >> 23) & 0x01);
+    info->fred = (BYTE)((eax >> 17) & 0x01);
+    info->lkgs = (BYTE)((eax >> 18) & 0x01);
+    info->wrmsrns = (BYTE)((eax >> 19) & 0x01);
+    info->nmi_src = (BYTE)((eax >> 20) & 0x01);
+    info->iamx_fp16 = (BYTE)((eax >> 21) & 0x01);
+    info->hreset = (BYTE)((eax >> 22) & 0x01);
+    info->avx_ifma = (BYTE)((eax >> 23) & 0x01);
     // reserved
     // reserved
-    info->lam = (uint8_t)((eax >> 26) & 0x01);
-    info->msrlist = (uint8_t)((eax >> 27) & 0x01);
+    info->lam = (BYTE)((eax >> 26) & 0x01);
+    info->msrlist = (BYTE)((eax >> 27) & 0x01);
     // reserved
     // reserved
-    info->invd_disable_post_bios_done = (uint8_t)((eax >> 30) & 0x01);
-    info->movrs = (uint8_t)((eax >> 31) & 0x01);
+    info->invd_disable_post_bios_done = (BYTE)((eax >> 30) & 0x01);
+    info->movrs = (BYTE)((eax >> 31) & 0x01);
     // EBX
-    info->ppin = (uint8_t)((ebx >> 0) & 0x01);
-    info->pbndkb = (uint8_t)((ebx >> 1) & 0x01);
+    info->ppin = (BYTE)((ebx >> 0) & 0x01);
+    info->pbndkb = (BYTE)((ebx >> 1) & 0x01);
     // reserved
-    info->cpuid_maxval_lim_rmv = (uint8_t)((ebx >> 3) & 0x01);
-    // reserved
-    // reserved
+    info->cpuid_maxval_lim_rmv = (BYTE)((ebx >> 3) & 0x01);
     // reserved
     // reserved
     // reserved
@@ -711,22 +711,24 @@ static void cpuid_decode_feat7(cpuid_raw_db_t *db, cpuid_feat7_t *info) {
     // reserved
     // reserved
     // reserved
-    info->mpsadbw_512 = (uint8_t)((ebx >> 28) & 0x01);
     // reserved
-    info->avx512_rao_fp = (uint8_t)((ebx >> 30) & 0x01);
+    // reserved
+    info->mpsadbw_512 = (BYTE)((ebx >> 28) & 0x01);
+    // reserved
+    info->avx512_rao_fp = (BYTE)((ebx >> 30) & 0x01);
     // ECX
-    info->rdt_m_asym = (uint8_t)((ecx >> 0) & 0x01);
-    info->rdt_a_asym = (uint8_t)((ecx >> 1) & 0x01);
-    info->reduced_isa = (uint8_t)((ecx >> 2) & 0x01);
+    info->rdt_m_asym = (BYTE)((ecx >> 0) & 0x01);
+    info->rdt_a_asym = (BYTE)((ecx >> 1) & 0x01);
+    info->reduced_isa = (BYTE)((ecx >> 2) & 0x01);
     // reserved
-    info->sipi64 = (uint8_t)((ecx >> 4) & 0x01);
-    info->msr_imm = (uint8_t)((ecx >> 5) & 0x01);
-    // reserved
-    // reserved
+    info->sipi64 = (BYTE)((ecx >> 4) & 0x01);
+    info->msr_imm = (BYTE)((ecx >> 5) & 0x01);
     // reserved
     // reserved
     // reserved
-    info->ace = (uint8_t)((ecx >> 11) & 0x01);
+    // reserved
+    // reserved
+    info->ace = (BYTE)((ecx >> 11) & 0x01);
     // reserved
     // reserved
     // reserved
@@ -749,30 +751,30 @@ static void cpuid_decode_feat7(cpuid_raw_db_t *db, cpuid_feat7_t *info) {
     // reserved
     // EDX
     // reserved
-    info->avx512_vnni_fp16 = (uint8_t)((edx >> 1) & 0x01);
-    info->avx512_vnni_int8 = (uint8_t)((edx >> 2) & 0x01);
-    info->avx512_ne_convert = (uint8_t)((edx >> 3) & 0x01);
-    info->avx_vnni_int8 = (uint8_t)((edx >> 4) & 0x01);
-    info->avx_ne_convert = (uint8_t)((edx >> 5) & 0x01);
+    info->avx512_vnni_fp16 = (BYTE)((edx >> 1) & 0x01);
+    info->avx512_vnni_int8 = (BYTE)((edx >> 2) & 0x01);
+    info->avx512_ne_convert = (BYTE)((edx >> 3) & 0x01);
+    info->avx_vnni_int8 = (BYTE)((edx >> 4) & 0x01);
+    info->avx_ne_convert = (BYTE)((edx >> 5) & 0x01);
     // reserved
     // reserved
-    info->iamx_complex = (uint8_t)((edx >> 8) & 0x01);
+    info->iamx_complex = (BYTE)((edx >> 8) & 0x01);
     // reserved
-    info->avx_vnni_int16 = (uint8_t)((edx >> 10) & 0x01);
-    info->avx512_vnni_int16 = (uint8_t)((edx >> 11) & 0x01);
+    info->avx_vnni_int16 = (BYTE)((edx >> 10) & 0x01);
+    info->avx512_vnni_int16 = (BYTE)((edx >> 11) & 0x01);
     // reserved
-    info->utmr = (uint8_t)((edx >> 13) & 0x01);
-    info->prefetchi = (uint8_t)((edx >> 14) & 0x01);
-    info->user_msr = (uint8_t)((edx >> 15) & 0x01);
-    info->avx512_bf16_ne = (uint8_t)((edx >> 16) & 0x01);
-    info->uiret_uif_from_rflags = (uint8_t)((edx >> 17) & 0x01);
-    info->cet_sss = (uint8_t)((edx >> 18) & 0x01);
-    info->avx10 = (uint8_t)((edx >> 19) & 0x01);
+    info->utmr = (BYTE)((edx >> 13) & 0x01);
+    info->prefetchi = (BYTE)((edx >> 14) & 0x01);
+    info->user_msr = (BYTE)((edx >> 15) & 0x01);
+    info->avx512_bf16_ne = (BYTE)((edx >> 16) & 0x01);
+    info->uiret_uif_from_rflags = (BYTE)((edx >> 17) & 0x01);
+    info->cet_sss = (BYTE)((edx >> 18) & 0x01);
+    info->avx10 = (BYTE)((edx >> 19) & 0x01);
     // reserved
-    info->apx_f = (uint8_t)((edx >> 21) & 0x01);
-    info->sec_tee_attestation = (uint8_t)((edx >> 22) & 0x01);
-    info->mwait = (uint8_t)((edx >> 23) & 0x01);
-    info->slsm = (uint8_t)((edx >> 24) & 0x01);
+    info->apx_f = (BYTE)((edx >> 21) & 0x01);
+    info->sec_tee_attestation = (BYTE)((edx >> 22) & 0x01);
+    info->mwait = (BYTE)((edx >> 23) & 0x01);
+    info->slsm = (BYTE)((edx >> 24) & 0x01);
     // reserved
     // reserved
     // reserved
@@ -787,14 +789,14 @@ static void cpuid_decode_feat7(cpuid_raw_db_t *db, cpuid_feat7_t *info) {
     }
     edx = leaf72->edx;
     // EDX
-    info->psfd = (uint8_t)((edx >> 0) & 0x01);
-    info->ipred_ctrl = (uint8_t)((edx >> 1) & 0x01);
-    info->rrsba_ctrl = (uint8_t)((edx >> 2) & 0x01);
-    info->ddpu_u = (uint8_t)((edx >> 3) & 0x01);
-    info->bhi_ctrl = (uint8_t)((edx >> 4) & 0x01);
-    info->mcdt_no = (uint8_t)((edx >> 5) & 0x01);
-    info->uc_lock_disable = (uint8_t)((edx >> 6) & 0x01);
-    info->monitor_mitg_no = (uint8_t)((edx >> 7) & 0x01);
+    info->psfd = (BYTE)((edx >> 0) & 0x01);
+    info->ipred_ctrl = (BYTE)((edx >> 1) & 0x01);
+    info->rrsba_ctrl = (BYTE)((edx >> 2) & 0x01);
+    info->ddpu_u = (BYTE)((edx >> 3) & 0x01);
+    info->bhi_ctrl = (BYTE)((edx >> 4) & 0x01);
+    info->mcdt_no = (BYTE)((edx >> 5) & 0x01);
+    info->uc_lock_disable = (BYTE)((edx >> 6) & 0x01);
+    info->monitor_mitg_no = (BYTE)((edx >> 7) & 0x01);
 }
 /* ==========================================================================
  *                                                                          *

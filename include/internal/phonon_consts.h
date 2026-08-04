@@ -1,5 +1,5 @@
 /*
-	* amitx_consts.h - [Enter description]
+	* phonon_consts.h - [Enter description]
 	* Author:   amity
 	* Date:     Tue Jun  9 19:38:56 2026
 	* Copyright © 2026 OwlyNest
@@ -19,8 +19,8 @@
 	* Statements and declarations:   Max one per line
 */
 
-#ifndef __INTERNAL_AMITX_CONSTS_H__
-#define __INTERNAL_AMITX_CONSTS_H__
+#ifndef __INTERNAL_PHONON_CONSTS_H__
+#define __INTERNAL_PHONON_CONSTS_H__
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Macros ---*/

@@ -56,7 +56,7 @@ int compositor_needs_update(void) {
  * ======================================================================= */
 static void compositor_clear_fb(void) {
     gfx_clear(&fb.back, gfx_theme_color(GFX_BG_DESKTOP));
-    gfx_logo_design2(&fb.back, 100, 100);
+    gfx_logo_os(&fb.back, 100, 100);
 }
 
 /* ==========================================================================

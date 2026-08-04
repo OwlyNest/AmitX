@@ -747,6 +747,27 @@ void gfx_logo_design2(gfx_surface_t *surface, int x, int y) {
     gfx_draw_string(surface, x, y-10, "Welcome to AmitX!", gfx_theme_color(GFX_WHITE));
 }
 
+void gfx_logo_os(gfx_surface_t *surface, int x, int y) {
+    gfx_logo_phonon(surface, x, y);
+    gfx_logo_shadow(surface, x + 160, y);
+}
+
+void gfx_logo_phonon(gfx_surface_t *surface, int x, int y) {
+    gfx_fill_rect(surface, x + 5,   y + 5,70, 70, fb_pack_pixel(0xF7, 0xA8, 0xB8));
+    gfx_fill_rect(surface, x + 80,  y,      70, 70, gfx_theme_color(GFX_GREEN));
+    gfx_fill_rect(surface, x,       y + 80, 70, 70, gfx_theme_color(GFX_BLUE));
+    gfx_fill_rect(surface, x + 75,y + 75, 70, 70, gfx_theme_color(GFX_RED));
+    gfx_draw_string(surface, x + 10, y-10, "Welcome to Phonon!", gfx_theme_color(GFX_WHITE));
+}
+
+void gfx_logo_shadow(gfx_surface_t *surface, int x, int y) {
+    gfx_draw_rect(surface, x      ,   y,         70, 70, fb_pack_pixel(0xF7, 0xA8, 0xB8));
+    gfx_draw_rect(surface, x + 75,  y + 5,  70, 70, gfx_theme_color(GFX_GREEN));
+    gfx_draw_rect(surface, x + 5,   y + 75, 70, 70, gfx_theme_color(GFX_BLUE));
+    gfx_fill_rect(surface, x + 80,y + 80,   70, 70, gfx_theme_color(GFX_RED));
+    gfx_draw_string(surface, x, y-10, "Powered by Shadow!", gfx_theme_color(GFX_WHITE));
+}
+
 int point_in_rect(int px, int py, int x, int y, int w, int h) {
     return px >= x && px < x + w && py >= y && py < y + h;
 }

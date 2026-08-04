@@ -45,8 +45,9 @@ int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len
 void crc32c_test_vectors(void);
 
 /* --- Master Record Table --- */
-int mrt_init(smkfs_mount_t *mnt, uint64_t start_block, uint64_t capacity);
-int mrt_alloc_entry(smkfs_mount_t *mnt, uint64_t *out_record_id);
+int mrt_format(smkfs_mount_t *mnt, uint64_t start_block, uint64_t length);
+int mrt_init(smkfs_mount_t *mnt, uint64_t start_block, uint64_t length);
+int mrt_alloc_entry(smkfs_mount_t *mnt, uint64_t *out_record_id, uint64_t *out_generation);
 int mrt_update_entry(smkfs_mount_t *mnt, uint64_t record_id, uint64_t new_physical_block, uint16_t flags);
 int mrt_free_entry(smkfs_mount_t *mnt, uint64_t record_id);
 int mrt_resolve(smkfs_mount_t *mnt, uint64_t record_id, uint64_t *out_physical_block, uint16_t *out_flags, uint32_t *out_generation);

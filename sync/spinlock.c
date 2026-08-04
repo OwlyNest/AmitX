@@ -35,8 +35,8 @@ void spinlock_init(spinlock_t *lock) {
 	(void)lock;
 }
 
-uint32_t spinlock_acquire(spinlock_t *lock) {
-	uint32_t flags;
+ULONG spinlock_acquire(spinlock_t *lock) {
+	ULONG flags;
 
 	(void)lock;
 
@@ -52,7 +52,7 @@ uint32_t spinlock_acquire(spinlock_t *lock) {
 	return flags;
 }
 
-void spinlock_release(spinlock_t *lock, uint32_t flags) {
+void spinlock_release(spinlock_t *lock, ULONG flags) {
     (void)lock;
 
     asm volatile (

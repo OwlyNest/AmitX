@@ -33,6 +33,50 @@
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
+static void printk_size(const char *label, uint64_t bytes) {
+    static const char *units[] = {
+        "B", "KiB", "MiB", "GiB", "TiB", "PiB"
+    };
+
+    uint64_t whole = bytes;
+    uint64_t remainder = 0;
+    unsigned int unit = 0;
+
+    while (whole >= 1024 && unit < 5) {
+        remainder = whole % 1024;
+        whole /= 1024;
+        unit++;
+    }
+
+    if (unit == 0) {
+        printk("%-16s %llu %s\n", label, whole, units[unit]);
+        return;
+    }
+
+    /*
+     * One decimal place, rounded rather than truncated.
+     *
+     * remainder / 1024 gives the fractional part.
+     * Multiply by 10 before dividing to get one decimal digit.
+     */
+    uint64_t decimal = (remainder * 10 + 512) / 1024;
+
+    /*
+     * Rounding can turn e.g. 1023.96 MiB into 1024.0 MiB.
+     * Promote to the next unit in that case.
+     */
+    if (decimal == 10) {
+        whole++;
+        decimal = 0;
+
+        if (whole >= 1024 && unit < 5) {
+            whole /= 1024;
+            unit++;
+        }
+    }
+
+    printk("%-16s %llu.%llu %s, (%lluB)\n", label, whole, decimal, units[unit], bytes);
+}
 
 int smkfs_dump_superblock(smkfs_mount_t *mnt) {
     if (!mnt->mounted) {
@@ -50,7 +94,10 @@ int smkfs_dump_superblock(smkfs_mount_t *mnt) {
     printk("Flags:           0x%08X\n", sb.header.flags);
     printk("Checksum:        0x%08X\n", sb.header.checksum);
     printk("Total blocks:    %llu\n", sb.total_blocks);
+    printk_size("Total Size:", sb.total_blocks * SMKFS_BLOCK_SIZE);
     printk("Free blocks:     %llu\n", sb.free_blocks);
+    printk_size("Free Size:", sb.free_blocks * SMKFS_BLOCK_SIZE);
+    printk("Sector size      %llu\n", sb.sector_size);
     printk("Records:         %llu\n", sb.record_count);
     printk("Next ID:         %llu\n", sb.next_record_id);
     printk("Root record:     %llu\n", sb.root_record_id);
@@ -71,15 +118,22 @@ int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id) {
     smkfs_record_t *rec;
     const uint8_t *ptr;
 
-    if (!mnt->mounted || record_id == 0) return SMKFS_ERR_INVAL;
-    if (read_block(mnt, record_id, block) != 0) {
-        printk("[SmKFS] Cannot read record %llu\n", record_id);
+    if (!mnt->mounted) return SMKFS_ERR_INVAL;
+
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        return mrt_ret;
+    }
+
+    if (read_block(mnt, phys_block, block) != 0) {
+        printk("[SmKFS] Cannot read record %llu, (phys: %llu)\n", record_id, phys_block);
         return SMKFS_ERR_IO;
     }
 
     rec = (smkfs_record_t *)block;
     if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) {
-        printk("[SmKFS] Record %llu: invalid header\n", record_id);
+        printk("[SmKFS] Record %llu (phys: %llu): invalid header\n", record_id, phys_block);
         return SMKFS_ERR_CORRUPT;
     }
 

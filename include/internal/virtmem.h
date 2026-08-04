@@ -26,7 +26,7 @@
 #include <mm/paging.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 
 /* --- Macros ---*/
 /* ==========================================================================

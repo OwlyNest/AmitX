@@ -4,7 +4,7 @@
 #include <hw/acpi.h>
 #include <arch/x86/interrupts.h>
 #include <arch/x86/time.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <mm/paging.h>
 #include <stdint.h>
 #include <internal/kscope.h>

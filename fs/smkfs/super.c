@@ -44,6 +44,8 @@ int smkfs_mount(uint8_t drive, smkfs_mount_t *mnt) {
     crc32c_test_vectors();
 
     mnt->drive_num = drive;
+    mnt->sb.sector_size = 512; /* will be replaced by actual superblock read,
+                                  reading the superblock itself will fail on a 0-division error otherwise. */
     if (read_block(mnt, 0, block) != 0) { // read_block only needs drive_num, safe to call
         printk("[SmKFS] Failed to read superblock\n");
         return SMKFS_ERR_IO;
@@ -126,24 +128,21 @@ int smkfs_sync(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
+int smkfs_mkfs(uint8_t drive, uint64_t total_blocks, uint64_t sector_size) {
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_mount_t mnt;
     memset(&mnt, 0, sizeof(smkfs_mount_t));
     mnt.drive_num = drive;
     uint64_t bitmap_blocks;
     uint64_t journal_blocks;
+    uint64_t mrt_start;
+    uint64_t mrt_blocks;
+    uint64_t data_start;
     uint64_t data_blocks;
-    uint64_t root_block;
     uint64_t btree_root;
-    smkfs_superblock_t new_sb;
-    smkfs_record_t root_rec;
+    uint64_t root_id;
     smkfs_btree_node_t *node;
-
-    /*
-     * MKFS writes essential data to disk. It needs write_block (196, 202, 218, 244), and FSCK (248) uses the drive number, recording line numbers wasn't the smartest idea.
-    */
-
+    
     if (total_blocks < 16) return SMKFS_ERR_INVAL;
 
     bitmap_blocks = (total_blocks + SMKFS_BLOCK_SIZE * 8 - 1) / (SMKFS_BLOCK_SIZE * 8);
@@ -154,59 +153,69 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
         journal_blocks = total_blocks - 1 - bitmap_blocks - 1;
     }
 
-    data_blocks = total_blocks - 1 - bitmap_blocks - journal_blocks;
+    mrt_blocks = (total_blocks + (SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t)) - 1) / (SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t));
+    if (mrt_blocks < 1) mrt_blocks = 1;
+    mrt_start = 1 + journal_blocks + bitmap_blocks;
 
-    memset(&new_sb, 0, sizeof(new_sb));
-    header_init(&new_sb.header, SMKFS_ST_SUPERBLOCK, sizeof(smkfs_superblock_t), 0);
+    data_start = 1 + bitmap_blocks + journal_blocks + mrt_blocks;
+    data_blocks = total_blocks - 1 - bitmap_blocks - journal_blocks - mrt_blocks;
 
-    new_sb.total_blocks = total_blocks;
-    new_sb.free_blocks = data_blocks - 1;
-    new_sb.record_count = 1;
-    new_sb.next_record_id = 1;
-    new_sb.mrt_start = 0;
-    new_sb.mrt_length = 0;
-    new_sb.mrt_capacity = 0;
-    new_sb.mrt_free_count = 0;
-    new_sb.root_record_id = 1 + bitmap_blocks + journal_blocks;
-    new_sb.journal_start = 1;
-    new_sb.journal_length = journal_blocks;
-    new_sb.journal_head = 0;
-    new_sb.journal_tail = 0;
-    new_sb.journal_sequence = 1;
-    new_sb.bitmap_start = 1 + journal_blocks;
-    new_sb.bitmap_length = bitmap_blocks;
-    new_sb.alloc_meta_start = 0;
-    new_sb.alloc_meta_length = 0;
-    new_sb.data_start = 1 + bitmap_blocks + journal_blocks;
-    new_sb.block_size = SMKFS_BLOCK_SIZE;
-    new_sb.flags = SMKFS_SBF_CLEAN;
-    memset(new_sb.uuid, 0, 16);
-    memset(new_sb.volume_name, 0, 64);
-    new_sb.creation_time = 0;      /* TODO: timekeeping */
-    new_sb.last_mount_time = 0;
-    new_sb.mount_count = 0;
-    new_sb.max_mount_count = 0;
+    /* --- Populate mnt.sb with layout fields, before anything is allocated --- */
+    header_init(&mnt.sb.header, SMKFS_ST_SUPERBLOCK, sizeof(smkfs_superblock_t), 0);
+    mnt.sb.total_blocks = total_blocks;
+    mnt.sb.free_blocks = data_blocks;
+    mnt.sb.sector_size = sector_size;
+    mnt.sb.record_count = 0;           /* record_alloc will bump this */
+    mnt.sb.next_record_id = 1;
+    mnt.sb.root_record_id = 0;         /* filled in once root is allocated */
+    mnt.sb.journal_start = 1;
+    mnt.sb.journal_length = journal_blocks;
+    mnt.sb.journal_head = 0;
+    mnt.sb.journal_tail = 0;
+    mnt.sb.journal_sequence = 1;
+    mnt.sb.bitmap_start = 1 + journal_blocks;
+    mnt.sb.bitmap_length = bitmap_blocks;
+    mnt.sb.alloc_meta_start = 0;
+    mnt.sb.alloc_meta_length = 0;
+    mnt.sb.data_start = data_start;
+    mnt.sb.block_size = SMKFS_BLOCK_SIZE;
+    mnt.sb.flags = SMKFS_SBF_CLEAN;
+    memset(mnt.sb.uuid, 0, 16);
+    memset(mnt.sb.volume_name, 0, 64);
+    mnt.sb.creation_time = 0;          /* TODO: timekeeping */
+    mnt.sb.last_mount_time = 0;
+    mnt.sb.mount_count = 0;
+    mnt.sb.max_mount_count = 0;
 
-    memset(block, 0, sizeof(block));
-    memcpy(block, &new_sb, sizeof(new_sb));
-    header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
-    if (write_block(&mnt, 0, block) != 0) return SMKFS_ERR_IO;
+    if (mrt_init(&mnt, mrt_start, mrt_blocks) != SMKFS_OK) {
+        return SMKFS_ERR_INVAL;
+    }
+    mnt.sb.mrt_free_count = mnt.sb.mrt_capacity - 1;   /* slot 0 reserved */
 
+    /* --- Zero journal region --- */
     memset(block, 0, sizeof(block));
     for (uint64_t i = 0; i < journal_blocks; i++) {
         if (write_block(&mnt, 1 + i, block) != 0) return SMKFS_ERR_IO;
     }
 
+    /* --- Zero bitmap region; nothing is pre-marked, everything below
+     *     allocates through bitmap_alloc like normal operation would --- */
     memset(block, 0, sizeof(block));
-    block[0] = 0x03;
     for (uint64_t i = 0; i < bitmap_blocks; i++) {
-        if (write_block(&mnt, 1 + journal_blocks + i, block) != 0) {
+        if (write_block(&mnt, mnt.sb.bitmap_start + i, block) != 0) {
             return SMKFS_ERR_IO;
         }
     }
 
-    root_block = new_sb.root_record_id;
-    btree_root = root_block + 1;
+    /* --- Format MRT region --- */
+    if (mrt_format(&mnt, mrt_start, mrt_blocks) != SMKFS_OK) {
+        return SMKFS_ERR_IO;
+    }
+
+    /* --- Allocate the root B+ tree node. Not a record, same convention
+     *     btree_insert already uses for new leaves: bitmap_alloc. --- */
+    btree_root = bitmap_alloc(&mnt);
+    if (btree_root == 0) return SMKFS_ERR_NOSPC;
 
     memset(block, 0, sizeof(block));
     node = (smkfs_btree_node_t *)block;
@@ -218,31 +227,38 @@ int smkfs_mkfs(uint8_t drive, uint64_t total_blocks) {
     header_checksum_update(&node->header, block, sizeof(smkfs_btree_node_t));
     if (write_block(&mnt, btree_root, block) != 0) return SMKFS_ERR_IO;
 
+    /* --- Allocate the root directory record through the same two-phase
+     *     MRT/bitmap path every other record uses. --- */
+    root_id = record_alloc(&mnt, SMKFS_ROT_DIR);
+    if (root_id == 0) return SMKFS_ERR_NOSPC;
+
+    {
+        uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+        smkfs_record_t root_rec;
+
+        if (record_read(&mnt, root_id, &root_rec, attr_buf, sizeof(attr_buf)) < 0) {
+            return SMKFS_ERR_IO;
+        }
+
+        if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_DATA, &btree_root, sizeof(btree_root)) != SMKFS_OK) {
+            return SMKFS_ERR_NOSPC;
+        }
+
+        root_rec.attr_count++;
+        root_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
+
+        if (record_write(&mnt, root_id, &root_rec, attr_buf) != SMKFS_OK) {
+            return SMKFS_ERR_IO;
+        }
+    }
+
+    mnt.sb.root_record_id = root_id;
+
+    /* --- Now that every field reflects reality, persist the superblock --- */
     memset(block, 0, sizeof(block));
-    header_init(&root_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + 2 * sizeof(smkfs_attr_header_t) + sizeof(uint64_t), 0);
-    root_rec.record_id = root_block;
-    root_rec.object_type = SMKFS_ROT_DIR;
-    root_rec.attr_count = 2;
-    root_rec.link_count = 1;       /* Root directory has one link */
-    root_rec.generation = 0;
-
-    memcpy(block, &root_rec, sizeof(root_rec));
-
-    smkfs_attr_header_t *name_ah = (smkfs_attr_header_t *)(block + sizeof(smkfs_record_t));
-    name_ah->type = SMKFS_ATTRT_DATA;
-    name_ah->flags = 0;
-    name_ah->id = 0;
-    name_ah->length = sizeof(uint64_t);
-    memcpy(block + sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), &btree_root, sizeof(btree_root));
-
-    smkfs_attr_header_t *end_ah = (smkfs_attr_header_t *)(block + sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t) + sizeof(uint64_t));
-    end_ah->type = SMKFS_ATTRT_END;
-    end_ah->flags = 0;
-    end_ah->id = 0;
-    end_ah->length = 0;
-
-    header_checksum_update(&((smkfs_record_t *)block)->header, block, root_rec.header.length);
-    if (write_block(&mnt, root_block, block) != 0) return SMKFS_ERR_IO;
+    memcpy(block, &mnt.sb, sizeof(mnt.sb));
+    header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
+    if (write_block(&mnt, 0, block) != 0) return SMKFS_ERR_IO;
 
     printk("[SmKFS] Formatted drive %d, %llu blocks total, %llu data blocks\n", drive, total_blocks, data_blocks);
 
@@ -257,6 +273,7 @@ int smkfs_fsck(uint8_t drive) {
     smkfs_mount_t mnt;
     memset(&mnt, 0, sizeof(smkfs_mount_t));
     mnt.drive_num = drive;
+    mnt.sb.sector_size = 512; /* Same as in mount */
 
     if (read_block(&mnt, 0, block) != 0) {
         printk("[SmKFS] fsck: Cannot read superblock\n");
@@ -267,8 +284,9 @@ int smkfs_fsck(uint8_t drive) {
     mnt.sb = check_sb; // bitmap_test reads sb.data_start, sb.bitmap_start and drive_num (trough read_block)
     
     /*
-    * FSCK uses read_block, (256, 298) which needs the drive number for the IDE device.
-    * Secondly it uses bitmap_test (289) which needs the superblock. check_sb is a direct copy of block 0, so that's (should be) identical to the superblock in the mount context.
+     * FSCK uses read_block, (256, 298) which needs the drive number for the IDE device.
+     * Secondly it uses bitmap_test (289) which needs the superblock. check_sb is a direct copy of block 0, so that's (should be) identical to the superblock in the mount context.
+     * I edited this file, meaning the line numbers no longer work, sorry!
     */
 
     if (header_validate(&check_sb.header, SMKFS_ST_SUPERBLOCK) != 0) {
@@ -292,7 +310,13 @@ int smkfs_fsck(uint8_t drive) {
         errors++;
     }
 
-    if (bitmap_test(&mnt, check_sb.root_record_id) != 1) {
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(&mnt, check_sb.root_record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        return mrt_ret;
+    }
+
+    if (bitmap_test(&mnt, phys_block) != 1) {
         printk("[SmKFS] fsck: root_record %llu not marked allocated\n", check_sb.root_record_id);
         errors++;
     }

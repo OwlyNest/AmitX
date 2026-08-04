@@ -21,6 +21,7 @@
 
 /* --- Macros ---*/
 #include "acpi.h"
+#include <actbl.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <screen/printk.h>
@@ -38,17 +39,13 @@ void acpi_print_pm1_ports(void) {
         return;
     }
 
-    printk("[acpi] PM1a_EVT_BLK = 0x%08x (len %u)\n",
-           fadt->Pm1aEventBlock, fadt->Pm1EventLength);
+    printk("[acpi] PM1a_EVT_BLK = 0x%08x (len %u)\n", fadt->Pm1aEventBlock, fadt->Pm1EventLength);
     printk("[acpi] PM1b_EVT_BLK = 0x%08x\n", fadt->Pm1bEventBlock);
     printk("[acpi] PM1a_CNT_BLK  = 0x%08x\n", fadt->Pm1aControlBlock);
     printk("[acpi] PM1b_CNT_BLK  = 0x%08x\n", fadt->Pm1bControlBlock);
 
     /* ACPI 2.0+ extended addresses */
-    printk("[acpi] X_PM1a_EVT: space=%u addr=0x%llx width=%u\n",
-           fadt->XPm1aEventBlock.SpaceId,
-           fadt->XPm1aEventBlock.Address,
-           fadt->XPm1aEventBlock.BitWidth);
+    printk("[acpi] X_PM1a_EVT: space=%u addr=0x%llx width=%u\n", fadt->XPm1aEventBlock.SpaceId, fadt->XPm1aEventBlock.Address, fadt->XPm1aEventBlock.BitWidth);
 }
 
 static int acpi_subsystem_init(void) {

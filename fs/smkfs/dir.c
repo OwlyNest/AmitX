@@ -101,6 +101,7 @@ int smkfs_create_record(smkfs_mount_t *mnt, uint16_t object_type, uint64_t paren
         node = (smkfs_btree_node_t *)empty_leaf;
         header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
         node->parent_block = 0;
+        node->flags = SMKFS_BTN_LEAF; /* AGAIN! */
         node->key_count = 0;
         node->right_sibling = 0;
         header_checksum_update(&node->header, empty_leaf, sizeof(smkfs_btree_node_t));
@@ -136,8 +137,9 @@ int smkfs_create_record(smkfs_mount_t *mnt, uint16_t object_type, uint64_t paren
     }
 
     uint64_t new_root = *parent_btree;
-    if (btree_insert(mnt, *parent_btree, name, new_id, &new_root) != 0) {
-        printk("[SmKFS] create_record: btree_insert failed, root=%llu\n", *parent_btree);
+    int ret2 = btree_insert(mnt, *parent_btree, name, new_id, &new_root);
+    if (ret2 != 0) {
+        printk("[SmKFS] create_record: btree_insert failed, root=%llu, %d\n", *parent_btree, ret2);
         if (btree_root) bitmap_clear(mnt, btree_root);
         record_free(mnt, new_id);
         goto cleanup;

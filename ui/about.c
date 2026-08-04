@@ -33,7 +33,7 @@
 #include <hw/pci.h>
 #include <screen/printk.h>
 #include <lib/string.h>
-#include <internal/amitx_info.h>
+#include <internal/phonon_info.h>
 #include <mm/pmm.h>
 #include <logo/logo.h>
 
@@ -70,7 +70,7 @@ static void about_draw(void) {
     int line_y = 50;
     int line_spacing = 24;
 
-    ksnprintf(str, sizeof(str), "AmitX v%s (%s)", AMITX_VERSION, AMITX_CODENAME);
+    ksnprintf(str, sizeof(str), "AmitX v%s (%s)", PHONON_VERSION, PHONON_CODENAME);
     window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
     i++;
 
@@ -78,7 +78,7 @@ static void about_draw(void) {
     window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
     i++;
 
-    ksnprintf(str, sizeof(str), "Build: %s", AMITX_BUILD_DATE);
+    ksnprintf(str, sizeof(str), "Build: %s", PHONON_BUILD_DATE);
     window_draw_text(about, (ABOUT_W - gfx_get_string_width(str)) / 2, line_y + line_spacing * i, str, gfx_theme_color(GFX_FG_TEXT));
     i++;
 

@@ -33,7 +33,7 @@
 typedef struct mutex {
     int locked;
     task_t *owner;
-	uint8_t owner_orig_prio; /* Saved priority before boost */
+	BYTE owner_orig_prio; /* Saved priority before boost */
     spinlock_t lock;
     task_queue_t waiters;
 } mutex_t;
@@ -42,6 +42,6 @@ typedef struct mutex {
 /* --- Prototypes ---*/
 void mutex_init(mutex_t *m);
 int mutex_trylock(mutex_t *m);
-int mutex_lock(mutex_t *m, uint32_t timeout_ms);
+int mutex_lock(mutex_t *m, ULONG timeout_ms);
 void mutex_unlock(mutex_t *m);
 #endif

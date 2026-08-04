@@ -31,7 +31,7 @@
  * OwlyNest grows SMP, this needs a real test-and-set loop too.
  */
 typedef struct spinlock {
-    int unused;
+    LONG unused;
 } spinlock_t;
 
 
@@ -39,6 +39,6 @@ typedef struct spinlock {
 
 /* --- Prototypes ---*/
 void spinlock_init(spinlock_t *lock);
-uint32_t spinlock_acquire(spinlock_t *lock);
-void spinlock_release(spinlock_t *lock, uint32_t flags);
+ULONG spinlock_acquire(spinlock_t *lock);
+void spinlock_release(spinlock_t *lock, ULONG flags);
 #endif

@@ -151,7 +151,6 @@ static int btree_insert_recursive(smkfs_mount_t *mnt, uint64_t block, const char
     uint64_t new_leaf = 0;
     uint64_t next_sibling = 0;
     uint32_t split_point = 0;
-
     if (!key || !new_root || block == 0) return SMKFS_ERR_INVAL;
     if (btree_node_read(mnt, block, &node, entries, sizeof(entries)) != 0) {
         return SMKFS_ERR_IO;
@@ -264,7 +263,6 @@ int btree_insert(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
         *new_root = new_block;
         return SMKFS_OK;
     }
-
     return btree_insert_recursive(mnt, root_block, key, value, new_root);
 }
 

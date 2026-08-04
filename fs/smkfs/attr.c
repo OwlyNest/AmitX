@@ -26,6 +26,7 @@
 #include <fs/smkfs_internal.h>
 #include <screen/printk.h>
 #include <lib/string.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -35,9 +36,9 @@
 /* --- Functions ---*/
 
 /*
-	* The Master Attribute Table is the single source of truth for how every
-	* attribute type behaves.  Adding a new attribute to SmKFS means
-	* adding one row to the attr_registry[] table below -- nothing more.
+ * The Master Attribute Table is the single source of truth for how every
+ * attribute type behaves.  Adding a new attribute to SmKFS means
+ * adding one row to the attr_registry[] table below -- nothing more.
 */
 
 /* --- Attribute Validation Helpers --- */
@@ -308,7 +309,7 @@ int record_remove_attr(void *attr_buf, uint16_t attr_type) {
 
     if (!found) return SMKFS_OK;
 
-    size_t tail = (size_t)(ptr - (found + found_len));
+    size_t tail = (size_t)(ptr + sizeof(smkfs_attr_header_t) - (found + found_len));
     memmove(found, found + found_len, tail);
     return SMKFS_OK;
 }

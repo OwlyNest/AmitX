@@ -25,13 +25,13 @@
 #include <screen/screen.h>
 #include <internal/kscope.h>
 #include <lib/string.h>
-#include <internal/amitx_info.h>
+#include <internal/phonon_info.h>
 #include <screen/printk.h>
 #include <arch/x86/io.h>
 #include <drivers/mouse.h>
 #include <hw/pci.h>
 #include <drivers/serial.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <internal/virtmem.h>
 #include <drivers/keyboard.h>
 #include <stdarg.h>
@@ -172,9 +172,9 @@ void newline() {
 }
 
 void draw_statusbar() {
-    const char *name = AMITX_NAME;
-    const char *version = AMITX_VERSION;
-    const char *build_date = AMITX_BUILD_DATE;
+    const char *name = PHONON_NAME;
+    const char *version = PHONON_VERSION;
+    const char *build_date = PHONON_BUILD_DATE;
 
     char status_text[80];
     int pos = 0;

@@ -35,7 +35,7 @@
 #include <arch/x86/interrupts.h>
 #include <drivers/serial.h>
 #include <arch/x86/io.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
 #include <stdint.h>

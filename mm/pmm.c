@@ -29,7 +29,7 @@
 #include <mm/heap.h>
 #include <screen/printk.h>
 #include <lib/string.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/

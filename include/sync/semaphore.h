@@ -30,16 +30,16 @@
 #include <sync/spinlock.h>
 /* --- Typedefs - Structs - Enums ---*/
 typedef struct semaphore {
-	uint32_t units;
-	uint32_t max_units;
+	ULONG units;
+	ULONG max_units;
 	spinlock_t lock;
 	task_queue_t waiters;
 } semaphore_t;
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void sem_init(semaphore_t *sem, uint32_t initial_units, uint32_t max_units);
-int sem_trywait(semaphore_t *sem, uint32_t units);
-int sem_wait(semaphore_t *sem, uint32_t units, uint32_t timeout_ms);
-void sem_signal(semaphore_t *sem, uint32_t units);
+void sem_init(semaphore_t *sem, ULONG initial_units, ULONG max_units);
+int sem_trywait(semaphore_t *sem, ULONG units);
+int sem_wait(semaphore_t *sem, ULONG units, ULONG timeout_ms);
+void sem_signal(semaphore_t *sem, ULONG units);
 #endif

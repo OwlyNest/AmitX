@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <arch/x86/interrupts.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <lib/string.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>

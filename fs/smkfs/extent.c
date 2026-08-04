@@ -65,7 +65,13 @@ int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, u
     uint8_t block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec = (smkfs_record_t *)block;
 
-    if (read_block(mnt, record_id, block) != 0) return SMKFS_ERR_IO;
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        return mrt_ret;
+    }
+
+    if (read_block(mnt, phys_block, block) != 0) return SMKFS_ERR_IO;
 
     uint8_t *attr_buf = block + sizeof(smkfs_record_t);
     size_t attr_space = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
@@ -104,7 +110,7 @@ int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, u
     rec->attr_count--;
 
     header_checksum_update(&rec->header, block, rec->header.length);
-    return write_block(mnt, record_id, block);
+    return write_block(mnt, phys_block, block);
 }
 
 void extent_remove_all(smkfs_mount_t *mnt, uint64_t record_id) {
@@ -112,7 +118,15 @@ void extent_remove_all(smkfs_mount_t *mnt, uint64_t record_id) {
     if (!block) return;
 
     smkfs_record_t *rec = (smkfs_record_t *)block;
-    if (read_block(mnt, record_id, block) != 0) {
+
+    uint64_t phys_block;
+    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    if (mrt_ret != SMKFS_OK) {
+        free(block);
+        return;
+    }
+
+    if (read_block(mnt, phys_block, block) != 0) {
         free(block);
         return;
     }
@@ -143,6 +157,6 @@ void extent_remove_all(smkfs_mount_t *mnt, uint64_t record_id) {
     }
 
     header_checksum_update(&rec->header, block, rec->header.length);
-    write_block(mnt, record_id, block);
+    write_block(mnt, phys_block, block);
     free(block);
 }

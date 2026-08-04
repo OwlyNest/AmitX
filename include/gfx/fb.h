@@ -101,6 +101,9 @@ void gfx_list(gfx_surface_t *surface, int x, int y, int w, int h, const char **i
 void gfx_desktop(gfx_surface_t *surface);
 void gfx_status_bar(gfx_surface_t *surface, int x, int y, int w, const char *text);
 void gfx_logo_design2(gfx_surface_t *surface, int x, int y);
+void gfx_logo_os(gfx_surface_t *surface, int x, int y);
+void gfx_logo_phonon(gfx_surface_t *surface, int x, int y);
+void gfx_logo_shadow(gfx_surface_t *surface, int x, int y);
 
 void fb_fill_circle(int cx, int cy, int radius, uint32_t color);
 void fb_draw_line_thick(int x0, int y0, int x1, int y1, int thickness, uint32_t color);

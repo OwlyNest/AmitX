@@ -67,6 +67,8 @@ CFLAGS := \
     -Wall \
     -Wextra \
     -Werror \
+    -DPHONON_BUILD_DATE="\"$(shell date +%Y-%m-%d)\"" \
+    -include include/internal/phonon_types.h \
     -isystem $(ACPICA_INC)
 
 ACPICA_CFLAGS := \

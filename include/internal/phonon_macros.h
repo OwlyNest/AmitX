@@ -1,5 +1,5 @@
 /*
-	* include/internal/amitx_macros.h - [Enter description]
+	* include/internal/phonon_macros.h - [Enter description]
 	* Author:   amity
 	* Date:     Sun Jun 28 15:25:54 2026
 	* Copyright © 2026 OwlyNest
@@ -20,8 +20,8 @@
 */
 
 /* --- Macros ---*/
-#ifndef __INTERNAL_AMITX_MACROS_H__
-#define __INTERNAL_AMITX_MACROS_H__
+#ifndef __INTERNAL_PHONON_MACROS_H__
+#define __INTERNAL_PHONON_MACROS_H__
 
 #define ASSERT(cond)                                  \
 do {                                                  \
@@ -43,6 +43,8 @@ do {                                                  \
         .name = #sym, \
         .func = (void *)sym \
     }
+
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

@@ -34,7 +34,7 @@
 
 /* --- Functions ---*/
 
-void sem_init(semaphore_t *sem, uint32_t initial_units, uint32_t max_units) {
+void sem_init(semaphore_t *sem, ULONG initial_units, ULONG max_units) {
     if (!sem) return;
 
     sem->units = initial_units;
@@ -43,10 +43,10 @@ void sem_init(semaphore_t *sem, uint32_t initial_units, uint32_t max_units) {
     task_queue_init(&sem->waiters);
 }
 
-int sem_trywait(semaphore_t *sem, uint32_t units) {
+int sem_trywait(semaphore_t *sem, ULONG units) {
     if (!sem) return 0;
 
-    uint32_t flags = spinlock_acquire(&sem->lock);
+    ULONG flags = spinlock_acquire(&sem->lock);
     int acquired = 0;
 
     if (sem->units >= units) {
@@ -59,11 +59,11 @@ int sem_trywait(semaphore_t *sem, uint32_t units) {
     return acquired;
 }
 
-int sem_wait(semaphore_t *sem, uint32_t units, uint32_t timeout_ms) {
+int sem_wait(semaphore_t *sem, ULONG units, ULONG timeout_ms) {
     if (!sem) return 0;
 
     for (;;) {
-        uint32_t flags = spinlock_acquire(&sem->lock);
+        ULONG flags = spinlock_acquire(&sem->lock);
 
         if (sem->units >= units) {
             sem->units -= units;
@@ -71,7 +71,7 @@ int sem_wait(semaphore_t *sem, uint32_t units, uint32_t timeout_ms) {
             return 1;
         }
 
-        uint32_t wait_ms = (timeout_ms == SEM_WAIT_FOREVER) ? SEM_NO_TIMEOUT : timeout_ms;
+        ULONG wait_ms = (timeout_ms == SEM_WAIT_FOREVER) ? SEM_NO_TIMEOUT : timeout_ms;
 
         /* task_block_on pushes onto sem->waiters and calls schedule()
          * while we still hold sem->lock -- sem_signal can't add units
@@ -88,10 +88,10 @@ int sem_wait(semaphore_t *sem, uint32_t units, uint32_t timeout_ms) {
     }
 }
 
-void sem_signal(semaphore_t *sem, uint32_t units) {
+void sem_signal(semaphore_t *sem, ULONG units) {
     if (!sem) return;
 
-    uint32_t flags = spinlock_acquire(&sem->lock);
+    ULONG flags = spinlock_acquire(&sem->lock);
 
     sem->units += units;
     if (sem->units > sem->max_units) sem->units = sem->max_units;

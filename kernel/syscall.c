@@ -6,7 +6,7 @@
 #include <screen/screen.h>
 #include <screen/printk.h>
 #include <arch/x86/time.h>
-#include <internal/amitx_info.h>
+#include <internal/phonon_info.h>
 #include <drivers/keyboard.h>
 #include <fs/amfs.h>
 #include <hw/rtc.h>
@@ -159,7 +159,7 @@ static int _sys_gettime(uint32_t buf, uint32_t a2, uint32_t a3) {
 
 static int _sys_version(uint32_t a1, uint32_t a2, uint32_t a3) {
     (void)a1; (void)a2; (void)a3;
-    return (int)AMITX_VERSION;
+    return (int)PHONON_VERSION;
 }
 
 static int _sys_malloc(uint32_t size, uint32_t a2, uint32_t a3) {

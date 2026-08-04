@@ -50,7 +50,7 @@
 #include <internal/virtmem.h>
 #include <kernel/syscall.h>
 #include <shell/cyclone.h>
-#include <internal/amitx_consts.h>
+#include <internal/phonon_consts.h>
 #include <ui/menu.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/

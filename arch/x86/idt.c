@@ -56,7 +56,7 @@ extern void isr45();
 extern void isr46();
 extern void isr47();
 extern void isr128();
-extern void load_idt(DWORD);
+extern void load_idt(uint32_t);
 
 #define IDT_ENTRIES 256
 static struct IDTEntry idt[IDT_ENTRIES];
@@ -73,7 +73,7 @@ static void (*const exception_isrs[])(void) = {
     isr28, isr29, isr30, isr31
 };
 
-void idt_set_gate(int num, DWORD base, WORD sel, BYTE flags) {
+void idt_set_gate(int num, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[num].base_lo = base & 0xFFFF;
     idt[num].base_hi = (base >> 16) & 0xFFFF;
 
@@ -83,31 +83,31 @@ void idt_set_gate(int num, DWORD base, WORD sel, BYTE flags) {
 }
 static int idt_install() {
     idt_ptr.limit = sizeof(struct IDTEntry) * IDT_ENTRIES - 1;
-    idt_ptr.base  = (DWORD)&idt;
+    idt_ptr.base  = (uint32_t)&idt;
 
-    for (LONG i = 0; i < 32; i++) {
-        idt_set_gate(i, (DWORD)exception_isrs[i], GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    for (int i = 0; i < 32; i++) {
+        idt_set_gate(i, (uint32_t)exception_isrs[i], GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
     }
 
-    idt_set_gate(32,  (DWORD)isr32,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(33,  (DWORD)isr33,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(34,  (DWORD)isr34,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(35,  (DWORD)isr35,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(36,  (DWORD)isr36,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(37,  (DWORD)isr37,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(38,  (DWORD)isr38,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(39,  (DWORD)isr39,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(40,  (DWORD)isr40,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(41,  (DWORD)isr41,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(42,  (DWORD)isr42,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(43,  (DWORD)isr43,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(44,  (DWORD)isr44,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(45,  (DWORD)isr45,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(46,  (DWORD)isr46,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(47,  (DWORD)isr47,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(128, (DWORD)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(32,  (uint32_t)isr32,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(33,  (uint32_t)isr33,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(34,  (uint32_t)isr34,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(35,  (uint32_t)isr35,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(36,  (uint32_t)isr36,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(37,  (uint32_t)isr37,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(38,  (uint32_t)isr38,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(39,  (uint32_t)isr39,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(40,  (uint32_t)isr40,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(41,  (uint32_t)isr41,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(42,  (uint32_t)isr42,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(43,  (uint32_t)isr43,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(44,  (uint32_t)isr44,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(45,  (uint32_t)isr45,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(46,  (uint32_t)isr46,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(47,  (uint32_t)isr47,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+    idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
 
-    load_idt((ULONG)&idt_ptr);
+    load_idt((uint32_t)&idt_ptr);
     return 0;
 }
 

@@ -33,7 +33,7 @@
  * Fundamental integer types
 */
 
-typedef int8_t      CHAR;
+typedef char        CHAR;
 typedef uint8_t     UCHAR;
 
 typedef int16_t     SHORT;

@@ -20,14 +20,11 @@
 */
 
 /* --- Macros ---*/
-// From Google I guess, someone copied it on stackoverflow
-#include "internal/phonon_types.h"
-#define ARRAY_SIZE(a)                               \
-  ((sizeof(a) / sizeof(*(a))) /                     \
-  (size_t)(!(sizeof(a) % sizeof(*(a)))))
+
 /* --- Includes ---*/
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <internal/phonon_macros.h>
 #include <arch/x86/cpuid.h>
 #include <screen/printk.h>
 #include <stdint.h>

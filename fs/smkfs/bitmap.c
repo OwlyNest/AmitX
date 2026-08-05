@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/phonon_types.h"
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <mm/heap.h>
@@ -34,17 +35,17 @@
 
 /* --- Functions ---*/
 
-void bitmap_set(smkfs_mount_t *mnt, uint64_t block) {
-    uint8_t *buf;
+VOID bitmap_set(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+    PUCHAR buf;
 
     if (block < mnt->sb.data_start) return;
-    uint64_t idx = block - mnt->sb.data_start;
-    uint64_t byte_offset = idx / 8;
-    uint64_t bit_offset = idx % 8;
-    uint64_t bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
-    uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+    ULONGLONG idx = block - mnt->sb.data_start;
+    SMKFS_OFFSET byte_offset = idx / 8;
+    SMKFS_OFFSET bit_offset = idx % 8;
+    SMKFS_BLOCK bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+    SMKFS_OFFSET block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return;
     if (read_block(mnt, bitmap_block, buf) != 0) {
         free(buf);
@@ -64,17 +65,17 @@ void bitmap_set(smkfs_mount_t *mnt, uint64_t block) {
     free(buf);
 }
 
-void bitmap_clear(smkfs_mount_t *mnt, uint64_t block) {
-    uint8_t *buf;
+VOID bitmap_clear(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+    PUCHAR buf;
 
     if (block < mnt->sb.data_start) return;
-    uint64_t idx = block - mnt->sb.data_start;
-    uint64_t byte_offset = idx / 8;
-    uint64_t bit_offset = idx % 8;
-    uint64_t bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
-    uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+    ULONGLONG idx = block - mnt->sb.data_start;
+    SMKFS_OFFSET byte_offset = idx / 8;
+    SMKFS_OFFSET bit_offset = idx % 8;
+    SMKFS_BLOCK bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+    SMKFS_OFFSET block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return;
     if (read_block(mnt, bitmap_block, buf) != 0) {
         free(buf);
@@ -93,18 +94,18 @@ void bitmap_clear(smkfs_mount_t *mnt, uint64_t block) {
     free(buf);
 }
 
-int bitmap_test(smkfs_mount_t *mnt, uint64_t block) {
-    uint8_t *buf;
-    int ret;
+LONG bitmap_test(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+    PUCHAR buf;
+    LONG ret;
 
     if (block < mnt->sb.data_start) return -1;
-    uint64_t idx = block - mnt->sb.data_start;
-    uint64_t byte_offset = idx / 8;
-    uint64_t bit_offset = idx % 8;
-    uint64_t bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
-    uint64_t block_offset = byte_offset % SMKFS_BLOCK_SIZE;
+    ULONGLONG idx = block - mnt->sb.data_start;
+    SMKFS_OFFSET byte_offset = idx / 8;
+    SMKFS_OFFSET bit_offset = idx % 8;
+    SMKFS_BLOCK bitmap_block = mnt->sb.bitmap_start + (byte_offset / SMKFS_BLOCK_SIZE);
+    SMKFS_OFFSET block_offset = byte_offset % SMKFS_BLOCK_SIZE;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return -1;
     if (read_block(mnt, bitmap_block, buf) != 0) {
         free(buf);
@@ -119,17 +120,17 @@ int bitmap_test(smkfs_mount_t *mnt, uint64_t block) {
 /*
  * TODO: optimize for G1 regioned allocator
  */
-uint64_t bitmap_alloc_range(smkfs_mount_t *mnt, uint32_t count) {
-    uint8_t *buf;
-    uint8_t *j_buf;
-    uint64_t total_bits;
-    uint64_t run_start;
-    uint32_t run_len;
+SMKFS_BLOCK bitmap_alloc_range(smkfs_mount_t *mnt, ULONG count) {
+    PUCHAR buf;
+    PUCHAR j_buf;
+    ULONGLONG total_bits;
+    ULONGLONG run_start;
+    ULONG run_len;
 
     if (count == 0) return 0;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
-    j_buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
+    j_buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf || !j_buf) {
         free(buf);
         free(j_buf);
@@ -140,17 +141,17 @@ uint64_t bitmap_alloc_range(smkfs_mount_t *mnt, uint32_t count) {
     run_start = 0;
     run_len = 0;
 
-    for (uint64_t bb = 0; bb < mnt->sb.bitmap_length; bb++) {
+    for (ULONGLONG bb = 0; bb < mnt->sb.bitmap_length; bb++) {
         if (read_block(mnt, mnt->sb.bitmap_start + bb, buf) != 0) {
             free(buf);
             free(j_buf);
             return 0;
         }
 
-        for (int bo = 0; bo < SMKFS_BLOCK_SIZE; bo++) {
+        for (LONG bo = 0; bo < SMKFS_BLOCK_SIZE; bo++) {
             uint8_t byte = buf[bo];
-            for (int bi = 0; bi < 8; bi++) {
-                uint64_t global_bit = bb * SMKFS_BLOCK_SIZE * 8 + bo * 8 + bi;
+            for (LONG bi = 0; bi < 8; bi++) {
+                ULONGLONG global_bit = bb * SMKFS_BLOCK_SIZE * 8 + bo * 8 + bi;
                 if (global_bit >= total_bits) break;
 
                 if ((byte >> bi) & 1) {
@@ -159,12 +160,12 @@ uint64_t bitmap_alloc_range(smkfs_mount_t *mnt, uint32_t count) {
                     if (run_len == 0) run_start = global_bit;
                     run_len++;
                     if (run_len >= count) {
-                        uint64_t first_block = mnt->sb.data_start + run_start;
-                        for (uint32_t j = 0; j < count; j++) {
-                            uint64_t idx = run_start + j;
-                            uint64_t j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
-                            uint64_t j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
-                            uint64_t j_bi = idx % 8;
+                        SMKFS_BLOCK first_block = mnt->sb.data_start + run_start;
+                        for (ULONG j = 0; j < count; j++) {
+                            ULONGLONG idx = run_start + j;
+                            ULONGLONG j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
+                            ULONGLONG j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+                            ULONGLONG j_bi = idx % 8;
                             if (read_block(mnt, mnt->sb.bitmap_start + j_bb, j_buf) != 0) {
                                 free(buf);
                                 free(j_buf);
@@ -195,23 +196,23 @@ uint64_t bitmap_alloc_range(smkfs_mount_t *mnt, uint32_t count) {
     return 0;
 }
 
-uint64_t bitmap_alloc(smkfs_mount_t *mnt) {
+SMKFS_BLOCK bitmap_alloc(smkfs_mount_t *mnt) {
     return bitmap_alloc_range(mnt, 1);
 }
 
-void bitmap_free_range(smkfs_mount_t *mnt, uint64_t start, uint32_t count) {
-    uint8_t *buf;
+VOID bitmap_free_range(smkfs_mount_t *mnt, SMKFS_BLOCK start, ULONG count) {
+    PUCHAR buf;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return;
 
-    for (uint32_t i = 0; i < count; i++) {
-        uint64_t block = start + i;
+    for (ULONG i = 0; i < count; i++) {
+        SMKFS_BLOCK block = start + i;
         if (block < mnt->sb.data_start) continue;
-        uint64_t idx = block - mnt->sb.data_start;
-        uint64_t bb = idx / (SMKFS_BLOCK_SIZE * 8);
-        uint64_t bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
-        uint64_t bi = idx % 8;
+        ULONGLONG idx = block - mnt->sb.data_start;
+        ULONGLONG bb = idx / (SMKFS_BLOCK_SIZE * 8);
+        ULONGLONG bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
+        ULONGLONG bi = idx % 8;
 
         if (read_block(mnt, mnt->sb.bitmap_start + bb, buf) != 0) {
             free(buf);

@@ -288,6 +288,34 @@ typedef LONG SMKFS_STATUS;
 #include <stddef.h>
 #include <internal/phonon_macros.h>
 
+/* --- Semantic Types --- */
+
+/*
+ * These aliases exist to prevent mixing values that share the same
+ * underlying integer width but represent different domains.
+ *
+ * Using SMKFS_RECORD_ID instead of ULONGLONG makes it impossible to
+ * accidentally pass a block number where a record ID is expected.
+*/
+
+typedef ULONGLONG SMKFS_RECORD_ID;   /* Logical record identifier (MRT slot) */
+typedef ULONGLONG SMKFS_BLOCK;       /* Physical block number on storage */
+typedef ULONGLONG SMKFS_LBLOCK;      /* Logical block offset within a stream */
+typedef ULONGLONG SMKFS_OFFSET;      /* Byte offset within a file */
+typedef ULONG     SMKFS_GENERATION;  /* MRT entry generation counter */
+typedef USHORT    SMKFS_STRUCT_TYPE; /* On-disk structure type (SMKFS_ST_*) */
+typedef USHORT    SMKFS_OBJECT_TYPE; /* Record object type (SMKFS_ROT_*) */
+typedef USHORT    SMKFS_ATTR_TYPE;   /* Attribute type (SMKFS_ATTRT_*) */
+typedef ULONG     SMKFS_ATTR_ID;     /* Attribute instance id */
+typedef USHORT    SMKFS_ATTR_FLAGS;  /* Attribute behavior flags */
+typedef USHORT    SMKFS_MRT_FLAGS;   /* MRT entry flags (SMKFS_MRTF_*) */
+typedef USHORT    SMKFS_DIRENT_FLAGS;/* Directory entry flags (SMKFS_DENTF_*) */
+typedef ULONG     SMKFS_JOP;         /* Journal operation code (SMKFS_JOP_*) */
+typedef ULONG     SMKFS_SBF;         /* Superblock flags (SMKFS_SBF_*) */
+typedef SHORT     SMKFS_PERM;        /* Permission bitmask (SMKFS_PERM_*) */
+typedef const char * SMKFS_PATH;     /* Path */
+typedef const char * SMKFS_NAME;     /* Path */
+
 /* --- Typedefs - Structs - Enums --- */
 
 /*
@@ -339,13 +367,13 @@ typedef LONG SMKFS_STATUS;
  * Or I formalize what a Structure is... extra complexity. Yay!
 */
 typedef struct {
-    /*  0 */ char     magic[4];    /* SMKFS magic: "SmKF" (SMKFS_MAGIC) */
-    /*  4 */ uint16_t version;     /* On-disk format version (SMKFS_VERSION) */
-    /*  6 */ uint16_t type;        /* Structure type (SMKFS_ST_*) */
-    /*  8 */ uint32_t length;      /* Payload length in bytes; excludes header */
-    /* 12 */ uint32_t flags;       /* Structure-specific flags */
-    /* 16 */ uint32_t checksum;    /* CRC32C(header with checksum field zeroed) */
-    /* 20 */ uint32_t reserved[3]; /* Reserved; MUST be zero */
+    /*  0 */ CHAR  magic[4];    /* SMKFS magic: "SmKF" (SMKFS_MAGIC) */
+    /*  4 */ SHORT version;     /* On-disk format version (SMKFS_VERSION) */
+    /*  6 */ SHORT type;        /* Structure type (SMKFS_ST_*) */
+    /*  8 */ ULONG length;      /* Payload length in bytes; excludes header */
+    /* 12 */ ULONG flags;       /* Structure-specific flags */
+    /* 16 */ ULONG checksum;    /* CRC32C(header with checksum field zeroed) */
+    /* 20 */ ULONG reserved[3]; /* Reserved; MUST be zero */
 } __attribute__((__packed__)) smkfs_header_t;
 
 _Static_assert(sizeof(smkfs_header_t) == 32, "SMKFS header size changed");
@@ -373,206 +401,207 @@ _Static_assert(sizeof(smkfs_header_t) == 32, "SMKFS header size changed");
 */
 
 typedef struct {
-    /*  0 */ uint64_t physical_block; /* UINT64_MAX = no block assigned.
-                                         Block 0 is the Superblock and is always
-                                         a valid physical block reference. */
-    /*  8 */ uint16_t flags;          /* SMKFS_MRTF_* */
-    /* 10 */ uint16_t reserved;       /* Reserved; MUST be zero */
-    /* 12 */ uint32_t generation;     /* Incremented on slot reuse */
+    /*  0 */ SMKFS_BLOCK      physical_block; /* UINT64_MAX = no block assigned.
+                                                 Block 0 is the Superblock and is always
+                                                 a valid physical block reference. */
+    /*  8 */ SMKFS_MRT_FLAGS  flags;          /* SMKFS_MRTF_* */
+    /* 10 */ SHORT            reserved;       /* Reserved; MUST be zero */
+    /* 12 */ SMKFS_GENERATION generation;     /* Incremented on slot reuse */
 } __attribute__((__packed__)) smkfs_mrt_entry_t;
 _Static_assert(sizeof(smkfs_mrt_entry_t) == 16, "SMKFS MRT entry size changed");
 
 /* Extent (20B) */
 typedef struct {
-    uint64_t logical_offset;
-    uint64_t physical_block;
-    uint32_t block_count;
+    SMKFS_LBLOCK logical_offset;
+    SMKFS_BLOCK  physical_block;
+    ULONG        block_count;
 } __attribute__((__packed__)) smkfs_extent_t;
 _Static_assert(sizeof(smkfs_extent_t) == 20, "SmKFS Extent size changed");
 
 /* Attribute header (12B) */
 typedef struct {
-    uint16_t type;
-    uint16_t flags;
-    uint32_t id;
-    uint32_t length;
+    SMKFS_ATTR_TYPE  type;
+    SMKFS_ATTR_FLAGS flags;
+    SMKFS_ATTR_ID    id;
+    ULONG            length;
 } __attribute__((__packed__)) smkfs_attr_header_t;
 _Static_assert(sizeof(smkfs_attr_header_t) == 12, "SmKFS Attribute Header size changed");
 
 /* Attribute behavior definition (in-memory only) */
 typedef struct {
-    uint16_t     type;
-    const char   *name;
-    uint32_t     flags;
-    size_t       fixed_size;
-    int          (*validate)(const void *data, size_t len);
-    void         (*debug_print)(const void *data, size_t len);
+    SMKFS_ATTR_TYPE  type;
+    SMKFS_NAME       name;
+    SMKFS_ATTR_FLAGS flags;
+    SIZE_T           fixed_size;
+    SMKFS_STATUS     (*validate)(PCVOID  data, SIZE_T len);
+    VOID             (*debug_print)(PCVOID  data, SIZE_T len);
 } smkfs_attr_def_t;
 
 /* B+ tree node header (56B) */
 typedef struct {
-    smkfs_header_t header;
-    uint64_t       parent_block;
-    uint32_t       flags;
-    uint32_t       key_count;
-    uint64_t       right_sibling;
+    smkfs_header_t  header;
+    SMKFS_BLOCK     parent_block;
+    ULONG           flags;
+    ULONG           key_count;
+    SMKFS_BLOCK     right_sibling;
 } __attribute__((__packed__)) smkfs_btree_node_t;
 _Static_assert(sizeof(smkfs_btree_node_t) == 56, "B+ tree node size changed");
 
 /* In-memory leaf entry (264B) */
 typedef struct {
-    uint64_t record_id;
-    char     name[SMKFS_NAME_LEN];
+    SMKFS_RECORD_ID record_id;
+    CHAR            name[SMKFS_NAME_LEN];
 } smkfs_btree_leaf_entry_t;
 
 /* In-memory index entry (25B) */
 typedef struct {
-    uint64_t child_block;
-    char     prefix[16];
-    uint8_t  prefix_len;
+    SMKFS_BLOCK child_block;
+    CHAR        prefix[16];
+    UCHAR     prefix_len;
 } smkfs_btree_index_entry_t;
 
 /* Record header v2 (56B) */
 typedef struct {
-    smkfs_header_t  header;
-    uint64_t        record_id;        /* Logical ID (MRT index) */
-    uint16_t        object_type;
-    uint16_t        attr_count;
-    uint32_t        link_count;       /* Directory entries pointing here */
-    uint64_t        generation;       /* Matches MRT generation */
+    smkfs_header_t    header;
+    SMKFS_RECORD_ID   record_id;        /* Logical ID (MRT index) */
+    SMKFS_OBJECT_TYPE object_type;
+    SHORT          attr_count;
+    ULONG             link_count;       /* Directory entries pointing here */
+    SMKFS_GENERATION  generation;       /* Matches MRT generation */
+    ULONG             reserved;         /* Reserved; MUST be zero */
 } __attribute__((__packed__)) smkfs_record_t;
 _Static_assert(sizeof(smkfs_record_t) == 56, "SmKFS Record size changed");
 
 /* Journal entry v2 (64B) */
 typedef struct {
     smkfs_header_t  header;
-    uint64_t        sequence;
-    uint64_t        target_block;
-    uint32_t        operation;
-    uint32_t        data_length;
-    uint64_t        record_id;        /* Logical record for fsck */
+    ULONGLONG       sequence;
+    SMKFS_BLOCK     target_block;
+    SMKFS_JOP       operation;
+    ULONG           data_length;
+    SMKFS_RECORD_ID record_id;        /* Logical record for fsck */
 } __attribute__((__packed__)) smkfs_journal_entry_t;
 _Static_assert(sizeof(smkfs_journal_entry_t) == 64, "SmKFS Journal entry size changed");
 
-/* Superblock v2 (312 bytes) */
+/* Superblock v2 (320 bytes) */
 typedef struct {
-    smkfs_header_t  header;
-    uint64_t        total_blocks;
-    uint64_t        free_blocks;
-    uint64_t        sector_size;
-    uint64_t        record_count;
-    uint64_t        next_record_id;   /* Next free MRT slot */
-    uint64_t        mrt_start;
-    uint64_t        mrt_length;       /* Blocks reserved for MRT */
-    uint64_t        mrt_capacity;     /* Max records (MRT entries) */
-    uint64_t        mrt_free_count;
-    uint64_t        root_record_id;   /* Logical ID of root dir */
-    uint64_t        journal_start;
-    uint64_t        journal_length;
-    uint64_t        journal_head;       /* Next free journal slot */
-    uint64_t        journal_tail;       /* Oldest uncheckpointed entry */
-    uint64_t        journal_sequence;   /* Monotonic transaction counter */
-    uint64_t        bitmap_start;
-    uint64_t        bitmap_length;
-    uint64_t        alloc_meta_start;
-    uint64_t        alloc_meta_length;
-    uint64_t        data_start;
-    uint32_t        block_size;
-    uint32_t        flags;            /* SMKFS_SBF_* */
-    uint8_t         uuid[16];
-    char            volume_name[64];
-    uint64_t        creation_time;
-    uint64_t        last_mount_time;
-    uint32_t        mount_count;
-    uint32_t        max_mount_count;
-    uint32_t        reserved[4];
+    smkfs_header_t   header;
+    ULONGLONG        total_blocks;
+    ULONGLONG        free_blocks;
+    ULONGLONG        sector_size;
+    ULONGLONG        record_count;
+    SMKFS_RECORD_ID  next_record_id;   /* Next free MRT slot */
+    SMKFS_BLOCK      mrt_start;
+    ULONGLONG        mrt_length;       /* Blocks reserved for MRT */
+    ULONGLONG        mrt_capacity;     /* Max records (MRT entries) */
+    ULONGLONG        mrt_free_count;
+    SMKFS_RECORD_ID  root_record_id;   /* Logical ID of root dir */
+    SMKFS_BLOCK      journal_start;
+    ULONGLONG        journal_length;
+    ULONGLONG        journal_head;       /* Next free journal slot */
+    ULONGLONG        journal_tail;       /* Oldest uncheckpointed entry */
+    ULONGLONG        journal_sequence;   /* Monotonic transaction counter */
+    SMKFS_BLOCK      bitmap_start;
+    ULONGLONG        bitmap_length;
+    SMKFS_BLOCK      alloc_meta_start;
+    ULONGLONG        alloc_meta_length;
+    SMKFS_BLOCK      data_start;
+    ULONG            block_size;
+    SMKFS_SBF        flags;            /* SMKFS_SBF_* */
+    UCHAR            uuid[16];
+    CHAR             volume_name[64];
+    ULONGLONG        creation_time;
+    ULONGLONG        last_mount_time;
+    ULONG            mount_count;
+    ULONG            max_mount_count;
+    ULONG            reserved[4];
 } __attribute__((__packed__)) smkfs_superblock_t;
 _Static_assert(sizeof(smkfs_superblock_t) == 320, "SmKFS Superblock size changed");
 
 /* On-disk directory entry (B+ tree value) (16B) */
 typedef struct {
-    uint64_t record_id;
-    uint32_t name_hash;     /* Fast comparison filter */
-    uint16_t flags;         /* SMKFS_DENTF_* */
-    uint16_t name_len;      /* Actual name length */
+    SMKFS_RECORD_ID    record_id;
+    ULONG              name_hash;     /* Fast comparison filter */
+    SMKFS_DIRENT_FLAGS flags;         /* SMKFS_DENTF_* */
+    SHORT              name_len;      /* Actual name length */
 } __attribute__((__packed__)) smkfs_dirent_disk_t;
 _Static_assert(sizeof(smkfs_dirent_disk_t) == 16, "SmKFS Dirent Disk size changed");
 
 /* Directory entry (in-memory, userspace-facing, 264B) */
 typedef struct {
-    uint64_t record_id;
-    char     name[SMKFS_NAME_LEN];
+    SMKFS_RECORD_ID record_id;
+    CHAR            name[SMKFS_NAME_LEN];
 } smkfs_dirent_t;
 
 /* File Descriptor */
 typedef struct {
-    int      used;
-    uint64_t record_id;
-    uint64_t offset;
-    int      flags;
+    LONG            used;
+    SMKFS_RECORD_ID record_id;
+    SMKFS_OFFSET    offset;
+    LONG            flags;
 } smkfs_fd_t;
 
 /* Per-mount context (G1 multi-mount support) */
 typedef struct {
-    uint8_t             drive_num;
-    int                 mounted;
+    UCHAR               drive_num;
+    LONG                mounted;
     smkfs_superblock_t  sb;
-    uint64_t            journal_next_sequence;
-    int                 journal_in_transaction;
-    uint64_t            journal_write_pos;
+    ULONGLONG           journal_next_sequence;
+    LONG                journal_in_transaction;
+    ULONGLONG           journal_write_pos;
     smkfs_fd_t          fd_table[SMKFS_FD_MAX];
 } smkfs_mount_t;
 
 /* Read Directory Context */
 typedef struct {
     smkfs_dirent_t *entries;
-    size_t          max;
-    size_t          count;
+    SIZE_T          max;
+    SIZE_T          count;
 } readdir_ctx_t;
 
 /* --- Prototypes --- */
 
 /* ~~~ Master Attribute Table ~~~ */
-const smkfs_attr_def_t *smkfs_attr_lookup(uint16_t type);
-const char *smkfs_attr_name(uint16_t type);
-void smkfs_attr_debug_print(uint16_t type, const void *data, size_t len);
+const smkfs_attr_def_t *smkfs_attr_lookup(SMKFS_ATTR_TYPE type);
+SMKFS_NAME smkfs_attr_name(SMKFS_ATTR_TYPE type);
+VOID  smkfs_attr_debug_print(SMKFS_ATTR_TYPE type, PCVOID  data, SIZE_T len);
 
 /* ~~~ Level 3: Kernel ~~~ */
-int smkfs_mount(uint8_t drive, smkfs_mount_t *mnt); /* Done */
-int smkfs_unmount(smkfs_mount_t *mnt); /* Done */
-int smkfs_sync(smkfs_mount_t *mnt); /* Done */
-int smkfs_lookup_by_name(smkfs_mount_t *mnt, uint64_t dir_record, const char *name, uint64_t *out_record); /* Done */
-int smkfs_create_record(smkfs_mount_t *mnt, uint16_t object_type, uint64_t parent_dir, const char *name, uint64_t *out_record); /* Done */
-int smkfs_delete_record(smkfs_mount_t *mnt, uint64_t record_id); /* Done */
-int smkfs_rename(smkfs_mount_t *mnt, uint64_t record_id, uint64_t new_parent, const char *new_name); /* Done */
-int smkfs_read(smkfs_mount_t *mnt, uint64_t record_id, uint64_t offset, size_t len, void *buf); /* Done */
-int smkfs_write(smkfs_mount_t *mnt, uint64_t record_id, uint64_t offset, size_t len, const void *buf); /* Done */
-int smkfs_truncate(smkfs_mount_t *mnt, uint64_t record_id, uint64_t new_size); /* Done */
-int smkfs_getattr(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size); /* Done */
-int smkfs_setattr(smkfs_mount_t *mnt, uint64_t record_id, uint16_t attr_type, const void *data, size_t len);     /* Done */
+SMKFS_STATUS smkfs_mount(UCHAR drive, smkfs_mount_t *mnt);
+SMKFS_STATUS smkfs_unmount(smkfs_mount_t *mnt);
+SMKFS_STATUS smkfs_sync(smkfs_mount_t *mnt);
+SMKFS_STATUS smkfs_lookup_by_name(smkfs_mount_t *mnt, SMKFS_RECORD_ID dir_record, SMKFS_NAME name, SMKFS_RECORD_ID *out_record);
+SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID *out_record);
+SMKFS_STATUS smkfs_delete_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id);
+SMKFS_STATUS smkfs_rename(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name);
+SMKFS_STATUS smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf);
+SMKFS_STATUS smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID  buf);
+SMKFS_STATUS smkfs_truncate(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size);
+SMKFS_STATUS smkfs_getattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size);
+SMKFS_STATUS smkfs_setattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID  data, SIZE_T len);
 
 /* ~~~ Level 2: User ~~~ */
-int path_lookup(smkfs_mount_t *mnt, const char *path, uint64_t *out_record); /* Done */
-int smkfs_open(smkfs_mount_t *mnt, const char *path, int flags); /* Done */
-int smkfs_close(smkfs_mount_t *mnt, int fd); /* Done */
-int smkfs_read_file(smkfs_mount_t *mnt, int fd, void *buf, size_t len); /* Done */
-int smkfs_write_file(smkfs_mount_t *mnt, int fd, const void *buf, size_t len); /* Done */
-int smkfs_seek(smkfs_mount_t *mnt, int fd, int64_t offset, int whence); /* Done */
-int smkfs_create_file(smkfs_mount_t *mnt, const char *path, uint16_t permissions); /* Done */
-int smkfs_delete_file(smkfs_mount_t *mnt, const char *path); /* Done */
-int smkfs_mkdir(smkfs_mount_t *mnt, const char *path); /* Done */
-int smkfs_rmdir(smkfs_mount_t *mnt, const char *path); /* Done */
-int smkfs_readdir(smkfs_mount_t *mnt, const char *path, smkfs_dirent_t *entries, size_t max_entries, size_t *out_count); /* Done */
-int smkfs_stat(smkfs_mount_t *mnt, const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size); /* Done */
-int smkfs_chmod(smkfs_mount_t *mnt, const char *path, uint16_t permissions); /* Done */
-int smkfs_chown(smkfs_mount_t *mnt, const char *path, uint32_t uid, uint32_t gid); /* Done */
+SMKFS_STATUS path_lookup(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record);
+SMKFS_STATUS smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags);
+SMKFS_STATUS smkfs_close(smkfs_mount_t *mnt, LONG fd);
+SMKFS_STATUS smkfs_read_file(smkfs_mount_t *mnt, LONG fd, PVOID buf, SIZE_T len);
+SMKFS_STATUS smkfs_write_file(smkfs_mount_t *mnt, LONG fd, PCVOID  buf, SIZE_T len);
+SMKFS_STATUS smkfs_seek(smkfs_mount_t *mnt, LONG fd, LONGLONG offset, LONG whence);
+SMKFS_STATUS smkfs_create_file(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permissions);
+SMKFS_STATUS smkfs_delete_file(smkfs_mount_t *mnt, SMKFS_PATH path);
+SMKFS_STATUS smkfs_mkdir(smkfs_mount_t *mnt, SMKFS_PATH path);
+SMKFS_STATUS smkfs_rmdir(smkfs_mount_t *mnt, SMKFS_PATH path);
+SMKFS_STATUS smkfs_readdir(smkfs_mount_t *mnt, SMKFS_PATH path, smkfs_dirent_t *entries, SIZE_T max_entries, SIZE_T *out_count);
+SMKFS_STATUS smkfs_stat(smkfs_mount_t *mnt, SMKFS_PATH path, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size);
+SMKFS_STATUS smkfs_chmod(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permissions);
+SMKFS_STATUS smkfs_chown(smkfs_mount_t *mnt, SMKFS_PATH path, ULONG uid, ULONG gid);
 
 /* ~~~ Level 1: Admin ~~~ */
-int smkfs_mkfs(uint8_t drive, uint64_t total_blocks, uint64_t sector_size); /* Done */
-int smkfs_fsck(uint8_t drive); /* Done */
-int smkfs_dump_superblock(smkfs_mount_t *mnt); /* Done */
-int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id); /* Done */
-int smkfs_dump_journal(smkfs_mount_t *mnt); /* Done */
-int smkfs_dump_btree(smkfs_mount_t *mnt, uint64_t root_block); /* Done */
+SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_size);
+SMKFS_STATUS smkfs_fsck(UCHAR drive);
+SMKFS_STATUS smkfs_dump_superblock(smkfs_mount_t *mnt);
+SMKFS_STATUS smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id);
+SMKFS_STATUS smkfs_dump_journal(smkfs_mount_t *mnt);
+SMKFS_STATUS smkfs_dump_btree(smkfs_mount_t *mnt, SMKFS_BLOCK root_block);
 
 #endif

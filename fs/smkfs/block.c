@@ -34,16 +34,24 @@
 
 /* --- Functions ---*/
 
-int read_block(smkfs_mount_t *mnt, uint64_t block, void *buf) {
+/*
+ * SMKFS_STATUS read_block
+ * Convert block to sectors, read sectors into buffer
+ * return status code
+*/
+SMKFS_STATUS read_block(smkfs_mount_t *mnt, /* Needs drive number and sector size */
+                        SMKFS_BLOCK block,  /* Block to read*/
+                        PVOID buf           /* Buffer to read into */
+                       ) {
     if (SMKFS_BLOCK_SIZE % mnt->sb.sector_size != 0) {
         return SMKFS_ERR_IO;
     }
 
-    uint8_t sectors = SMKFS_BLOCK_SIZE / mnt->sb.sector_size;
-    uint32_t lba = (uint32_t)(block * sectors);
-    uint8_t *ptr = (uint8_t *)buf;
+    UCHAR sectors = SMKFS_BLOCK_SIZE / mnt->sb.sector_size;
+    ULONG lba = (ULONG)(block * sectors);
+    PUCHAR ptr = (PUCHAR)buf;
 
-    for (uint8_t i = 0; i < sectors; i++) {
+    for (UCHAR i = 0; i < sectors; i++) {
         if (ide_read_sectors(mnt->drive_num, lba + i, 1, (uint16_t *)(ptr + i * mnt->sb.sector_size)) != 0) {
             return SMKFS_ERR_IO;
         }
@@ -51,16 +59,24 @@ int read_block(smkfs_mount_t *mnt, uint64_t block, void *buf) {
     return SMKFS_OK;
 }
 
-int write_block(smkfs_mount_t *mnt, uint64_t block, const void *buf) {
+/*
+ * SMKFS_STATUS write_block
+ * Convert block to sectors, write buffer to sectors on disk
+ * return status code
+*/
+SMKFS_STATUS write_block(smkfs_mount_t *mnt, /* Mount context, needs drive number and sector size */
+                         SMKFS_BLOCK block,  /* The physical block to write to*/
+                         PCVOID buf          /* (Pointer to Const VOID), data to write to block*/
+                        ) {
     if (SMKFS_BLOCK_SIZE % mnt->sb.sector_size != 0) {
         return SMKFS_ERR_IO;
     }
     
-    uint8_t sectors = SMKFS_BLOCK_SIZE / mnt->sb.sector_size;
-    uint32_t lba = (uint32_t)(block * sectors);
-    const uint8_t *ptr = (const uint8_t *)buf;
+    UCHAR sectors = SMKFS_BLOCK_SIZE / mnt->sb.sector_size;
+    ULONG lba = (ULONG)(block * sectors);
+    PCUCHAR ptr = (PCUCHAR)buf;
 
-    for (uint8_t i = 0; i < sectors; i++) {
+    for (UCHAR i = 0; i < sectors; i++) {
         if (ide_write_sectors(mnt->drive_num, lba + i, 1, (const uint16_t *)(ptr + i * mnt->sb.sector_size)) != 0) {
             printk("[SmKFS] write_block FAILED: block=%llu LBA=%u\n",block, lba + i);
             return SMKFS_ERR_IO;

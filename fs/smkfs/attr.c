@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/phonon_types.h"
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <screen/printk.h>
@@ -43,54 +44,54 @@
 
 /* --- Attribute Validation Helpers --- */
 
-static int attr_validate_u16(const void *data, size_t len) {
-	(void)data;
+static SMKFS_STATUS attr_validate_u16(PCVOID data, SIZE_T len) {
+	(VOID)data;
     return (len == 2) ? SMKFS_OK : SMKFS_ERR_INVAL;
 }
 
-static int attr_validate_u64(const void *data, size_t len) {
-	(void)data;
+static SMKFS_STATUS attr_validate_u64(PCVOID data, SIZE_T len) {
+	(VOID)data;
     return (len == 8) ? SMKFS_OK : SMKFS_ERR_INVAL;
 }
 
-static int attr_validate_name(const void *data, size_t len) {
+static SMKFS_STATUS attr_validate_name(PCVOID data, SIZE_T len) {
     if (len == 0 || len > SMKFS_NAME_LEN) return SMKFS_ERR_INVAL;
-    if (((const char *)data)[len - 1] != '\0') return SMKFS_ERR_INVAL;
+    if (((PCCHAR)data)[len - 1] != '\0') return SMKFS_ERR_INVAL;
     return SMKFS_OK;
 }
 
-static int attr_validate_extents(const void *data, size_t len) {
-	(void)data;
+static SMKFS_STATUS attr_validate_extents(PCVOID data, SIZE_T len) {
+	(VOID)data;
     return (len % sizeof(smkfs_extent_t) == 0) ? SMKFS_OK : SMKFS_ERR_INVAL;
 }
 
 /* --- Attribute Debug Print Helpers --- */
 
-static void attr_print_u16(const void *data, size_t len) {
-    if (len == 2) printk("%u", *(const uint16_t *)data);
+static VOID attr_print_u16(PCVOID data, SIZE_T len) {
+    if (len == 2) printk("%u", *(const USHORT *)data);
     else printk("<bad u16>");
 }
 
-static void attr_print_u64(const void *data, size_t len) {
-    if (len == 8) printk("%llu", *(const uint64_t *)data);
+static VOID attr_print_u64(PCVOID data, SIZE_T len) {
+    if (len == 8) printk("%llu", *(const ULONGLONG *)data);
     else printk("<bad u64>");
 }
 
-static void attr_print_name(const void *data, size_t len) {
-	(void)len;
-    printk("'%s'", (const char *)data);
+static VOID attr_print_name(PCVOID data, SIZE_T len) {
+	(VOID)len;
+    printk("'%s'", (PCCHAR)data);
 }
 
-static void attr_print_string(const void *data, size_t len) {
-	(void)len;
-    printk("\"%s\"", (const char *)data);
+static VOID attr_print_string(PCVOID data, SIZE_T len) {
+	(VOID)len;
+    printk("\"%s\"", (PCCHAR)data);
 }
 
-static void attr_print_extents(const void *data, size_t len) {
-    uint32_t n = len / sizeof(smkfs_extent_t);
+static VOID attr_print_extents(PCVOID data, SIZE_T len) {
+    ULONG n = len / sizeof(smkfs_extent_t);
     const smkfs_extent_t *e = (const smkfs_extent_t *)data;
     printk("[%u extents]", n);
-    for (uint32_t i = 0; i < n && i < 3; i++) {
+    for (ULONG i = 0; i < n && i < 3; i++) {
         printk(" {log=%llu phys=%llu cnt=%u}", e[i].logical_offset, e[i].physical_block, e[i].block_count);
     }
     if (n > 3) printk(" ...");
@@ -210,19 +211,19 @@ static const smkfs_attr_def_t attr_registry[] = {
 
 /* --- Registry Accessors --- */
 
-const smkfs_attr_def_t *smkfs_attr_lookup(uint16_t type) {
+const smkfs_attr_def_t *smkfs_attr_lookup(SMKFS_ATTR_TYPE type) {
     for (const smkfs_attr_def_t *p = attr_registry; p->name != NULL; p++) {
         if (p->type == type) return p;
     }
     return NULL;
 }
 
-const char *smkfs_attr_name(uint16_t type) {
+SMKFS_NAME smkfs_attr_name(SMKFS_ATTR_TYPE type) {
     const smkfs_attr_def_t *def = smkfs_attr_lookup(type);
     return (def != NULL) ? def->name : "UNKNOWN";
 }
 
-void smkfs_attr_debug_print(uint16_t type, const void *data, size_t len) {
+void smkfs_attr_debug_print(SMKFS_ATTR_TYPE type, PCVOID data, SIZE_T len) {
     const smkfs_attr_def_t *def = smkfs_attr_lookup(type);
     if (def && def->debug_print) {
         def->debug_print(data, len);
@@ -233,8 +234,8 @@ void smkfs_attr_debug_print(uint16_t type, const void *data, size_t len) {
 
 /* --- Attribute Buffer Operations --- */
 
-int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t *out_len) {
-    const uint8_t *ptr = (const uint8_t *)attr_buf;
+SMKFS_STATUS record_find_attr(PCVOID attr_buf, SMKFS_ATTR_TYPE attr_type, PVOID *out_attr, SIZE_T *out_len) {
+    PCUCHAR ptr = (PCUCHAR)attr_buf;
 
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
@@ -249,9 +250,9 @@ int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, 
     return SMKFS_ERR_NOTFOUND;
 }
 
-int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len) {
-    uint8_t *ptr = (uint8_t *)attr_buf;
-    size_t used = 0;
+SMKFS_STATUS record_add_attr(PVOID attr_buf, SIZE_T buf_size, SMKFS_ATTR_TYPE attr_type, PCVOID data, SIZE_T data_len) {
+    PUCHAR ptr = (PUCHAR)attr_buf;
+    SIZE_T used = 0;
 
     if (!attr_buf || (data_len > 0 && !data)) {
         return SMKFS_ERR_INVAL;
@@ -263,24 +264,24 @@ int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const v
 
     record_remove_attr(attr_buf, attr_type);
 
-    ptr = (uint8_t *)attr_buf;
+    ptr = (PUCHAR)attr_buf;
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
         if (ah->type == SMKFS_ATTRT_END) {
-            used = (size_t)(ptr - (uint8_t *)attr_buf) + sizeof(smkfs_attr_header_t);
+            used = (SIZE_T)(ptr - (PUCHAR)attr_buf) + sizeof(smkfs_attr_header_t);
             break;
         }
         ptr += sizeof(smkfs_attr_header_t) + ah->length;
     }
 
-    size_t need = sizeof(smkfs_attr_header_t) + data_len + sizeof(smkfs_attr_header_t);
+    SIZE_T need = sizeof(smkfs_attr_header_t) + data_len + sizeof(smkfs_attr_header_t);
     if (used + need > buf_size) return SMKFS_ERR_NOSPC;
 
     smkfs_attr_header_t *new_ah = (smkfs_attr_header_t *)(ptr);
     new_ah->type = attr_type;
     new_ah->flags = 0;
     new_ah->id = 0;
-    new_ah->length = (uint32_t)data_len;
+    new_ah->length = (ULONG)data_len;
     memcpy(ptr + sizeof(smkfs_attr_header_t), data, data_len);
 
     smkfs_attr_header_t *term = (smkfs_attr_header_t *)(ptr + sizeof(smkfs_attr_header_t) + data_len);
@@ -292,10 +293,10 @@ int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const v
     return SMKFS_OK;
 }
 
-int record_remove_attr(void *attr_buf, uint16_t attr_type) {
-    uint8_t *ptr = (uint8_t *)attr_buf;
-    uint8_t *found = NULL;
-    size_t found_len = 0;
+SMKFS_STATUS record_remove_attr(PVOID attr_buf, SMKFS_ATTR_TYPE attr_type) {
+    PUCHAR ptr = (PUCHAR)attr_buf;
+    PUCHAR found = NULL;
+    SIZE_T found_len = 0;
 
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
@@ -309,7 +310,7 @@ int record_remove_attr(void *attr_buf, uint16_t attr_type) {
 
     if (!found) return SMKFS_OK;
 
-    size_t tail = (size_t)(ptr + sizeof(smkfs_attr_header_t) - (found + found_len));
+    SIZE_T tail = (SIZE_T)(ptr + sizeof(smkfs_attr_header_t) - (found + found_len));
     memmove(found, found + found_len, tail);
     return SMKFS_OK;
 }

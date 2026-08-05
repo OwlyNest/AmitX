@@ -32,6 +32,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/phonon_types.h"
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <lib/string.h>
@@ -43,7 +44,7 @@
 
 /* CRC32C lookup table */
 
-static const uint32_t crc32c_table[256] = {
+static const ULONG crc32c_table[256] = {
     0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
     0x8AD958CF, 0x78B2DBCC, 0x6BE22838, 0x9989AB3B, 0x4D43CFD0, 0xBF284CD3, 0xAC78BF27, 0x5E133C24,
     0x105EC76F, 0xE235446C, 0xF165B798, 0x030E349B, 0xD7C45070, 0x25AFD373, 0x36FF2087, 0xC494A384,
@@ -83,11 +84,11 @@ static const uint32_t crc32c_table[256] = {
 
 /* --- Checksum Computation --- */
 
-uint32_t checksum_compute(const void *data, size_t len) {
-    const uint8_t *ptr = (const uint8_t *)data;
-    uint32_t crc = 0xFFFFFFFF;
+ULONG checksum_compute(PCVOID data, SIZE_T len) {
+    PCUCHAR ptr = (PCUCHAR)data;
+    ULONG crc = 0xFFFFFFFF;
 
-    for (size_t i = 0; i < len; i++) {
+    for (SIZE_T i = 0; i < len; i++) {
         crc = (crc >> 8) ^ crc32c_table[(crc ^ ptr[i]) & 0xFF];
     }
 
@@ -96,7 +97,7 @@ uint32_t checksum_compute(const void *data, size_t len) {
 
 /* --- Header Utilities --- */
 
-void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags) {
+VOID header_init(smkfs_header_t *h, SMKFS_STRUCT_TYPE type, ULONG length, ULONG flags) {
     memcpy(h->magic, SMKFS_MAGIC, 4);
     h->version = SMKFS_VERSION;
     h->type = type;
@@ -105,7 +106,7 @@ void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t fla
     h->checksum = 0;
 }
 
-int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
+SMKFS_STATUS header_validate(const smkfs_header_t *h, SMKFS_STRUCT_TYPE expected_type) {
     if (memcmp(h->magic, SMKFS_MAGIC, 4) != 0) {
         printk("[SmKFS] Wrong magic, expected %.4s, got %.4s\n", SMKFS_MAGIC, h->magic);
         return SMKFS_ERR_CORRUPT;
@@ -124,14 +125,14 @@ int header_validate(const smkfs_header_t *h, uint16_t expected_type) {
     return SMKFS_OK;
 }
 
-void header_checksum_update(smkfs_header_t *h, const void *data, size_t len) {
+VOID header_checksum_update(smkfs_header_t *h, PCVOID data, SIZE_T len) {
     h->checksum = 0;
     h->checksum = checksum_compute(data, len);
 }
 
-int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len) {
-    uint32_t saved = h->checksum;
-    uint8_t tmp_buf[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS header_checksum_verify(const smkfs_header_t *h, PCVOID data, SIZE_T len) {
+    ULONG saved = h->checksum;
+    UCHAR tmp_buf[SMKFS_BLOCK_SIZE];
 
     if (len > sizeof(tmp_buf)) {
         return SMKFS_ERR_CORRUPT;
@@ -139,7 +140,7 @@ int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len
 
     memcpy(tmp_buf, data, len);
     ((smkfs_header_t *)tmp_buf)->checksum = 0;
-    uint32_t computed = checksum_compute(tmp_buf, len);
+    ULONG computed = checksum_compute(tmp_buf, len);
 
     if (computed != saved) {
         return SMKFS_ERR_CORRUPT;
@@ -150,12 +151,12 @@ int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len
 
 /* --- Test Vector Verification --- */
 
-void crc32c_test_vectors(void) {
+VOID crc32c_test_vectors(VOID) {
     /* RFC 3309 / iSCSI test vectors */
     static const struct {
-        const char *data;
-        size_t len;
-        uint32_t expected;
+        PCCHAR data;
+        SIZE_T len;
+        ULONG expected;
     } vectors[] = {
         { "",             0,  0x00000000},
         { "a",            1,  0xC1D04330},
@@ -170,9 +171,9 @@ void crc32c_test_vectors(void) {
         { NULL, 0, 0 }
     };
 
-    int pass = 1;
-    for (int i = 0; vectors[i].data != NULL; i++) {
-        uint32_t result = checksum_compute(vectors[i].data, vectors[i].len);
+    LONG pass = 1;
+    for (LONG i = 0; vectors[i].data != NULL; i++) {
+        ULONG result = checksum_compute(vectors[i].data, vectors[i].len);
         if (result != vectors[i].expected) {
             printk("[SmKFS] CRC32C test %d FAILED: got 0x%08X, expected 0x%08X\n", i, result, vectors[i].expected);
             pass = 0;

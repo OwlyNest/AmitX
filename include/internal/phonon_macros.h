@@ -43,8 +43,6 @@ do {                                                  \
         .name = #sym, \
         .func = (void *)sym \
     }
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 /* --- Includes ---*/
 
 /* --- Typedefs - Structs - Enums ---*/

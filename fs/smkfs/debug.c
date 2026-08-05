@@ -22,6 +22,7 @@
 /* --- Macros ---*/
 
 /* --- Includes ---*/
+#include "internal/phonon_types.h"
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <screen/printk.h>
@@ -33,14 +34,14 @@
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
-static void printk_size(const char *label, uint64_t bytes) {
-    static const char *units[] = {
+static VOID printk_size(PCCHAR label, QWORD bytes) {
+    static PCCHAR units[] = {
         "B", "KiB", "MiB", "GiB", "TiB", "PiB"
     };
 
-    uint64_t whole = bytes;
-    uint64_t remainder = 0;
-    unsigned int unit = 0;
+    QWORD whole = bytes;
+    QWORD remainder = 0;
+    ULONG unit = 0;
 
     while (whole >= 1024 && unit < 5) {
         remainder = whole % 1024;
@@ -59,7 +60,7 @@ static void printk_size(const char *label, uint64_t bytes) {
      * remainder / 1024 gives the fractional part.
      * Multiply by 10 before dividing to get one decimal digit.
      */
-    uint64_t decimal = (remainder * 10 + 512) / 1024;
+    QWORD decimal = (remainder * 10 + 512) / 1024;
 
     /*
      * Rounding can turn e.g. 1023.96 MiB into 1024.0 MiB.
@@ -78,7 +79,7 @@ static void printk_size(const char *label, uint64_t bytes) {
     printk("%-16s %llu.%llu %s, (%lluB)\n", label, whole, decimal, units[unit], bytes);
 }
 
-int smkfs_dump_superblock(smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_dump_superblock(smkfs_mount_t *mnt) {
     if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;
@@ -113,15 +114,15 @@ int smkfs_dump_superblock(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id) {
-    uint8_t block[SMKFS_BLOCK_SIZE];
+int smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec;
-    const uint8_t *ptr;
+    PCUCHAR ptr;
 
     if (!mnt->mounted) return SMKFS_ERR_INVAL;
 
-    uint64_t phys_block;
-    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    SMKFS_BLOCK phys_block;
+    SMKFS_STATUS mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
         return mrt_ret;
     }
@@ -168,8 +169,8 @@ int smkfs_dump_record(smkfs_mount_t *mnt, uint64_t record_id) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_journal(smkfs_mount_t *mnt) {
-    uint8_t block[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS smkfs_dump_journal(smkfs_mount_t *mnt) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_journal_entry_t *ent;
 
     if (!mnt->mounted) {
@@ -178,7 +179,7 @@ int smkfs_dump_journal(smkfs_mount_t *mnt) {
     }
 
     printk("\n=== Journal ===\n");
-    for (uint64_t i = 0; i < mnt->sb.journal_length; i++) {
+    for (ULONGLONG i = 0; i < mnt->sb.journal_length; i++) {
         if (read_block(mnt, mnt->sb.journal_start + i, block) != 0) continue;
 
         ent = (smkfs_journal_entry_t *)block;
@@ -211,7 +212,7 @@ int smkfs_dump_journal(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_btree(smkfs_mount_t *mnt, uint64_t root_block) {
+SMKFS_STATUS smkfs_dump_btree(smkfs_mount_t *mnt, SMKFS_BLOCK root_block) {
     if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;

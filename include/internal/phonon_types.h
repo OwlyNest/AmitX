@@ -31,9 +31,8 @@
 /* --- Fundamental Integer Types ---*/
 
 /*
- * These names intentionally follow the Windows/NT naming convention.
  * Fixed-width C types provide the underlying representation.
- */
+*/
 
 typedef char        CHAR;
 typedef uint8_t     UCHAR;
@@ -122,10 +121,10 @@ typedef HANDLE *PHANDLE;
 
 /* --- Status Types ---*/
 
-typedef LONG NTSTATUS;
-typedef NTSTATUS *PNTSTATUS;
+typedef LONG SHSTATUS;
+typedef SHSTATUS *PSHSTATUS;
 
-#define STATUS_SUCCESS ((NTSTATUS)0)
+#define STATUS_SUCCESS ((SHSTATUS)0)
 
 /* --- Access Types ---*/
 
@@ -180,8 +179,8 @@ typedef ULARGE_INTEGER *PULARGE_INTEGER;
 
 /* --- Time Types ---*/
 
-typedef LONGLONG NT_TIME;
-typedef NT_TIME *PNT_TIME;
+typedef LONGLONG _TIME;
+typedef _TIME *P_TIME;
 
 /* --- GUID ---*/
 
@@ -196,11 +195,6 @@ typedef GUID *PGUID;
 typedef const GUID *PCGUID;
 
 /* --- Unicode / String Types ---*/
-
-/*
- * Strings are not necessarily NUL terminated. Length is expressed in
- * bytes, following the NT string convention.
-*/
 
 typedef struct _UNICODE_STRING {
     USHORT Length;

@@ -35,8 +35,8 @@
 
 /* --- Functions ---*/
 
-int btree_node_read(smkfs_mount_t *mnt, uint64_t block, smkfs_btree_node_t *node, void *payload, size_t payload_size) {
-    uint8_t raw[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS btree_node_read(smkfs_mount_t *mnt, SMKFS_BLOCK block, smkfs_btree_node_t *node, PVOID payload, SIZE_T payload_size) {
+    UCHAR raw[SMKFS_BLOCK_SIZE];
     
 	if (!node || block == 0) return SMKFS_ERR_INVAL;
     if (payload_size > 0 && !payload) return SMKFS_ERR_INVAL;
@@ -62,15 +62,16 @@ int btree_node_read(smkfs_mount_t *mnt, uint64_t block, smkfs_btree_node_t *node
     return SMKFS_OK;
 }
 
-int btree_node_write(smkfs_mount_t *mnt, uint64_t block_id, const smkfs_btree_node_t *node,  const void *payload, size_t payload_size) {
-    uint8_t *raw, *old_raw;
-    int ret;
+SMKFS_STATUS btree_node_write(smkfs_mount_t *mnt, SMKFS_BLOCK block_id, const smkfs_btree_node_t *node, PCVOID payload, SIZE_T payload_size) {
+    PUCHAR raw;
+    PUCHAR old_raw;
+    LONG ret;
 
     if (!node || block_id == 0) return SMKFS_ERR_INVAL;
     if (payload_size > 0 && !payload) return SMKFS_ERR_INVAL;
 
-    raw = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
-    old_raw = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    raw = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
+    old_raw = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!raw || !old_raw) {
         free(raw);
         free(old_raw);
@@ -100,13 +101,13 @@ int btree_node_write(smkfs_mount_t *mnt, uint64_t block_id, const smkfs_btree_no
     return (ret == 0) ? SMKFS_OK : SMKFS_ERR_IO;
 }
 
-static int btree_leaf_insert_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_entry_t *entries, uint32_t *count, const char *key, uint64_t value) {
-    uint32_t pos = 0;
-    uint32_t max_entries = (uint32_t)((SMKFS_BLOCK_SIZE - sizeof(smkfs_btree_node_t)) / sizeof(smkfs_btree_leaf_entry_t));
+static SMKFS_STATUS btree_leaf_insert_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_entry_t *entries, ULONG *count, PCCHAR key, ULONGLONG value) {
+    ULONG pos = 0;
+    ULONG max_entries = (ULONG)((SMKFS_BLOCK_SIZE - sizeof(smkfs_btree_node_t)) / sizeof(smkfs_btree_leaf_entry_t));
 
     if (!node || !entries || !count || !key) return SMKFS_ERR_INVAL;
-    for (uint32_t i = 0; i < *count; i++) {
-        int cmp = strcmp(entries[i].name, key);
+    for (ULONG i = 0; i < *count; i++) {
+        LONG cmp = strcmp(entries[i].name, key);
         if (cmp == 0) {
             entries[i].record_id = value;
             return SMKFS_OK;
@@ -127,11 +128,11 @@ static int btree_leaf_insert_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_en
     return SMKFS_OK;
 }
 
-static int btree_leaf_remove_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_entry_t *entries, uint32_t *count, const char *key) {
-    uint32_t index = 0;
+static SMKFS_STATUS btree_leaf_remove_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_entry_t *entries, ULONG *count, PCCHAR key) {
+    ULONG index = 0;
 
     if (!node || !entries || !count || !key) return SMKFS_ERR_INVAL;
-    for (uint32_t i = 0; i < *count; i++) {
+    for (ULONG i = 0; i < *count; i++) {
         if (strcmp(entries[i].name, key) == 0) {
             index = i;
             break;
@@ -144,13 +145,13 @@ static int btree_leaf_remove_entry(smkfs_btree_node_t *node, smkfs_btree_leaf_en
     return SMKFS_OK;
 }
 
-static int btree_insert_recursive(smkfs_mount_t *mnt, uint64_t block, const char *key, uint64_t value, uint64_t *new_root) {
+static SMKFS_STATUS btree_insert_recursive(smkfs_mount_t *mnt, SMKFS_BLOCK block, PCCHAR key, ULONGLONG value, SMKFS_BLOCK *new_root) {
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
-    uint32_t count = 0;
-    uint64_t new_leaf = 0;
-    uint64_t next_sibling = 0;
-    uint32_t split_point = 0;
+    ULONG count = 0;
+    ULONGLONG new_leaf = 0;
+    ULONGLONG next_sibling = 0;
+    ULONG split_point = 0;
     if (!key || !new_root || block == 0) return SMKFS_ERR_INVAL;
     if (btree_node_read(mnt, block, &node, entries, sizeof(entries)) != 0) {
         return SMKFS_ERR_IO;
@@ -190,8 +191,8 @@ static int btree_insert_recursive(smkfs_mount_t *mnt, uint64_t block, const char
     return btree_node_write(mnt, block, &node, entries, count * sizeof(smkfs_btree_leaf_entry_t));
 }
 
-int btree_search(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint64_t *out_value) {
-    uint8_t block[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS btree_search(smkfs_mount_t *mnt, SMKFS_BLOCK root_block, PCCHAR key, ULONGLONG *out_value) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
     smkfs_btree_index_entry_t index_entries[64];
@@ -212,7 +213,7 @@ int btree_search(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
     if (node.flags & SMKFS_BTN_LEAF) {
         memcpy(entries, block + sizeof(node), node.key_count * sizeof(smkfs_btree_leaf_entry_t));
 
-        for (uint32_t i = 0; i < node.key_count; i++) {
+        for (ULONG i = 0; i < node.key_count; i++) {
             if (strcmp(entries[i].name, key) == 0) {
                 *out_value = entries[i].record_id;
                 return SMKFS_OK;
@@ -228,7 +229,7 @@ int btree_search(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
 
     memcpy(index_entries, block + sizeof(node), node.key_count * sizeof(smkfs_btree_index_entry_t));
 
-    for (uint32_t i = 0; i < node.key_count; i++) {
+    for (ULONG i = 0; i < node.key_count; i++) {
         if (strcmp(key, index_entries[i].prefix) < 0) {
             return btree_search(mnt, index_entries[i].child_block, key, out_value);
         }
@@ -237,8 +238,8 @@ int btree_search(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
     return btree_search(mnt, index_entries[node.key_count - 1].child_block, key, out_value);
 }
 
-int btree_insert(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint64_t value, uint64_t *new_root) {
-    uint64_t new_block = 0;
+SMKFS_STATUS btree_insert(smkfs_mount_t *mnt, SMKFS_BLOCK root_block, PCCHAR key, ULONGLONG value, SMKFS_BLOCK *new_root) {
+    SMKFS_BLOCK new_block = 0;
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
 
@@ -266,10 +267,10 @@ int btree_insert(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
     return btree_insert_recursive(mnt, root_block, key, value, new_root);
 }
 
-int btree_delete(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint64_t *new_root) {
+SMKFS_STATUS btree_delete(smkfs_mount_t *mnt, SMKFS_BLOCK root_block, PCCHAR key, SMKFS_BLOCK *new_root) {
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
-    uint32_t count = 0;
+    ULONG count = 0;
 
     if (!key || !new_root || root_block == 0) return SMKFS_ERR_INVAL;
 
@@ -292,8 +293,8 @@ int btree_delete(smkfs_mount_t *mnt, uint64_t root_block, const char *key, uint6
     return SMKFS_OK;
 }
 
-int btree_iterate(smkfs_mount_t *mnt, uint64_t root_block, int (*cb)(const char *key, uint64_t value, void *ctx), void *ctx) {
-    uint8_t block[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS btree_iterate(smkfs_mount_t *mnt, SMKFS_BLOCK root_block, LONG (*cb)(PCCHAR key, ULONGLONG value, PVOID ctx), PVOID ctx) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
 
@@ -311,8 +312,8 @@ int btree_iterate(smkfs_mount_t *mnt, uint64_t root_block, int (*cb)(const char 
 	}
 
     memcpy(entries, block + sizeof(node), node.key_count * sizeof(smkfs_btree_leaf_entry_t));
-    for (uint32_t i = 0; i < node.key_count; i++) {
-        int r = cb(entries[i].name, entries[i].record_id, ctx);
+    for (ULONG i = 0; i < node.key_count; i++) {
+        LONG r = cb(entries[i].name, entries[i].record_id, ctx);
         if (r != 0) return r;
     }
     if (node.right_sibling != 0) {
@@ -321,12 +322,12 @@ int btree_iterate(smkfs_mount_t *mnt, uint64_t root_block, int (*cb)(const char 
     return SMKFS_OK;
 }
 
-void btree_dump_recursive(smkfs_mount_t *mnt, uint64_t block, int depth) {
-    uint8_t raw[SMKFS_BLOCK_SIZE];
+VOID btree_dump_recursive(smkfs_mount_t *mnt, SMKFS_BLOCK block, LONG depth) {
+    UCHAR raw[SMKFS_BLOCK_SIZE];
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t leaf_entries[64];
     smkfs_btree_index_entry_t index_entries[64];
-    int indent = depth * 2;
+    LONG indent = depth * 2;
 
     if (block == 0) return;
     if (read_block(mnt, block, raw) != 0) return;
@@ -338,12 +339,12 @@ void btree_dump_recursive(smkfs_mount_t *mnt, uint64_t block, int depth) {
 
     if (node.flags & SMKFS_BTN_LEAF) {
         memcpy(leaf_entries, raw + sizeof(node), node.key_count * sizeof(smkfs_btree_leaf_entry_t));
-        for (uint32_t i = 0; i < node.key_count; i++) {
+        for (ULONG i = 0; i < node.key_count; i++) {
             printk("%*s  '%s' -> %llu\n", indent, "", leaf_entries[i].name, leaf_entries[i].record_id);
         }
     } else {
         memcpy(index_entries, raw + sizeof(node), node.key_count * sizeof(smkfs_btree_index_entry_t));
-        for (uint32_t i = 0; i < node.key_count; i++) {
+        for (ULONG i = 0; i < node.key_count; i++) {
             printk("%*s  '%s' -> child %llu\n", indent, "", index_entries[i].prefix, index_entries[i].child_block);
             btree_dump_recursive(mnt, index_entries[i].child_block, depth + 1);
         }

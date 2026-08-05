@@ -114,7 +114,7 @@ SMKFS_STATUS smkfs_dump_superblock(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-int smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+SMKFS_STATUS smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
     UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec;
     PCUCHAR ptr;
@@ -149,7 +149,7 @@ int smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
     printk("Obj Type:   %u\n", rec->object_type);
     printk("Attr Count: %u\n", rec->attr_count);
     printk("Link Count: %u\n", rec->link_count);
-    printk("Generation: %llu\n", rec->generation);
+    printk("Generation: %u\n", rec->generation);
 
     ptr = block + sizeof(smkfs_record_t);
     while (1) {

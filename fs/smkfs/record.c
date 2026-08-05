@@ -36,32 +36,32 @@
 
 /* --- Functions ---*/
 
-int record_read(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size) {
-    uint8_t *block;
-    size_t attr_len;
-    int ret;
+SMKFS_STATUS record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size) {
+    PUCHAR block;
+    SIZE_T attr_len;
+    SMKFS_STATUS ret;
+    SMKFS_BLOCK phys_block;
+    SMKFS_STATUS mrt_ret;
 
     if (!rec || !attr_buf) return SMKFS_ERR_INVAL;
 
-    block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!block) return SMKFS_ERR_NOMEM;
 
-
-    uint64_t phys_block;
-    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
         free(block);
         return mrt_ret;
     }
     
-    if (read_block(mnt, phys_block, block) != 0) {
+    if (read_block(mnt, phys_block, block) != SMKFS_OK) {
         free(block);
         return SMKFS_ERR_IO;
     }
 
     memcpy(rec, block, sizeof(smkfs_record_t));
 
-    if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) {
+    if (header_validate(&rec->header, SMKFS_ST_RECORD) != SMKFS_OK) {
         free(block);
         return SMKFS_ERR_CORRUPT;
     }
@@ -71,7 +71,7 @@ int record_read(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, voi
         return SMKFS_ERR_CORRUPT;
     }
 
-    if (header_checksum_verify(&rec->header, block, rec->header.length) != 0) {
+    if (header_checksum_verify(&rec->header, block, rec->header.length) != SMKFS_OK) {
         free(block);
         return SMKFS_ERR_CORRUPT;
     }
@@ -80,18 +80,20 @@ int record_read(smkfs_mount_t *mnt, uint64_t record_id, smkfs_record_t *rec, voi
     if (attr_len > buf_size) attr_len = buf_size;
 
     memcpy(attr_buf, block + sizeof(smkfs_record_t), attr_len);
-    ret = (int)attr_len;
+    ret = (SMKFS_STATUS)attr_len;
     free(block);
     return ret;
 }
 
-int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf) {
-    uint8_t *block, *old_block;
-    size_t total_len;
-    size_t attr_len;
-    int ret;
-    const uint8_t *ptr;
+SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const smkfs_record_t *rec, PCVOID attr_buf) {
+    PUCHAR block, old_block;
+    SIZE_T total_len;
+    SIZE_T attr_len;
+    SMKFS_STATUS ret;
+    PCUCHAR ptr;
     smkfs_record_t *wrec;
+    SMKFS_BLOCK phys_block;
+    SMKFS_STATUS mrt_ret;
 
     if (!rec) return SMKFS_ERR_INVAL;
     if (sizeof(smkfs_record_t) > SMKFS_BLOCK_SIZE) {
@@ -101,11 +103,11 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
     if (!attr_buf) return SMKFS_ERR_INVAL;
 
     attr_len = 0;
-    ptr = (const uint8_t *)attr_buf;
+    ptr = (PCUCHAR)attr_buf;
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)((uintptr_t)ptr);
         if (ah->type == SMKFS_ATTRT_END) {
-            attr_len = (size_t)(ptr - (const uint8_t *)attr_buf) + sizeof(smkfs_attr_header_t);
+            attr_len = (SIZE_T)(ptr - (PCUCHAR)attr_buf) + sizeof(smkfs_attr_header_t);
             break;
         }
 
@@ -114,7 +116,7 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
         }
 
         ptr += sizeof(smkfs_attr_header_t) + ah->length;
-        if ((size_t)(ptr - (const uint8_t *)attr_buf) > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
+        if ((SIZE_T)(ptr - (PCUCHAR)attr_buf) > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
             return SMKFS_ERR_TOO_BIG;
         }
     }
@@ -124,23 +126,22 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
         return SMKFS_ERR_TOO_BIG;
     }
 
-    block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
-    old_block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
+    old_block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!block || !old_block) {
         free(block);
         free(old_block);
         return SMKFS_ERR_NOMEM;
     }
 
-    uint64_t phys_block;
-    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
         free(block);
         free(old_block);
         return mrt_ret;
     }
 
-    if (read_block(mnt, phys_block, old_block) != 0) {
+    if (read_block(mnt, phys_block, old_block) != SMKFS_OK) {
         memset(old_block, 0, SMKFS_BLOCK_SIZE);
     }
 
@@ -156,17 +157,19 @@ int record_write(smkfs_mount_t *mnt, uint64_t record_id, const smkfs_record_t *r
     ret = write_block(mnt, phys_block, block);
     free(block);
     free(old_block);
-    return (ret == 0) ? SMKFS_OK : SMKFS_ERR_IO;
+    return (ret == SMKFS_OK) ? SMKFS_OK : SMKFS_ERR_IO;
 }
 
-uint64_t record_alloc(smkfs_mount_t *mnt, uint16_t object_type) {
-    uint64_t logical_id;
-    uint64_t generation;
+SMKFS_RECORD_ID record_alloc(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type) {
+    SMKFS_RECORD_ID logical_id;
+    SMKFS_GENERATION generation;
+    SMKFS_BLOCK block;
+
     if (mrt_alloc_entry(mnt, &logical_id, &generation) != SMKFS_OK) {
         return 0;
     }
 
-    uint64_t block = bitmap_alloc(mnt);
+    block = bitmap_alloc(mnt);
     if (block == 0) {
         mrt_free_entry(mnt, logical_id);
         return 0;
@@ -180,7 +183,7 @@ uint64_t record_alloc(smkfs_mount_t *mnt, uint16_t object_type) {
 
     smkfs_record_t rec;
     header_init(&rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), 0);
-    rec.record_id = logical_id;    /* Logical ID, resolved through MRT */
+    rec.record_id = logical_id;
     rec.object_type = object_type;
     rec.attr_count = 0;
     rec.link_count = 1;
@@ -202,19 +205,19 @@ uint64_t record_alloc(smkfs_mount_t *mnt, uint16_t object_type) {
     return logical_id;
 }
 
-void record_free(smkfs_mount_t *mnt, uint64_t record_id) {
-    uint8_t *block;
+VOID record_free(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+    PUCHAR block;
+    SMKFS_BLOCK phys_block;
 
-    uint64_t phys_block;
     if (mrt_resolve(mnt, record_id, &phys_block, NULL, NULL) != SMKFS_OK) {
         return;
     }
 
     extent_remove_all(mnt, record_id);
 
-    block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (block) {
-        if (read_block(mnt, phys_block, block) == 0) {
+        if (read_block(mnt, phys_block, block) == SMKFS_OK) {
             smkfs_record_t *rec = (smkfs_record_t *)block;
             rec->header.flags |= SMKFS_FLA_DELETED;
             header_checksum_update(&rec->header, block, rec->header.length);
@@ -229,9 +232,9 @@ void record_free(smkfs_mount_t *mnt, uint64_t record_id) {
     mnt->sb.record_count--;
 }
 
-size_t attr_buf_total_len(const void *attr_buf) {
-    const uint8_t *ptr = (const uint8_t *)attr_buf;
-    size_t total = 0;
+SIZE_T attr_buf_total_len(PCVOID attr_buf) {
+    PCUCHAR ptr = (PCUCHAR)attr_buf;
+    SIZE_T total = 0;
 
     while (1) {
         const smkfs_attr_header_t *ah = (const smkfs_attr_header_t *)ptr;

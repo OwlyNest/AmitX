@@ -36,17 +36,17 @@
 
 /* --- Functions ---*/
 
-int journal_start_transaction(smkfs_mount_t *mnt) {
+SMKFS_STATUS journal_start_transaction(smkfs_mount_t *mnt) {
     if (mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
     mnt->journal_in_transaction = 1;
-    return (int)mnt->journal_next_sequence;
+    return SMKFS_OK;
 }
 
-int journal_log_write(smkfs_mount_t *mnt, uint64_t block, const void *old_data, const void *new_data, size_t len) {
-    uint8_t *buf;
+SMKFS_STATUS journal_log_write(smkfs_mount_t *mnt, SMKFS_BLOCK block, PCVOID old_data, PCVOID new_data, SIZE_T len) {
+    PUCHAR buf;
     smkfs_journal_entry_t *ent;
-    size_t total_len;
-    int ret;
+    SIZE_T total_len;
+    SMKFS_STATUS ret;
 
     if (!mnt->journal_in_transaction || len > SMKFS_BLOCK_SIZE) {
         return SMKFS_ERR_JOURNAL;
@@ -59,7 +59,7 @@ int journal_log_write(smkfs_mount_t *mnt, uint64_t block, const void *old_data, 
     total_len = sizeof(smkfs_journal_entry_t) + len;
     if (total_len > SMKFS_BLOCK_SIZE) return SMKFS_ERR_TOO_BIG;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return SMKFS_ERR_NOMEM;
 
     memset(buf, 0, SMKFS_BLOCK_SIZE);
@@ -68,8 +68,8 @@ int journal_log_write(smkfs_mount_t *mnt, uint64_t block, const void *old_data, 
     ent->sequence = mnt->journal_next_sequence++;
     ent->target_block = block;
     ent->operation = SMKFS_JOP_WRITE;
-    ent->data_length = (uint32_t)len;
-    ent->record_id = 0;          /* TODO: set from MRT in G1.5 */
+    ent->data_length = (ULONG)len;
+    ent->record_id = 0;
 
     if (len > 0) {
         memcpy(buf + sizeof(smkfs_journal_entry_t), new_data, len);
@@ -79,7 +79,7 @@ int journal_log_write(smkfs_mount_t *mnt, uint64_t block, const void *old_data, 
 
     ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
     free(buf);
-    if (ret != 0) {
+    if (ret != SMKFS_OK) {
         printk("[SmKFS] journal_log_write FAILED at journal block %llu\n", mnt->sb.journal_start + mnt->journal_write_pos);
         return SMKFS_ERR_IO;
     }
@@ -92,14 +92,14 @@ int journal_log_write(smkfs_mount_t *mnt, uint64_t block, const void *old_data, 
     return SMKFS_OK;
 }
 
-int journal_log_alloc(smkfs_mount_t *mnt, uint64_t block, uint32_t count) {
-    uint8_t *buf;
+SMKFS_STATUS journal_log_alloc(smkfs_mount_t *mnt, SMKFS_BLOCK block, ULONG count) {
+    PUCHAR buf;
     smkfs_journal_entry_t *ent;
-    int ret;
+    SMKFS_STATUS ret;
 
     if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return SMKFS_ERR_NOMEM;
 
     memset(buf, 0, SMKFS_BLOCK_SIZE);
@@ -114,21 +114,21 @@ int journal_log_alloc(smkfs_mount_t *mnt, uint64_t block, uint32_t count) {
 
     ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
     free(buf);
-    if (ret != 0) return SMKFS_ERR_IO;
+    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
 
     mnt->journal_write_pos++;
     if (mnt->journal_write_pos >= mnt->sb.journal_length) mnt->journal_write_pos = 0;
     return SMKFS_OK;
 }
 
-int journal_log_free(smkfs_mount_t *mnt, uint64_t block, uint32_t count) {
-    uint8_t *buf;
+SMKFS_STATUS journal_log_free(smkfs_mount_t *mnt, SMKFS_BLOCK block, ULONG count) {
+    PUCHAR buf;
     smkfs_journal_entry_t *ent;
-    int ret;
+    SMKFS_STATUS ret;
 
     if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return SMKFS_ERR_NOMEM;
 
     memset(buf, 0, SMKFS_BLOCK_SIZE);
@@ -143,7 +143,7 @@ int journal_log_free(smkfs_mount_t *mnt, uint64_t block, uint32_t count) {
 
     ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
     free(buf);
-    if (ret != 0) return SMKFS_ERR_IO;
+    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
 
     mnt->journal_write_pos++;
     if (mnt->journal_write_pos >= mnt->sb.journal_length) {
@@ -153,14 +153,14 @@ int journal_log_free(smkfs_mount_t *mnt, uint64_t block, uint32_t count) {
     return SMKFS_OK;
 }
 
-int journal_commit(smkfs_mount_t *mnt) {
-    uint8_t *buf;
+SMKFS_STATUS journal_commit(smkfs_mount_t *mnt) {
+    PUCHAR buf;
     smkfs_journal_entry_t *ent;
-    int ret;
+    SMKFS_STATUS ret;
 
     if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
 
-    buf = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!buf) return SMKFS_ERR_NOMEM;
 
     memset(buf, 0, SMKFS_BLOCK_SIZE);
@@ -175,7 +175,7 @@ int journal_commit(smkfs_mount_t *mnt) {
 
     ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
     free(buf);
-    if (ret != 0) return SMKFS_ERR_IO;
+    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
 
     mnt->journal_write_pos++;
     if (mnt->journal_write_pos >= mnt->sb.journal_length) {
@@ -186,11 +186,10 @@ int journal_commit(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-int journal_replay(smkfs_mount_t *mnt) {
-    /* G0 fix: journal is not trustworthy for recovery. Clear it. */
-    uint8_t buf[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS journal_replay(smkfs_mount_t *mnt) {
+    UCHAR buf[SMKFS_BLOCK_SIZE];
 
-    for (uint64_t i = 0; i < mnt->sb.journal_length; i++) {
+    for (ULONGLONG i = 0; i < mnt->sb.journal_length; i++) {
         memset(buf, 0, sizeof(buf));
         write_block(mnt, mnt->sb.journal_start + i, buf);
     }

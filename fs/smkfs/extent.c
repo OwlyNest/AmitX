@@ -26,6 +26,7 @@
 #include <fs/smkfs_internal.h>
 #include <mm/heap.h>
 #include <lib/string.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -34,22 +35,24 @@
 
 /* --- Functions ---*/
 
-int extent_resolve(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out) {
-    uint8_t attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
+SMKFS_STATUS extent_resolve(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLOCK logical_block, smkfs_extent_t *out) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
     smkfs_record_t rec;
-    int attr_len = record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf));
-    if (attr_len < 0) return attr_len;
+    SMKFS_STATUS status;
 
-    void *attr_data;
-    size_t attr_data_len = 0;
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &attr_data, &attr_data_len) != 0) {
+    status = record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf));
+    if (status < 0) return status;
+
+    PVOID attr_data;
+    SIZE_T attr_data_len = 0;
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &attr_data, &attr_data_len) != SMKFS_OK) {
         return SMKFS_ERR_NOTFOUND;
     }
 
-    uint32_t num_extents = attr_data_len / sizeof(smkfs_extent_t);
+    ULONG num_extents = attr_data_len / sizeof(smkfs_extent_t);
     smkfs_extent_t *extents = (smkfs_extent_t *)attr_data;
 
-    for (uint32_t i = 0; i < num_extents; i++) {
+    for (ULONG i = 0; i < num_extents; i++) {
         if (logical_block >= extents[i].logical_offset && logical_block < extents[i].logical_offset + extents[i].block_count) {
             if (out) *out = extents[i];
             return SMKFS_OK;
@@ -58,30 +61,27 @@ int extent_resolve(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_bloc
     return SMKFS_ERR_NOTFOUND;
 }
 
-/*
- * TODO: optimize for G1 multi-valued extent attributes
- */
-int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, uint64_t physical_block, uint32_t count) {
-    uint8_t block[SMKFS_BLOCK_SIZE];
+SMKFS_STATUS extent_add(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLOCK logical_block, SMKFS_BLOCK physical_block, ULONG count) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     smkfs_record_t *rec = (smkfs_record_t *)block;
 
-    uint64_t phys_block;
-    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    SMKFS_BLOCK phys_block;
+    SMKFS_STATUS mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
         return mrt_ret;
     }
 
-    if (read_block(mnt, phys_block, block) != 0) return SMKFS_ERR_IO;
+    if (read_block(mnt, phys_block, block) != SMKFS_OK) return SMKFS_ERR_IO;
 
-    uint8_t *attr_buf = block + sizeof(smkfs_record_t);
-    size_t attr_space = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
+    PUCHAR attr_buf = block + sizeof(smkfs_record_t);
+    SIZE_T attr_space = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
 
-    void *existing;
-    size_t existing_len = 0;
+    PVOID existing;
+    SIZE_T existing_len = 0;
     smkfs_extent_t extents[32];
-    uint32_t num_extents = 0;
+    ULONG num_extents = 0;
 
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) == 0) {
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) == SMKFS_OK) {
         num_extents = existing_len / sizeof(smkfs_extent_t);
         if (num_extents >= 32) return SMKFS_ERR_TOO_BIG;
         memcpy(extents, existing, existing_len);
@@ -93,13 +93,13 @@ int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, u
     num_extents++;
 
     record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
-    if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS, extents, num_extents * sizeof(smkfs_extent_t)) != 0) {
+    if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS, extents, num_extents * sizeof(smkfs_extent_t)) != SMKFS_OK) {
         return SMKFS_ERR_NOSPC;
     }
 
     rec->attr_count = 0;
     rec->header.length = sizeof(smkfs_record_t);
-    uint8_t *ptr = attr_buf;
+    PUCHAR ptr = attr_buf;
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
         rec->header.length += sizeof(smkfs_attr_header_t) + ah->length;
@@ -113,42 +113,42 @@ int extent_add(smkfs_mount_t *mnt, uint64_t record_id, uint64_t logical_block, u
     return write_block(mnt, phys_block, block);
 }
 
-void extent_remove_all(smkfs_mount_t *mnt, uint64_t record_id) {
-    uint8_t *block = (uint8_t *)malloc(SMKFS_BLOCK_SIZE);
+void extent_remove_all(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+    PUCHAR block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!block) return;
 
     smkfs_record_t *rec = (smkfs_record_t *)block;
 
-    uint64_t phys_block;
-    int mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    SMKFS_BLOCK phys_block;
+    SMKFS_STATUS mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
         free(block);
         return;
     }
 
-    if (read_block(mnt, phys_block, block) != 0) {
+    if (read_block(mnt, phys_block, block) != SMKFS_OK) {
         free(block);
         return;
     }
 
-    uint8_t *attr_buf = block + sizeof(smkfs_record_t);
-    void *existing;
-    size_t existing_len = 0;
-    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) != 0) {
+    PUCHAR attr_buf = block + sizeof(smkfs_record_t);
+    PVOID existing;
+    SIZE_T existing_len = 0;
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &existing, &existing_len) != SMKFS_OK) {
         free(block);
         return;
     }
 
-    uint32_t num_extents = existing_len / sizeof(smkfs_extent_t);
+    ULONG num_extents = existing_len / sizeof(smkfs_extent_t);
     smkfs_extent_t *extents = (smkfs_extent_t *)existing;
-    for (uint32_t i = 0; i < num_extents; i++) {
+    for (ULONG i = 0; i < num_extents; i++) {
         bitmap_free_range(mnt, extents[i].physical_block, extents[i].block_count);
     }
 
     record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
 
     rec->header.length = sizeof(smkfs_record_t);
-    uint8_t *ptr = attr_buf;
+    PUCHAR ptr = attr_buf;
     while (1) {
         smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
         rec->header.length += sizeof(smkfs_attr_header_t) + ah->length;

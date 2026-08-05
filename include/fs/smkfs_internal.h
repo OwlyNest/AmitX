@@ -61,7 +61,7 @@ SMKFS_BLOCK bitmap_alloc(smkfs_mount_t *mnt);
 VOID bitmap_free_range(smkfs_mount_t *mnt, SMKFS_BLOCK start, ULONG count);
 
 /* --- Record --- */
-SMKFS_STATUS record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size);
+LONG record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size);
 SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const smkfs_record_t *rec, PCVOID  attr_buf);
 SMKFS_RECORD_ID record_alloc(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type);
 VOID record_free(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id);

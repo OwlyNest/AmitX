@@ -574,19 +574,20 @@ SMKFS_STATUS smkfs_lookup_by_name(smkfs_mount_t *mnt, SMKFS_RECORD_ID dir_record
 SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID *out_record);
 SMKFS_STATUS smkfs_delete_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id);
 SMKFS_STATUS smkfs_rename(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name);
-SMKFS_STATUS smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf);
-SMKFS_STATUS smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID  buf);
+LONG smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf);
+LONG smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID buf);
 SMKFS_STATUS smkfs_truncate(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size);
 SMKFS_STATUS smkfs_getattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size);
 SMKFS_STATUS smkfs_setattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID  data, SIZE_T len);
 
 /* ~~~ Level 2: User ~~~ */
 SMKFS_STATUS path_lookup(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record);
-SMKFS_STATUS smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags);
+LONG smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags);
+
 SMKFS_STATUS smkfs_close(smkfs_mount_t *mnt, LONG fd);
-SMKFS_STATUS smkfs_read_file(smkfs_mount_t *mnt, LONG fd, PVOID buf, SIZE_T len);
-SMKFS_STATUS smkfs_write_file(smkfs_mount_t *mnt, LONG fd, PCVOID  buf, SIZE_T len);
-SMKFS_STATUS smkfs_seek(smkfs_mount_t *mnt, LONG fd, LONGLONG offset, LONG whence);
+LONG smkfs_read_file(smkfs_mount_t *mnt, LONG fd, PVOID buf, SIZE_T len);
+LONG smkfs_write_file(smkfs_mount_t *mnt, LONG fd, PCVOID buf, SIZE_T len);
+LONG smkfs_seek(smkfs_mount_t *mnt, LONG fd, LONGLONG offset, LONG whence);
 SMKFS_STATUS smkfs_create_file(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permissions);
 SMKFS_STATUS smkfs_delete_file(smkfs_mount_t *mnt, SMKFS_PATH path);
 SMKFS_STATUS smkfs_mkdir(smkfs_mount_t *mnt, SMKFS_PATH path);

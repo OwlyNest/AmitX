@@ -149,8 +149,8 @@ static SMKFS_STATUS btree_insert_recursive(smkfs_mount_t *mnt, SMKFS_BLOCK block
     smkfs_btree_node_t node;
     smkfs_btree_leaf_entry_t entries[64];
     ULONG count = 0;
-    ULONGLONG new_leaf = 0;
-    ULONGLONG next_sibling = 0;
+    SMKFS_BLOCK new_leaf = 0;
+    SMKFS_BLOCK next_sibling = 0;
     ULONG split_point = 0;
     if (!key || !new_root || block == 0) return SMKFS_ERR_INVAL;
     if (btree_node_read(mnt, block, &node, entries, sizeof(entries)) != 0) {

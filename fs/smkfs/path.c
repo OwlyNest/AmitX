@@ -33,12 +33,12 @@
 
 /* --- Functions ---*/
 
-int path_lookup(smkfs_mount_t *mnt, const char *path, uint64_t *out_record) {
-    const char *p;
-    char name[SMKFS_NAME_LEN];
-    uint64_t current;
-    int i;
-    uint8_t path_drive;
+SMKFS_STATUS path_lookup(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record) {
+    PCCHAR p;
+    CHAR name[SMKFS_NAME_LEN];
+    SMKFS_RECORD_ID current;
+    LONG i;
+    UCHAR path_drive;
 
     if (!path || path[1] != ':' || path[2] != '/') return SMKFS_ERR_INVAL;
 
@@ -59,7 +59,7 @@ int path_lookup(smkfs_mount_t *mnt, const char *path, uint64_t *out_record) {
         
         name[i] = '\0';
 
-        if (smkfs_lookup_by_name(mnt, current, name, &current) != 0) {
+        if (smkfs_lookup_by_name(mnt, current, name, &current) != SMKFS_OK) {
             return SMKFS_ERR_NOTFOUND;
         }
     }

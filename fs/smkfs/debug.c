@@ -79,13 +79,13 @@ static VOID printk_size(PCCHAR label, QWORD bytes) {
     printk("%-16s %llu.%llu %s, (%lluB)\n", label, whole, decimal, units[unit], bytes);
 }
 
-SMKFS_STATUS smkfs_dump_superblock(smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_dump_superblock(_SMKFS_MOUNT *mnt) {
     if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;
     }
 
-    smkfs_superblock_t sb = mnt->sb; // Not gonna rewrite all that
+    _SMKFS_SUPERBLOCK sb = mnt->sb; // Not gonna rewrite all that
 
     printk("\n=== SmKFS Superblock (G1) ===\n");
     printk("Magic:           %.4s\n", sb.header.magic);
@@ -114,9 +114,9 @@ SMKFS_STATUS smkfs_dump_superblock(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+SMKFS_STATUS smkfs_dump_record(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
     UCHAR block[SMKFS_BLOCK_SIZE];
-    smkfs_record_t *rec;
+    _SMKFS_RECORD *rec;
     PCUCHAR ptr;
 
     if (!mnt->mounted) return SMKFS_ERR_INVAL;
@@ -132,7 +132,7 @@ SMKFS_STATUS smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
         return SMKFS_ERR_IO;
     }
 
-    rec = (smkfs_record_t *)block;
+    rec = (_SMKFS_RECORD *)block;
     if (header_validate(&rec->header, SMKFS_ST_RECORD) != 0) {
         printk("[SmKFS] Record %llu (phys: %llu): invalid header\n", record_id, phys_block);
         return SMKFS_ERR_CORRUPT;
@@ -151,27 +151,27 @@ SMKFS_STATUS smkfs_dump_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
     printk("Link Count: %u\n", rec->link_count);
     printk("Generation: %u\n", rec->generation);
 
-    ptr = block + sizeof(smkfs_record_t);
+    ptr = block + sizeof(_SMKFS_RECORD);
     while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
         if (ah->type == SMKFS_ATTRT_END) {
             printk("  [END]\n");
             break;
         }
 
         printk("  Attr %s (0x%04X, id=%u), len %u: ", smkfs_attr_name(ah->type), ah->type, ah->id, ah->length);
-        smkfs_attr_debug_print(ah->type, ptr + sizeof(smkfs_attr_header_t), ah->length);
+        smkfs_attr_debug_print(ah->type, ptr + sizeof(_SMKFS_ATTR_HEADER), ah->length);
         printk("\n");
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
     }
 
     printk("==================\n\n");
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_dump_journal(smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_dump_journal(_SMKFS_MOUNT *mnt) {
     UCHAR block[SMKFS_BLOCK_SIZE];
-    smkfs_journal_entry_t *ent;
+    _SMKFS_JOURNAL_ENTRY *ent;
 
     if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
@@ -182,7 +182,7 @@ SMKFS_STATUS smkfs_dump_journal(smkfs_mount_t *mnt) {
     for (ULONGLONG i = 0; i < mnt->sb.journal_length; i++) {
         if (read_block(mnt, mnt->sb.journal_start + i, block) != 0) continue;
 
-        ent = (smkfs_journal_entry_t *)block;
+        ent = (_SMKFS_JOURNAL_ENTRY *)block;
         if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != 0) {
             continue;
         }
@@ -212,7 +212,7 @@ SMKFS_STATUS smkfs_dump_journal(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_dump_btree(smkfs_mount_t *mnt, SMKFS_BLOCK root_block) {
+SMKFS_STATUS smkfs_dump_btree(_SMKFS_MOUNT *mnt, SMKFS_BLOCK root_block) {
     if (!mnt->mounted) {
         printk("[SmKFS] Not mounted\n");
         return SMKFS_ERR_INVAL;

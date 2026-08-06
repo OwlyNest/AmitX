@@ -64,7 +64,7 @@ static int storage_init(void) {
     int found_ide = 0;
     int fs_mounted = 0;
     char drive_letter = 'A';
-    smkfs_mount_t mnt;
+    _SMKFS_MOUNT mnt;
 
     while (dev) {
         if (dev->class_code != PCI_CLASS_MASS_STORAGE) {
@@ -222,7 +222,7 @@ static int storage_init(void) {
 
     if (fs_mounted) {
         char root_path[4] = { drive_letter, ':', '/', '\0' };
-        smkfs_dirent_t entries[32];
+        _SMKFS_DIRENT entries[32];
         size_t count = 0;
 
         if (smkfs_readdir(&mnt, root_path, entries, 32, &count) == 0) {

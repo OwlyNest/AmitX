@@ -39,7 +39,7 @@
  * Convert block to sectors, read sectors into buffer
  * return status code
 */
-SMKFS_STATUS read_block(smkfs_mount_t *mnt, /* Needs drive number and sector size */
+SMKFS_STATUS read_block(_SMKFS_MOUNT *mnt, /* Needs drive number and sector size */
                         SMKFS_BLOCK block,  /* Block to read*/
                         PVOID buf           /* Buffer to read into */
                        ) {
@@ -64,7 +64,7 @@ SMKFS_STATUS read_block(smkfs_mount_t *mnt, /* Needs drive number and sector siz
  * Convert block to sectors, write buffer to sectors on disk
  * return status code
 */
-SMKFS_STATUS write_block(smkfs_mount_t *mnt, /* Mount context, needs drive number and sector size */
+SMKFS_STATUS write_block(_SMKFS_MOUNT *mnt, /* Mount context, needs drive number and sector size */
                          SMKFS_BLOCK block,  /* The physical block to write to*/
                          PCVOID buf          /* (Pointer to Const VOID), data to write to block*/
                         ) {

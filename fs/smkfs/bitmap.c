@@ -35,7 +35,7 @@
 
 /* --- Functions ---*/
 
-VOID bitmap_set(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+VOID bitmap_set(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block) {
     PUCHAR buf;
 
     if (block < mnt->sb.data_start) return;
@@ -65,7 +65,7 @@ VOID bitmap_set(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
     free(buf);
 }
 
-VOID bitmap_clear(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+VOID bitmap_clear(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block) {
     PUCHAR buf;
 
     if (block < mnt->sb.data_start) return;
@@ -94,7 +94,7 @@ VOID bitmap_clear(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
     free(buf);
 }
 
-LONG bitmap_test(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
+LONG bitmap_test(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block) {
     PUCHAR buf;
     LONG ret;
 
@@ -120,7 +120,7 @@ LONG bitmap_test(smkfs_mount_t *mnt, SMKFS_BLOCK block) {
 /*
  * TODO: optimize for G1 regioned allocator
  */
-SMKFS_BLOCK bitmap_alloc_range(smkfs_mount_t *mnt, ULONG count) {
+SMKFS_BLOCK bitmap_alloc_range(_SMKFS_MOUNT *mnt, ULONG count) {
     PUCHAR buf;
     PUCHAR j_buf;
     ULONGLONG total_bits;
@@ -196,11 +196,11 @@ SMKFS_BLOCK bitmap_alloc_range(smkfs_mount_t *mnt, ULONG count) {
     return 0;
 }
 
-SMKFS_BLOCK bitmap_alloc(smkfs_mount_t *mnt) {
+SMKFS_BLOCK bitmap_alloc(_SMKFS_MOUNT *mnt) {
     return bitmap_alloc_range(mnt, 1);
 }
 
-VOID bitmap_free_range(smkfs_mount_t *mnt, SMKFS_BLOCK start, ULONG count) {
+VOID bitmap_free_range(_SMKFS_MOUNT *mnt, SMKFS_BLOCK start, ULONG count) {
     PUCHAR buf;
 
     buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);

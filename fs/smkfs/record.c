@@ -36,7 +36,7 @@
 
 /* --- Functions ---*/
 
-SMKFS_STATUS record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size) {
+SMKFS_STATUS record_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size) {
     PUCHAR block;
     SIZE_T attr_len;
     SMKFS_STATUS ret;
@@ -59,14 +59,14 @@ SMKFS_STATUS record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_re
         return SMKFS_ERR_IO;
     }
 
-    memcpy(rec, block, sizeof(smkfs_record_t));
+    memcpy(rec, block, sizeof(_SMKFS_RECORD));
 
     if (header_validate(&rec->header, SMKFS_ST_RECORD) != SMKFS_OK) {
         free(block);
         return SMKFS_ERR_CORRUPT;
     }
 
-    if (rec->header.length < sizeof(smkfs_record_t)) {
+    if (rec->header.length < sizeof(_SMKFS_RECORD)) {
         free(block);
         return SMKFS_ERR_CORRUPT;
     }
@@ -76,27 +76,38 @@ SMKFS_STATUS record_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_re
         return SMKFS_ERR_CORRUPT;
     }
 
-    attr_len = rec->header.length - sizeof(smkfs_record_t);
+    SMKFS_GENERATION generation;
+    if (mrt_resolve(mnt, record_id, NULL, NULL, &generation) != SMKFS_OK) {
+        free(block);
+        return SMKFS_ERR_INVAL;
+    }
+
+    if (rec->generation != generation) {
+        free(block);
+        return SMKFS_ERR_CORRUPT;
+    }
+
+    attr_len = rec->header.length - sizeof(_SMKFS_RECORD);
     if (attr_len > buf_size) attr_len = buf_size;
 
-    memcpy(attr_buf, block + sizeof(smkfs_record_t), attr_len);
+    memcpy(attr_buf, block + sizeof(_SMKFS_RECORD), attr_len);
     ret = (SMKFS_STATUS)attr_len;
     free(block);
     return ret;
 }
 
-SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const smkfs_record_t *rec, PCVOID attr_buf) {
+SMKFS_STATUS record_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, const _SMKFS_RECORD *rec, PCVOID attr_buf) {
     PUCHAR block, old_block;
     SIZE_T total_len;
     SIZE_T attr_len;
     SMKFS_STATUS ret;
     PCUCHAR ptr;
-    smkfs_record_t *wrec;
+    _SMKFS_RECORD *wrec;
     SMKFS_BLOCK phys_block;
     SMKFS_STATUS mrt_ret;
 
     if (!rec) return SMKFS_ERR_INVAL;
-    if (sizeof(smkfs_record_t) > SMKFS_BLOCK_SIZE) {
+    if (sizeof(_SMKFS_RECORD) > SMKFS_BLOCK_SIZE) {
         return SMKFS_ERR_TOO_BIG;
     }
 
@@ -105,24 +116,24 @@ SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const s
     attr_len = 0;
     ptr = (PCUCHAR)attr_buf;
     while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)((uintptr_t)ptr);
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)((uintptr_t)ptr);
         if (ah->type == SMKFS_ATTRT_END) {
-            attr_len = (SIZE_T)(ptr - (PCUCHAR)attr_buf) + sizeof(smkfs_attr_header_t);
+            attr_len = (SIZE_T)(ptr - (PCUCHAR)attr_buf) + sizeof(_SMKFS_ATTR_HEADER);
             break;
         }
 
-        if (attr_len > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
+        if (attr_len > SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)) {
             return SMKFS_ERR_TOO_BIG;
         }
 
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
-        if ((SIZE_T)(ptr - (PCUCHAR)attr_buf) > SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) {
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+        if ((SIZE_T)(ptr - (PCUCHAR)attr_buf) > SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)) {
             return SMKFS_ERR_TOO_BIG;
         }
     }
 
-    total_len = sizeof(smkfs_record_t) + attr_len;
-    if (total_len < sizeof(smkfs_record_t) || total_len > SMKFS_BLOCK_SIZE) {
+    total_len = sizeof(_SMKFS_RECORD) + attr_len;
+    if (total_len < sizeof(_SMKFS_RECORD) || total_len > SMKFS_BLOCK_SIZE) {
         return SMKFS_ERR_TOO_BIG;
     }
 
@@ -146,10 +157,10 @@ SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const s
     }
 
     memset(block, 0, SMKFS_BLOCK_SIZE);
-    wrec = (smkfs_record_t *)block;
-    memcpy(wrec, rec, sizeof(smkfs_record_t));
+    wrec = (_SMKFS_RECORD *)block;
+    memcpy(wrec, rec, sizeof(_SMKFS_RECORD));
     wrec->header.length = total_len;
-    memcpy(block + sizeof(smkfs_record_t), attr_buf, attr_len);
+    memcpy(block + sizeof(_SMKFS_RECORD), attr_buf, attr_len);
     header_checksum_update(&wrec->header, block, total_len);
 
     journal_log_write(mnt, phys_block, old_block, block, total_len);
@@ -160,7 +171,7 @@ SMKFS_STATUS record_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, const s
     return (ret == SMKFS_OK) ? SMKFS_OK : SMKFS_ERR_IO;
 }
 
-SMKFS_RECORD_ID record_alloc(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type) {
+SMKFS_RECORD_ID record_alloc(_SMKFS_MOUNT *mnt, SMKFS_OBJECT_TYPE object_type) {
     SMKFS_RECORD_ID logical_id;
     SMKFS_GENERATION generation;
     SMKFS_BLOCK block;
@@ -181,15 +192,15 @@ SMKFS_RECORD_ID record_alloc(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type) 
         return 0;
     }
 
-    smkfs_record_t rec;
-    header_init(&rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), 0);
+    _SMKFS_RECORD rec;
+    header_init(&rec.header, SMKFS_ST_RECORD, sizeof(_SMKFS_RECORD) + sizeof(_SMKFS_ATTR_HEADER), 0);
     rec.record_id = logical_id;
     rec.object_type = object_type;
     rec.attr_count = 0;
     rec.link_count = 1;
     rec.generation = generation;
 
-    smkfs_attr_header_t term;
+    _SMKFS_ATTR_HEADER term;
     term.type = SMKFS_ATTRT_END;
     term.flags = 0;
     term.id = 0;
@@ -205,7 +216,7 @@ SMKFS_RECORD_ID record_alloc(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type) 
     return logical_id;
 }
 
-VOID record_free(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+VOID record_free(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
     PUCHAR block;
     SMKFS_BLOCK phys_block;
 
@@ -218,7 +229,7 @@ VOID record_free(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
     block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (block) {
         if (read_block(mnt, phys_block, block) == SMKFS_OK) {
-            smkfs_record_t *rec = (smkfs_record_t *)block;
+            _SMKFS_RECORD *rec = (_SMKFS_RECORD *)block;
             rec->header.flags |= SMKFS_FLA_DELETED;
             header_checksum_update(&rec->header, block, rec->header.length);
             write_block(mnt, phys_block, block);
@@ -237,10 +248,10 @@ SIZE_T attr_buf_total_len(PCVOID attr_buf) {
     SIZE_T total = 0;
 
     while (1) {
-        const smkfs_attr_header_t *ah = (const smkfs_attr_header_t *)ptr;
-        total += sizeof(smkfs_attr_header_t) + ah->length;
+        const _SMKFS_ATTR_HEADER *ah = (const _SMKFS_ATTR_HEADER *)ptr;
+        total += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
         if (ah->type == SMKFS_ATTRT_END) break;
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
     }
     return total;
 }

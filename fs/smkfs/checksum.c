@@ -97,7 +97,7 @@ ULONG checksum_compute(PCVOID data, SIZE_T len) {
 
 /* --- Header Utilities --- */
 
-VOID header_init(smkfs_header_t *h, SMKFS_STRUCT_TYPE type, ULONG length, ULONG flags) {
+VOID header_init(_SMKFS_HEADER *h, SMKFS_STRUCT_TYPE type, ULONG length, ULONG flags) {
     memcpy(h->magic, SMKFS_MAGIC, 4);
     h->version = SMKFS_VERSION;
     h->type = type;
@@ -106,7 +106,7 @@ VOID header_init(smkfs_header_t *h, SMKFS_STRUCT_TYPE type, ULONG length, ULONG 
     h->checksum = 0;
 }
 
-SMKFS_STATUS header_validate(const smkfs_header_t *h, SMKFS_STRUCT_TYPE expected_type) {
+SMKFS_STATUS header_validate(const _SMKFS_HEADER *h, SMKFS_STRUCT_TYPE expected_type) {
     if (memcmp(h->magic, SMKFS_MAGIC, 4) != 0) {
         printk("[SmKFS] Wrong magic, expected %.4s, got %.4s\n", SMKFS_MAGIC, h->magic);
         return SMKFS_ERR_CORRUPT;
@@ -125,12 +125,12 @@ SMKFS_STATUS header_validate(const smkfs_header_t *h, SMKFS_STRUCT_TYPE expected
     return SMKFS_OK;
 }
 
-VOID header_checksum_update(smkfs_header_t *h, PCVOID data, SIZE_T len) {
+VOID header_checksum_update(_SMKFS_HEADER *h, PCVOID data, SIZE_T len) {
     h->checksum = 0;
     h->checksum = checksum_compute(data, len);
 }
 
-SMKFS_STATUS header_checksum_verify(const smkfs_header_t *h, PCVOID data, SIZE_T len) {
+SMKFS_STATUS header_checksum_verify(const _SMKFS_HEADER *h, PCVOID data, SIZE_T len) {
     ULONG saved = h->checksum;
     UCHAR tmp_buf[SMKFS_BLOCK_SIZE];
 
@@ -139,7 +139,7 @@ SMKFS_STATUS header_checksum_verify(const smkfs_header_t *h, PCVOID data, SIZE_T
     }
 
     memcpy(tmp_buf, data, len);
-    ((smkfs_header_t *)tmp_buf)->checksum = 0;
+    ((_SMKFS_HEADER *)tmp_buf)->checksum = 0;
     ULONG computed = checksum_compute(tmp_buf, len);
 
     if (computed != saved) {

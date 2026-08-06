@@ -36,7 +36,7 @@
 
 /* --- Functions ---*/
 
-SMKFS_STATUS smkfs_mount(UCHAR drive, smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_mount(UCHAR drive, _SMKFS_MOUNT *mnt) {
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     if (mnt->mounted) return SMKFS_ERR_INVAL;
@@ -73,9 +73,9 @@ SMKFS_STATUS smkfs_mount(UCHAR drive, smkfs_mount_t *mnt) {
 
     smkfs_dump_superblock(mnt);
 
-    PUCHAR root_attr = (PUCHAR)malloc(SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t));
-    smkfs_record_t root_rec;
-    if (root_attr && record_read(mnt, mnt->sb.root_record_id, &root_rec, root_attr, SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)) >= 0) {
+    PUCHAR root_attr = (PUCHAR)malloc(SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD));
+    _SMKFS_RECORD root_rec;
+    if (root_attr && record_read(mnt, mnt->sb.root_record_id, &root_rec, root_attr, SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)) >= 0) {
         ULONGLONG *btree_root_ptr;
         if (record_find_attr(root_attr, SMKFS_ATTRT_DATA, (PVOID *)&btree_root_ptr, NULL) == SMKFS_OK) {
             smkfs_dump_btree(mnt, *btree_root_ptr);
@@ -88,7 +88,7 @@ SMKFS_STATUS smkfs_mount(UCHAR drive, smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_unmount(smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_unmount(_SMKFS_MOUNT *mnt) {
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     if (!mnt->mounted) return SMKFS_ERR_INVAL;
@@ -98,7 +98,7 @@ SMKFS_STATUS smkfs_unmount(smkfs_mount_t *mnt) {
 
     memset(block, 0, sizeof(block));
     memcpy(block, &mnt->sb, sizeof(mnt->sb));
-    header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
+    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
 
     if (write_block(mnt, 0, block) != SMKFS_OK) {
         printk("[SmKFS] Failed to write superblock\n");
@@ -110,14 +110,14 @@ SMKFS_STATUS smkfs_unmount(smkfs_mount_t *mnt) {
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_sync(smkfs_mount_t *mnt) {
+SMKFS_STATUS smkfs_sync(_SMKFS_MOUNT *mnt) {
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     if (!mnt->mounted) return SMKFS_ERR_INVAL;
 
     memset(block, 0, sizeof(block));
     memcpy(block, &mnt->sb, sizeof(mnt->sb));
-    header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
+    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
 
     if (write_block(mnt, 0, block) != SMKFS_OK) {
         printk("[SmKFS] Sync failed\n");
@@ -130,8 +130,8 @@ SMKFS_STATUS smkfs_sync(smkfs_mount_t *mnt) {
 
 SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_size) {
     UCHAR block[SMKFS_BLOCK_SIZE];
-    smkfs_mount_t mnt;
-    memset(&mnt, 0, sizeof(smkfs_mount_t));
+    _SMKFS_MOUNT mnt;
+    memset(&mnt, 0, sizeof(_SMKFS_MOUNT));
     mnt.drive_num = drive;
     ULONGLONG bitmap_blocks;
     ULONGLONG journal_blocks;
@@ -141,7 +141,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     ULONGLONG data_blocks;
     SMKFS_BLOCK btree_root;
     SMKFS_RECORD_ID root_id;
-    smkfs_btree_node_t *node;
+    _SMKFS_BTREE_NODE *node;
     
     if (total_blocks < 16) return SMKFS_ERR_INVAL;
 
@@ -153,7 +153,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         journal_blocks = total_blocks - 1 - bitmap_blocks - 1;
     }
 
-    mrt_blocks = (total_blocks + (SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t)) - 1) / (SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t));
+    mrt_blocks = (total_blocks + (SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY)) - 1) / (SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY));
     if (mrt_blocks < 1) mrt_blocks = 1;
     mrt_start = 1 + journal_blocks + bitmap_blocks;
 
@@ -161,7 +161,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     data_blocks = total_blocks - 1 - bitmap_blocks - journal_blocks - mrt_blocks;
 
     /* --- Populate mnt.sb with layout fields, before anything is allocated --- */
-    header_init(&mnt.sb.header, SMKFS_ST_SUPERBLOCK, sizeof(smkfs_superblock_t), 0);
+    header_init(&mnt.sb.header, SMKFS_ST_SUPERBLOCK, sizeof(_SMKFS_SUPERBLOCK), 0);
     mnt.sb.total_blocks = total_blocks;
     mnt.sb.free_blocks = data_blocks;
     mnt.sb.sector_size = sector_size;
@@ -218,13 +218,13 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     if (btree_root == 0) return SMKFS_ERR_NOSPC;
 
     memset(block, 0, sizeof(block));
-    node = (smkfs_btree_node_t *)block;
-    header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
+    node = (_SMKFS_BTREE_NODE *)block;
+    header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(_SMKFS_BTREE_NODE), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
     node->parent_block = 0;
     node->flags = SMKFS_BTN_LEAF | SMKFS_BTN_ROOT; // Do NOT remove/edit this line, will cause nightmares
     node->key_count = 0;
     node->right_sibling = 0;
-    header_checksum_update(&node->header, block, sizeof(smkfs_btree_node_t));
+    header_checksum_update(&node->header, block, sizeof(_SMKFS_BTREE_NODE));
     if (write_block(&mnt, btree_root, block) != SMKFS_OK) return SMKFS_ERR_IO;
 
     /* --- Allocate the root directory record through the same two-phase
@@ -233,8 +233,8 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     if (root_id == 0) return SMKFS_ERR_NOSPC;
 
     {
-        UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-        smkfs_record_t root_rec;
+        UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+        _SMKFS_RECORD root_rec;
 
         if (record_read(&mnt, root_id, &root_rec, attr_buf, sizeof(attr_buf)) < 0) {
             return SMKFS_ERR_IO;
@@ -245,7 +245,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         }
 
         root_rec.attr_count++;
-        root_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
+        root_rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
 
         if (record_write(&mnt, root_id, &root_rec, attr_buf) != SMKFS_OK) {
             return SMKFS_ERR_IO;
@@ -257,7 +257,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     /* --- Now that every field reflects reality, persist the superblock --- */
     memset(block, 0, sizeof(block));
     memcpy(block, &mnt.sb, sizeof(mnt.sb));
-    header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
+    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
     if (write_block(&mnt, 0, block) != 0) return SMKFS_ERR_IO;
 
     printk("[SmKFS] Formatted drive %d, %llu blocks total, %llu data blocks\n", drive, total_blocks, data_blocks);
@@ -268,10 +268,10 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
 
 SMKFS_STATUS smkfs_fsck(UCHAR drive) {
     UCHAR block[SMKFS_BLOCK_SIZE];
-    smkfs_superblock_t check_sb;
+    _SMKFS_SUPERBLOCK check_sb;
     LONG errors = 0;
-    smkfs_mount_t mnt;
-    memset(&mnt, 0, sizeof(smkfs_mount_t));
+    _SMKFS_MOUNT mnt;
+    memset(&mnt, 0, sizeof(_SMKFS_MOUNT));
     mnt.drive_num = drive;
     mnt.sb.sector_size = 512; /* Same as in mount */
 
@@ -324,7 +324,7 @@ SMKFS_STATUS smkfs_fsck(UCHAR drive) {
     if (errors > 0) {
         memset(block, 0, sizeof(block));
         memcpy(block, &check_sb, sizeof(check_sb));
-        header_checksum_update(&((smkfs_superblock_t *)block)->header, block, sizeof(smkfs_superblock_t));
+        header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
         write_block(&mnt, 0, block);
         printk("[SmKFS] fsck: Repaired %d errors\n", errors);
         return 1;

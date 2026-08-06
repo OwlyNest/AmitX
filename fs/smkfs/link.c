@@ -1,7 +1,7 @@
 /*
-	* fs/smkfs/path.c - Path Resolution (G1)
+	* fs/smkfs/link.c - [Enter description]
 	* Author:   amity
-	* Date:     Wed Jul 29 17:39:04 2026
+	* Date:     Thu Aug  6 13:38:34 2026
 	* Copyright © 2026 OwlyNest
 */
 
@@ -24,7 +24,6 @@
 /* --- Includes ---*/
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
-
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -33,37 +32,3 @@
 
 /* --- Functions ---*/
 
-SMKFS_STATUS path_lookup(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record) {
-    PCCHAR p;
-    CHAR name[SMKFS_NAME_LEN];
-    SMKFS_RECORD_ID current;
-    LONG i;
-    UCHAR path_drive;
-
-    if (!path || path[1] != ':' || path[2] != '/') return SMKFS_ERR_INVAL;
-
-    path_drive = path[0] - 'A';
-    if (path_drive != mnt->drive_num) return SMKFS_ERR_INVAL;
-
-    current = mnt->sb.root_record_id;
-    p = path + 3;
-
-    while (*p) {
-        while (*p == '/') p++;
-        if (!*p) break;
-
-        i = 0;
-        while (*p && *p != '/' && i < SMKFS_NAME_LEN - 1) {
-            name[i++] = *p++;
-        }
-        
-        name[i] = '\0';
-
-        if (smkfs_lookup_by_name(mnt, current, name, &current) != SMKFS_OK) {
-            return SMKFS_ERR_NOTFOUND;
-        }
-    }
-
-    if (out_record) *out_record = current;
-    return SMKFS_OK;
-}

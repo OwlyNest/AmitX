@@ -36,9 +36,9 @@
 
 /* --- Functions ---*/
 
-SMKFS_STATUS smkfs_lookup_by_name(smkfs_mount_t *mnt, SMKFS_RECORD_ID dir_record, SMKFS_NAME name, SMKFS_RECORD_ID *out_record) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+SMKFS_STATUS smkfs_lookup_by_name(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID dir_record, SMKFS_NAME name, SMKFS_RECORD_ID *out_record) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     SMKFS_BLOCK *root_block;
 
     if (!mnt->mounted || !name || !out_record) return SMKFS_ERR_INVAL;
@@ -54,12 +54,12 @@ SMKFS_STATUS smkfs_lookup_by_name(smkfs_mount_t *mnt, SMKFS_RECORD_ID dir_record
     return btree_search(mnt, *root_block, name, out_record);
 }
 
-SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_type, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID *out_record) {
+SMKFS_STATUS smkfs_create_record(_SMKFS_MOUNT *mnt, SMKFS_OBJECT_TYPE object_type, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID *out_record) {
     SMKFS_STATUS ret = SMKFS_ERR_IO;
-    SIZE_T attr_buf_size = SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t);
+    SIZE_T attr_buf_size = SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD);
     PUCHAR parent_attr;
     PUCHAR new_attr;
-    smkfs_record_t parent_rec;
+    _SMKFS_RECORD parent_rec;
     SMKFS_RECORD_ID new_id;
     SMKFS_BLOCK btree_root = 0;
     SMKFS_BLOCK *parent_btree;
@@ -89,7 +89,7 @@ SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_ty
 
     if (object_type == SMKFS_ROT_DIR) {
         PUCHAR empty_leaf;
-        smkfs_btree_node_t *node;
+        _SMKFS_BTREE_NODE *node;
 
         empty_leaf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
         if (!empty_leaf) {
@@ -98,13 +98,13 @@ SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_ty
         }
 
         memset(empty_leaf, 0, SMKFS_BLOCK_SIZE);
-        node = (smkfs_btree_node_t *)empty_leaf;
-        header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(smkfs_btree_node_t), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
+        node = (_SMKFS_BTREE_NODE *)empty_leaf;
+        header_init(&node->header, SMKFS_ST_BTREE_NODE, sizeof(_SMKFS_BTREE_NODE), SMKFS_BTN_LEAF | SMKFS_BTN_ROOT);
         node->parent_block = 0;
         node->flags = SMKFS_BTN_LEAF;
         node->key_count = 0;
         node->right_sibling = 0;
-        header_checksum_update(&node->header, empty_leaf, sizeof(smkfs_btree_node_t));
+        header_checksum_update(&node->header, empty_leaf, sizeof(_SMKFS_BTREE_NODE));
 
         btree_root = bitmap_alloc(mnt);
         if (btree_root == 0) {
@@ -146,7 +146,7 @@ SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_ty
     }
 
     memset(new_attr, 0, attr_buf_size);
-    smkfs_attr_header_t term;
+    _SMKFS_ATTR_HEADER term;
     term.type = SMKFS_ATTRT_END;
     term.flags = 0;
     term.id = 0;
@@ -159,14 +159,20 @@ SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_ty
         record_add_attr(new_attr, attr_buf_size, SMKFS_ATTRT_DATA, &btree_root, sizeof(btree_root));
     }
 
-    smkfs_record_t new_rec;
-    header_init(&new_rec.header, SMKFS_ST_RECORD, sizeof(smkfs_record_t) + sizeof(smkfs_attr_header_t), 0);
+    SMKFS_GENERATION new_gen;
+    if (mrt_resolve(mnt, new_id, NULL, NULL, &new_gen) != SMKFS_OK) {
+        return SMKFS_ERR_INVAL;
+    }
+
+
+    _SMKFS_RECORD new_rec;
+    header_init(&new_rec.header, SMKFS_ST_RECORD, sizeof(_SMKFS_RECORD) + sizeof(_SMKFS_ATTR_HEADER), 0);
     new_rec.record_id = new_id;
     new_rec.object_type = object_type;
     new_rec.attr_count = btree_root ? 3 : 2;
     new_rec.link_count = 1;
-    new_rec.generation = 0;
-    new_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(new_attr);
+    new_rec.generation = new_gen;
+    new_rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(new_attr);
 
     if (record_write(mnt, new_id, &new_rec, new_attr) != SMKFS_OK) {
         printk("[SmKFS] create_record: record_write(new_id=%llu) failed\n", new_id);
@@ -175,9 +181,8 @@ SMKFS_STATUS smkfs_create_record(smkfs_mount_t *mnt, SMKFS_OBJECT_TYPE object_ty
         goto cleanup;
     }
 
-    parent_rec.attr_count++;
     record_add_attr(parent_attr, attr_buf_size, SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
-    parent_rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(parent_attr);
+    parent_rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(parent_attr);
     if (record_write(mnt, parent_dir, &parent_rec, parent_attr) != SMKFS_OK) {
         printk("[SmKFS] create_record: record_write(parent_dir=%llu) failed\n", parent_dir);
         record_free(mnt, new_id);
@@ -194,15 +199,15 @@ cleanup:
     return ret;
 }
 
-SMKFS_STATUS smkfs_delete_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+SMKFS_STATUS smkfs_delete_record(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     PCHAR name;
     SMKFS_RECORD_ID *parent_ptr;
     SMKFS_RECORD_ID parent_dir;
     SMKFS_BLOCK *parent_btree;
-    UCHAR parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t parent_rec;
+    UCHAR parent_attr[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD parent_rec;
     SMKFS_BLOCK new_root;
 
     if (!mnt->mounted || record_id == 0) return SMKFS_ERR_INVAL;
@@ -213,8 +218,8 @@ SMKFS_STATUS smkfs_delete_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) 
     if (rec.object_type == SMKFS_ROT_DIR) {
         SMKFS_BLOCK *dir_btree;
         if (record_find_attr(attr_buf, SMKFS_ATTRT_DATA, (PVOID *)&dir_btree, NULL) == SMKFS_OK) {
-            smkfs_btree_node_t node;
-            smkfs_btree_leaf_entry_t entries[64];
+            _SMKFS_BTREE_NODE node;
+            _SMKFS_BTREE_LEAF_ENTRY entries[64];
             if (btree_node_read(mnt, *dir_btree, &node, entries, sizeof(entries)) == SMKFS_OK) {
                 if (node.key_count > 0) {
                     printk("[SmKFS] Directory not empty\n");
@@ -248,18 +253,17 @@ SMKFS_STATUS smkfs_delete_record(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) 
 
     record_free(mnt, record_id);
 
-    parent_rec.attr_count++;
     record_add_attr(parent_attr, sizeof(parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
     record_write(mnt, parent_dir, &parent_rec, parent_attr);
 
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_rename(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name) {
-    UCHAR rec_attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    UCHAR old_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    UCHAR new_parent_attr[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec, old_parent_rec, new_parent_rec;
+SMKFS_STATUS smkfs_rename(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name) {
+    UCHAR rec_attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    UCHAR old_parent_attr[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    UCHAR new_parent_attr[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec, old_parent_rec, new_parent_rec;
     SMKFS_RECORD_ID *old_parent_ptr;
     SMKFS_RECORD_ID old_parent;
     SMKFS_BLOCK *old_btree_ptr;
@@ -335,7 +339,7 @@ SMKFS_STATUS smkfs_rename(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_R
 }
 
 static LONG readdir_cb(PCCHAR key, ULONGLONG value, PVOID ctx) {
-    readdir_ctx_t *c = (readdir_ctx_t *)ctx;
+    _SMKFS_READDIR_CTX *c = (_SMKFS_READDIR_CTX *)ctx;
     if (c->count >= c->max) return 1;
     strncpy(c->entries[c->count].name, key, SMKFS_NAME_LEN - 1);
     c->entries[c->count].name[SMKFS_NAME_LEN - 1] = '\0';
@@ -344,12 +348,12 @@ static LONG readdir_cb(PCCHAR key, ULONGLONG value, PVOID ctx) {
     return 0;
 }
 
-SMKFS_STATUS smkfs_readdir(smkfs_mount_t *mnt, SMKFS_PATH path, smkfs_dirent_t *entries, SIZE_T max_entries, SIZE_T *out_count) {
+SMKFS_STATUS smkfs_readdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path, _SMKFS_DIRENT *entries, SIZE_T max_entries, SIZE_T *out_count) {
     SMKFS_RECORD_ID dir_record;
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     SMKFS_BLOCK *btree_root;
-    readdir_ctx_t ctx;
+    _SMKFS_READDIR_CTX ctx;
 
     if (!mnt->mounted || !path || !entries || !out_count) {
         return SMKFS_ERR_INVAL;

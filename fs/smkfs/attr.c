@@ -62,7 +62,7 @@ static SMKFS_STATUS attr_validate_name(PCVOID data, SIZE_T len) {
 
 static SMKFS_STATUS attr_validate_extents(PCVOID data, SIZE_T len) {
 	(VOID)data;
-    return (len % sizeof(smkfs_extent_t) == 0) ? SMKFS_OK : SMKFS_ERR_INVAL;
+    return (len % sizeof(_SMKFS_EXTENT) == 0) ? SMKFS_OK : SMKFS_ERR_INVAL;
 }
 
 /* --- Attribute Debug Print Helpers --- */
@@ -88,8 +88,8 @@ static VOID attr_print_string(PCVOID data, SIZE_T len) {
 }
 
 static VOID attr_print_extents(PCVOID data, SIZE_T len) {
-    ULONG n = len / sizeof(smkfs_extent_t);
-    const smkfs_extent_t *e = (const smkfs_extent_t *)data;
+    ULONG n = len / sizeof(_SMKFS_EXTENT);
+    const _SMKFS_EXTENT *e = (const _SMKFS_EXTENT *)data;
     printk("[%u extents]", n);
     for (ULONG i = 0; i < n && i < 3; i++) {
         printk(" {log=%llu phys=%llu cnt=%u}", e[i].logical_offset, e[i].physical_block, e[i].block_count);
@@ -99,7 +99,7 @@ static VOID attr_print_extents(PCVOID data, SIZE_T len) {
 
 /* --- The Central Attribute Registry --- */
 
-static const smkfs_attr_def_t attr_registry[] = {
+static const _SMKFS_ATTR_DEF attr_registry[] = {
     {
 	  SMKFS_ATTRT_END,
 	  "END",
@@ -211,20 +211,20 @@ static const smkfs_attr_def_t attr_registry[] = {
 
 /* --- Registry Accessors --- */
 
-const smkfs_attr_def_t *smkfs_attr_lookup(SMKFS_ATTR_TYPE type) {
-    for (const smkfs_attr_def_t *p = attr_registry; p->name != NULL; p++) {
+const _SMKFS_ATTR_DEF *smkfs_attr_lookup(SMKFS_ATTR_TYPE type) {
+    for (const _SMKFS_ATTR_DEF *p = attr_registry; p->name != NULL; p++) {
         if (p->type == type) return p;
     }
     return NULL;
 }
 
 SMKFS_NAME smkfs_attr_name(SMKFS_ATTR_TYPE type) {
-    const smkfs_attr_def_t *def = smkfs_attr_lookup(type);
+    const _SMKFS_ATTR_DEF *def = smkfs_attr_lookup(type);
     return (def != NULL) ? def->name : "UNKNOWN";
 }
 
 void smkfs_attr_debug_print(SMKFS_ATTR_TYPE type, PCVOID data, SIZE_T len) {
-    const smkfs_attr_def_t *def = smkfs_attr_lookup(type);
+    const _SMKFS_ATTR_DEF *def = smkfs_attr_lookup(type);
     if (def && def->debug_print) {
         def->debug_print(data, len);
     } else {
@@ -238,14 +238,14 @@ SMKFS_STATUS record_find_attr(PCVOID attr_buf, SMKFS_ATTR_TYPE attr_type, PVOID 
     PCUCHAR ptr = (PCUCHAR)attr_buf;
 
     while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
         if (ah->type == SMKFS_ATTRT_END) break;
         if (ah->type == attr_type) {
-            if (out_attr) *out_attr = (void *)(ptr + sizeof(smkfs_attr_header_t));
+            if (out_attr) *out_attr = (void *)(ptr + sizeof(_SMKFS_ATTR_HEADER));
             if (out_len) *out_len = ah->length;
             return SMKFS_OK;
         }
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
     }
     return SMKFS_ERR_NOTFOUND;
 }
@@ -253,38 +253,68 @@ SMKFS_STATUS record_find_attr(PCVOID attr_buf, SMKFS_ATTR_TYPE attr_type, PVOID 
 SMKFS_STATUS record_add_attr(PVOID attr_buf, SIZE_T buf_size, SMKFS_ATTR_TYPE attr_type, PCVOID data, SIZE_T data_len) {
     PUCHAR ptr = (PUCHAR)attr_buf;
     SIZE_T used = 0;
+    SMKFS_ATTR_ID new_id = 0;
 
     if (!attr_buf || (data_len > 0 && !data)) {
         return SMKFS_ERR_INVAL;
 	}
 
-    if (buf_size < 2 * sizeof(smkfs_attr_header_t) + data_len) {
+    if (buf_size < 2 * sizeof(_SMKFS_ATTR_HEADER) + data_len) {
         return SMKFS_ERR_NOSPC;
 	}
 
-    record_remove_attr(attr_buf, attr_type);
+    const _SMKFS_ATTR_DEF *def = smkfs_attr_lookup(attr_type);
+    if (!def) return SMKFS_ERR_INVAL;
+
+    if (def->flags & SMKFS_ATTRF_UNIQUE) {
+        record_remove_attr(attr_buf, attr_type);
+        new_id = 0;
+    } else {
+        /*
+         * Non-unique: scan existing instances of this type, find the
+         * highest id in use, so the new instance gets a fresh one.
+         * Ids are never reused, even across add/remove cycles.
+        */
+        BOOLEAN any_found = FALSE;
+        SMKFS_ATTR_ID max_id = 0;
+        PUCHAR scan = (PUCHAR)attr_buf;
+
+        while (1) {
+            _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)scan;
+            if (ah->type == SMKFS_ATTRT_END) break;
+            if (ah->type == attr_type) {
+                if (!any_found || ah->id > max_id) {
+                    max_id = ah->id;
+                }
+                any_found = TRUE;
+            }
+            scan += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+        }
+
+        new_id = any_found ? max_id + 1 : 0;
+    }
 
     ptr = (PUCHAR)attr_buf;
     while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
         if (ah->type == SMKFS_ATTRT_END) {
-            used = (SIZE_T)(ptr - (PUCHAR)attr_buf) + sizeof(smkfs_attr_header_t);
+            used = (SIZE_T)(ptr - (PUCHAR)attr_buf) + sizeof(_SMKFS_ATTR_HEADER);
             break;
         }
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
     }
 
-    SIZE_T need = sizeof(smkfs_attr_header_t) + data_len + sizeof(smkfs_attr_header_t);
+    SIZE_T need = sizeof(_SMKFS_ATTR_HEADER) + data_len + sizeof(_SMKFS_ATTR_HEADER);
     if (used + need > buf_size) return SMKFS_ERR_NOSPC;
 
-    smkfs_attr_header_t *new_ah = (smkfs_attr_header_t *)(ptr);
+    _SMKFS_ATTR_HEADER *new_ah = (_SMKFS_ATTR_HEADER *)(ptr);
     new_ah->type = attr_type;
     new_ah->flags = 0;
-    new_ah->id = 0;
+    new_ah->id = new_id;
     new_ah->length = (ULONG)data_len;
-    memcpy(ptr + sizeof(smkfs_attr_header_t), data, data_len);
+    memcpy(ptr + sizeof(_SMKFS_ATTR_HEADER), data, data_len);
 
-    smkfs_attr_header_t *term = (smkfs_attr_header_t *)(ptr + sizeof(smkfs_attr_header_t) + data_len);
+    _SMKFS_ATTR_HEADER *term = (_SMKFS_ATTR_HEADER *)(ptr + sizeof(_SMKFS_ATTR_HEADER) + data_len);
     term->type = SMKFS_ATTRT_END;
     term->flags = 0;
     term->id = 0;
@@ -299,18 +329,58 @@ SMKFS_STATUS record_remove_attr(PVOID attr_buf, SMKFS_ATTR_TYPE attr_type) {
     SIZE_T found_len = 0;
 
     while (1) {
-        smkfs_attr_header_t *ah = (smkfs_attr_header_t *)ptr;
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
         if (ah->type == SMKFS_ATTRT_END) break;
         if (ah->type == attr_type) {
             found = ptr;
-            found_len = sizeof(smkfs_attr_header_t) + ah->length;
+            found_len = sizeof(_SMKFS_ATTR_HEADER) + ah->length;
         }
-        ptr += sizeof(smkfs_attr_header_t) + ah->length;
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
     }
 
     if (!found) return SMKFS_OK;
 
-    SIZE_T tail = (SIZE_T)(ptr + sizeof(smkfs_attr_header_t) - (found + found_len));
+    SIZE_T tail = (SIZE_T)(ptr + sizeof(_SMKFS_ATTR_HEADER) - (found + found_len));
     memmove(found, found + found_len, tail);
+    return SMKFS_OK;
+}
+
+SMKFS_STATUS record_remove_attr_id(PVOID attr_buf, SMKFS_ATTR_TYPE attr_type, SMKFS_ATTR_ID attr_id) {
+    PUCHAR ptr = (PUCHAR)attr_buf;
+    PUCHAR found = NULL;
+    SIZE_T found_len = 0;
+
+    while (1) {
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
+        if (ah->type == SMKFS_ATTRT_END) break;
+        if (ah->type == attr_type && ah->id == attr_id) {
+            found = ptr;
+            found_len = sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+        }
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+    }
+
+    if (!found) return SMKFS_OK;
+
+    SIZE_T tail = (SIZE_T)(ptr + sizeof(_SMKFS_ATTR_HEADER) - (found + found_len));
+    memmove(found, found + found_len, tail);
+    return SMKFS_OK;
+}
+
+SMKFS_STATUS record_iterate_attr(PVOID attr_buf, SMKFS_ATTR_TYPE attr_type, LONG (*cb)(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, PVOID ctx), PVOID ctx) {
+    PUCHAR ptr = (PUCHAR)attr_buf;
+
+    if (!attr_buf || !cb) return SMKFS_ERR_INVAL;
+
+    while (1) {
+        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
+        if (ah->type == SMKFS_ATTRT_END) break;
+        if (ah->type == attr_type) {
+            LONG r = cb(ah->id, ptr + sizeof(_SMKFS_ATTR_HEADER), ah->length, ctx);
+            if (r != 0) return r;
+        }
+        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+    }
+
     return SMKFS_OK;
 }

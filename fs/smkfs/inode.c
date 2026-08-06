@@ -33,7 +33,7 @@
 
 /* --- Functions ---*/
 
-SMKFS_STATUS smkfs_getattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size) {
+SMKFS_STATUS smkfs_getattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size) {
     LONG ret;
     if (!mnt->mounted || !rec || !attr_buf || record_id == 0) {
         return SMKFS_ERR_INVAL;
@@ -43,9 +43,9 @@ SMKFS_STATUS smkfs_getattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, smkfs_
     return (ret < 0) ? (SMKFS_STATUS)ret : SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_setattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID data, SIZE_T len) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+SMKFS_STATUS smkfs_setattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID data, SIZE_T len) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
 
     if (!mnt->mounted || !data || record_id == 0) return SMKFS_ERR_INVAL;
     if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
@@ -57,11 +57,11 @@ SMKFS_STATUS smkfs_setattr(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_
     }
 
     rec.attr_count++;
-    rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
+    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
     return record_write(mnt, record_id, &rec, attr_buf);
 }
 
-SMKFS_STATUS smkfs_stat(smkfs_mount_t *mnt, SMKFS_PATH path, smkfs_record_t *rec, PVOID attr_buf, SIZE_T buf_size) {
+SMKFS_STATUS smkfs_stat(_SMKFS_MOUNT *mnt, SMKFS_PATH path, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size) {
     SMKFS_RECORD_ID record_id;
 
     if (!mnt->mounted || !path || !rec || !attr_buf || path[1] != ':' || path[2] != '/') {
@@ -75,7 +75,7 @@ SMKFS_STATUS smkfs_stat(smkfs_mount_t *mnt, SMKFS_PATH path, smkfs_record_t *rec
     return smkfs_getattr(mnt, record_id, rec, attr_buf, buf_size);
 }
 
-SMKFS_STATUS smkfs_chmod(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
+SMKFS_STATUS smkfs_chmod(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
     SMKFS_RECORD_ID record_id;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
@@ -89,7 +89,7 @@ SMKFS_STATUS smkfs_chmod(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permiss
     return smkfs_setattr(mnt, record_id, SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
 }
 
-SMKFS_STATUS smkfs_chown(smkfs_mount_t *mnt, SMKFS_PATH path, ULONG uid, ULONG gid) {
+SMKFS_STATUS smkfs_chown(_SMKFS_MOUNT *mnt, SMKFS_PATH path, ULONG uid, ULONG gid) {
     SMKFS_RECORD_ID record_id;
     ULONGLONG owner = ((ULONGLONG)uid << 32) | gid;
 

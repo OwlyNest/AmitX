@@ -35,9 +35,9 @@
 
 /* --- Functions ---*/
 
-LONG smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+LONG smkfs_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     ULONGLONG *fsize_ptr;
     ULONGLONG file_size;
     SIZE_T to_read;
@@ -63,7 +63,7 @@ LONG smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
     for (SIZE_T done = 0; done < to_read; ) {
         SMKFS_LBLOCK logical_block = (offset + done) / SMKFS_BLOCK_SIZE;
         SIZE_T block_offset = (offset + done) % SMKFS_BLOCK_SIZE;
-        smkfs_extent_t ext;
+        _SMKFS_EXTENT ext;
         UCHAR block[SMKFS_BLOCK_SIZE];
         SIZE_T chunk;
 
@@ -87,9 +87,9 @@ LONG smkfs_read(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
     return (LONG)to_read;
 }
 
-LONG smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID buf) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID buf) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     ULONGLONG *fsize_ptr;
     ULONGLONG file_size;
     ULONGLONG new_size;
@@ -113,7 +113,7 @@ LONG smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET off
     for (SIZE_T done = 0; done < len; ) {
         SMKFS_LBLOCK logical_block = (offset + done) / SMKFS_BLOCK_SIZE;
         SIZE_T block_offset = (offset + done) % SMKFS_BLOCK_SIZE;
-        smkfs_extent_t ext;
+        _SMKFS_EXTENT ext;
         UCHAR block[SMKFS_BLOCK_SIZE];
         SIZE_T chunk;
         SMKFS_BLOCK phys_block;
@@ -148,8 +148,8 @@ LONG smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET off
     }
 
     if (new_size != file_size) {
-        UCHAR final_attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-        smkfs_record_t final_rec;
+        UCHAR final_attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+        _SMKFS_RECORD final_rec;
 
         if (record_read(mnt, record_id, &final_rec, final_attr_buf, sizeof(final_attr_buf)) < 0) {
             return SMKFS_ERR_IO;
@@ -164,9 +164,9 @@ LONG smkfs_write(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET off
     return (LONG)len;
 }
 
-SMKFS_STATUS smkfs_truncate(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     ULONGLONG *fsize_ptr;
     ULONGLONG old_size;
     ULONGLONG old_blocks;
@@ -194,8 +194,8 @@ SMKFS_STATUS smkfs_truncate(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, ULONG
             PVOID ext_data;
             SIZE_T ext_len;
             if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &ext_data, &ext_len) == SMKFS_OK) {
-                ULONG num = ext_len / sizeof(smkfs_extent_t);
-                smkfs_extent_t *ext = (smkfs_extent_t *)ext_data;
+                ULONG num = ext_len / sizeof(_SMKFS_EXTENT);
+                _SMKFS_EXTENT *ext = (_SMKFS_EXTENT *)ext_data;
                 for (ULONG i = 0; i < num; i++) {
                     ULONGLONG ext_end = ext[i].logical_offset + ext[i].block_count;
                     if (ext[i].logical_offset >= new_blocks) {
@@ -207,18 +207,18 @@ SMKFS_STATUS smkfs_truncate(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, ULONG
                         ext[i].block_count = (ULONG)keep;
                     }
                 }
-                record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, ext, num * sizeof(smkfs_extent_t));
+                record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, ext, num * sizeof(_SMKFS_EXTENT));
             }
         }
     }
 
     record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
     rec.attr_count++;
-    rec.header.length = sizeof(smkfs_record_t) + attr_buf_total_len(attr_buf);
+    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
     return record_write(mnt, record_id, &rec, attr_buf);
 }
 
-LONG smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags) {
+LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags) {
     SMKFS_RECORD_ID record_id;
     LONG fd;
 
@@ -254,8 +254,8 @@ LONG smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags) {
     mnt->fd_table[fd].flags = flags;
 
     if (flags & SMKFS_O_APPEND) {
-        UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-        smkfs_record_t rec;
+        UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+        _SMKFS_RECORD rec;
         ULONGLONG *fsize_ptr;
         if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) >= 0) {
             if (record_find_attr(attr_buf, SMKFS_ATTRT_FSIZE, (PVOID *)&fsize_ptr, NULL) == SMKFS_OK) {
@@ -268,7 +268,7 @@ LONG smkfs_open(smkfs_mount_t *mnt, SMKFS_PATH path, LONG flags) {
     return fd;
 }
 
-SMKFS_STATUS smkfs_close(smkfs_mount_t *mnt, LONG fd) {
+SMKFS_STATUS smkfs_close(_SMKFS_MOUNT *mnt, LONG fd) {
     if (fd < 0 || fd >= SMKFS_FD_MAX) return SMKFS_ERR_INVAL;
     if (!mnt->fd_table[fd].used) return SMKFS_ERR_INVAL;
 
@@ -279,7 +279,7 @@ SMKFS_STATUS smkfs_close(smkfs_mount_t *mnt, LONG fd) {
     return SMKFS_OK;
 }
 
-LONG smkfs_read_file(smkfs_mount_t *mnt, LONG fd, PVOID buf, SIZE_T len) {
+LONG smkfs_read_file(_SMKFS_MOUNT *mnt, LONG fd, PVOID buf, SIZE_T len) {
     LONG ret;
 
     if (fd < 0 || fd >= SMKFS_FD_MAX) return SMKFS_ERR_INVAL;
@@ -291,7 +291,7 @@ LONG smkfs_read_file(smkfs_mount_t *mnt, LONG fd, PVOID buf, SIZE_T len) {
     return ret;
 }
 
-LONG smkfs_write_file(smkfs_mount_t *mnt, LONG fd, PCVOID buf, SIZE_T len) {
+LONG smkfs_write_file(_SMKFS_MOUNT *mnt, LONG fd, PCVOID buf, SIZE_T len) {
     LONG ret;
 
     if (fd < 0 || fd >= SMKFS_FD_MAX) return SMKFS_ERR_INVAL;
@@ -303,9 +303,9 @@ LONG smkfs_write_file(smkfs_mount_t *mnt, LONG fd, PCVOID buf, SIZE_T len) {
     return ret;
 }
 
-LONG smkfs_seek(smkfs_mount_t *mnt, LONG fd, LONGLONG offset, LONG whence) {
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+LONG smkfs_seek(_SMKFS_MOUNT *mnt, LONG fd, LONGLONG offset, LONG whence) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     ULONGLONG *fsize_ptr;
     ULONGLONG file_size = 0;
     LONGLONG new_offset;
@@ -338,7 +338,7 @@ LONG smkfs_seek(smkfs_mount_t *mnt, LONG fd, LONGLONG offset, LONG whence) {
     return (LONG)mnt->fd_table[fd].offset;
 }
 
-SMKFS_STATUS smkfs_create_file(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
+SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
     SMKFS_RECORD_ID parent;
     CHAR name[SMKFS_NAME_LEN];
     PCCHAR last_slash;
@@ -377,8 +377,8 @@ SMKFS_STATUS smkfs_create_file(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM p
         return SMKFS_ERR_NOSPC;
     }
 
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(smkfs_record_t)];
-    smkfs_record_t rec;
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
     if (record_read(mnt, new_record, &rec, attr_buf, sizeof(attr_buf)) >= 0) {
         record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
         rec.attr_count++;
@@ -387,7 +387,7 @@ SMKFS_STATUS smkfs_create_file(smkfs_mount_t *mnt, SMKFS_PATH path, SMKFS_PERM p
     return SMKFS_OK;
 }
 
-SMKFS_STATUS smkfs_delete_file(smkfs_mount_t *mnt, SMKFS_PATH path) {
+SMKFS_STATUS smkfs_delete_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID record_id;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
@@ -401,7 +401,7 @@ SMKFS_STATUS smkfs_delete_file(smkfs_mount_t *mnt, SMKFS_PATH path) {
     return smkfs_delete_record(mnt, record_id);
 }
 
-SMKFS_STATUS smkfs_mkdir(smkfs_mount_t *mnt, SMKFS_PATH path) {
+SMKFS_STATUS smkfs_mkdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID parent;
     CHAR name[SMKFS_NAME_LEN];
     PCCHAR last_slash;
@@ -439,7 +439,7 @@ SMKFS_STATUS smkfs_mkdir(smkfs_mount_t *mnt, SMKFS_PATH path) {
     return smkfs_create_record(mnt, SMKFS_ROT_DIR, parent, name, &new_record);
 }
 
-SMKFS_STATUS smkfs_rmdir(smkfs_mount_t *mnt, SMKFS_PATH path) {
+SMKFS_STATUS smkfs_rmdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID record_id;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {

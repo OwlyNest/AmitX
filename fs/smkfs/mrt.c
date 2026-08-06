@@ -40,18 +40,18 @@ inline LONG power_of_two(LONG n) {
     return (n > 0) && ((n & (n - 1)) == 0);
 }
 
-SMKFS_STATUS mrt_format(smkfs_mount_t *mnt, SMKFS_BLOCK start_block, ULONGLONG length) {
+SMKFS_STATUS mrt_format(_SMKFS_MOUNT *mnt, SMKFS_BLOCK start_block, ULONGLONG length) {
     
     /* 0 length MRT is invalid*/
     ASSERT(length != 0);
     
     /* MRT entry size must be power of two for capacity to be calculated nicely */
     /* SMKFS_BLOCK_SIZE = 4096 = 2^12, so only powers of two are divisors*/
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
     UCHAR block[SMKFS_BLOCK_SIZE];
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t);
-    smkfs_mrt_entry_t *entries = (smkfs_mrt_entry_t *)block;
+    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+    _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
 
     /* Write j entries to the i'th block */
     for (ULONGLONG i = 0; i < length; i++) {
@@ -71,22 +71,22 @@ SMKFS_STATUS mrt_format(smkfs_mount_t *mnt, SMKFS_BLOCK start_block, ULONGLONG l
     return SMKFS_OK;
 }
 
-SMKFS_STATUS mrt_init(smkfs_mount_t *mnt, SMKFS_BLOCK start_block, ULONGLONG length) {
+SMKFS_STATUS mrt_init(_SMKFS_MOUNT *mnt, SMKFS_BLOCK start_block, ULONGLONG length) {
 
     /* 0 length MRT is invalid*/
     ASSERT(length != 0);
     
     /* MRT entry size must be power of two for capacity to be calculated nicely */
     /* SMKFS_BLOCK_SIZE = 4096 = 2^12, so only powers of two are divisors*/
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
     mnt->sb.mrt_start = start_block;
     mnt->sb.mrt_length = length;
-    mnt->sb.mrt_capacity = length * (SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t));
+    mnt->sb.mrt_capacity = length * (SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY));
     return SMKFS_OK;
 }
 
-SMKFS_STATUS mrt_alloc_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID *out_record_id, SMKFS_GENERATION *out_generation) {
+SMKFS_STATUS mrt_alloc_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID *out_record_id, SMKFS_GENERATION *out_generation) {
 
     UCHAR block[SMKFS_BLOCK_SIZE];
 
@@ -94,16 +94,16 @@ SMKFS_STATUS mrt_alloc_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID *out_record_id,
      * or kernel code is being modified while running.
      * This would mean a bug or attack, best to check anyway.
     */
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t);
+    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
 
     for (ULONGLONG i = 0; i < mnt->sb.mrt_length; i++) {
         if (read_block(mnt, mnt->sb.mrt_start + i, block) != 0) {
             return SMKFS_ERR_IO;
         }
 
-        smkfs_mrt_entry_t *entries = (smkfs_mrt_entry_t *)block;
+        _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
         for (ULONG j = 0; j < entries_per_block; j++) {
 
             /* MEOW flashback */
@@ -129,24 +129,24 @@ SMKFS_STATUS mrt_alloc_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID *out_record_id,
     return SMKFS_ERR_NOSPC;
 }
 
-SMKFS_STATUS mrt_update_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_BLOCK new_physical_block, SMKFS_MRT_FLAGS flags) {
+SMKFS_STATUS mrt_update_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_BLOCK new_physical_block, SMKFS_MRT_FLAGS flags) {
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     /* I'm not gonna reason this one again */
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
     if (record_id >= mnt->sb.mrt_capacity) {
         return SMKFS_ERR_INVAL;
     }
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t);
+    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
 
     SMKFS_BLOCK block_id = mnt->sb.mrt_start + record_id / entries_per_block;
     if (read_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
     }
 
-    smkfs_mrt_entry_t *entries = (smkfs_mrt_entry_t *)block;
+    _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
     ULONG entry_id = record_id % entries_per_block;
 
     entries[entry_id].physical_block = new_physical_block;
@@ -159,25 +159,25 @@ SMKFS_STATUS mrt_update_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMK
     return SMKFS_OK;
 }
 
-SMKFS_STATUS mrt_free_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
+SMKFS_STATUS mrt_free_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
 
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     /* I'm not gonna reason this one again */
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
     if (record_id >= mnt->sb.mrt_capacity) {
         return SMKFS_ERR_INVAL;
     }
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t);
+    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
 
     SMKFS_BLOCK block_id = mnt->sb.mrt_start + record_id / entries_per_block;
     if (read_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
     }
 
-    smkfs_mrt_entry_t *entries = (smkfs_mrt_entry_t *)block;
+    _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
     ULONG entry_id = record_id % entries_per_block;
 
     entries[entry_id].physical_block = UINT64_MAX; /* 64 ZiB, safe for now */
@@ -196,27 +196,27 @@ SMKFS_STATUS mrt_free_entry(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id) {
     return SMKFS_OK;
 }
 
-SMKFS_STATUS mrt_resolve(smkfs_mount_t *mnt, SMKFS_RECORD_ID record_id, SMKFS_BLOCK *out_physical_block, SMKFS_MRT_FLAGS *out_flags, SMKFS_GENERATION *out_generation) {
+SMKFS_STATUS mrt_resolve(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_BLOCK *out_physical_block, SMKFS_MRT_FLAGS *out_flags, SMKFS_GENERATION *out_generation) {
     
     UCHAR block[SMKFS_BLOCK_SIZE];
 
     /* I'm not gonna reason this one again */
-    ASSERT(power_of_two(sizeof(smkfs_mrt_entry_t)) != 0);
+    ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
 
     if (record_id >= mnt->sb.mrt_capacity) {
         return SMKFS_ERR_INVAL;
     }
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(smkfs_mrt_entry_t);
+    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
 
     SMKFS_BLOCK block_id = mnt->sb.mrt_start + record_id / entries_per_block;
     if (read_block(mnt, block_id, block) != SMKFS_OK) {
         return SMKFS_ERR_IO;
     }
 
-    smkfs_mrt_entry_t *entries = (smkfs_mrt_entry_t *)block;
+    _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
     ULONG entry_id = record_id % entries_per_block;
-    smkfs_mrt_entry_t entry = entries[entry_id];
+    _SMKFS_MRT_ENTRY entry = entries[entry_id];
 
     if (!(entry.flags & SMKFS_MRTF_ALLOCATED)) {
         return SMKFS_ERR_NOTFOUND;

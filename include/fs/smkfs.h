@@ -533,6 +533,17 @@ typedef struct {
     CHAR            name[SMKFS_NAME_LEN];
 } _SMKFS_DIRENT;
 
+/* In-memory representation of a hard link.
+ * On disk this is just a B+ tree entry in a directory:
+ *   key   = name
+ *   value = _SMKFS_DIRENT_DISK
+*/
+typedef struct {
+    SMKFS_RECORD_ID record_id;      /* Target record (the "inode") */
+    SMKFS_RECORD_ID parent_dir;     /* Directory containing this link */
+    CHAR            name[SMKFS_NAME_LEN];
+} _SMKFS_LINK;
+
 /* File Descriptor */
 typedef struct {
     LONG            used;
@@ -559,8 +570,6 @@ typedef struct {
     SIZE_T          count;
 } _SMKFS_READDIR_CTX;
 
-/* */
-
 
 /* --- Prototypes --- */
 
@@ -575,8 +584,8 @@ SMKFS_STATUS smkfs_unmount(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS smkfs_sync(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS smkfs_lookup_by_name(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID dir_record, SMKFS_NAME name, SMKFS_RECORD_ID *out_record);
 SMKFS_STATUS smkfs_create_record(_SMKFS_MOUNT *mnt, SMKFS_OBJECT_TYPE object_type, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID *out_record);
-SMKFS_STATUS smkfs_delete_record(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id);
-SMKFS_STATUS smkfs_rename(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name);
+SMKFS_STATUS smkfs_delete_record(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID parent_dir, SMKFS_NAME name, SMKFS_RECORD_ID record_id);
+SMKFS_STATUS smkfs_rename(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID old_parent, SMKFS_NAME old_name, SMKFS_RECORD_ID new_parent, SMKFS_NAME new_name, SMKFS_RECORD_ID record_id);
 LONG smkfs_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf);
 LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID buf);
 SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size);
@@ -584,6 +593,7 @@ SMKFS_STATUS smkfs_getattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_
 SMKFS_STATUS smkfs_setattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID  data, SIZE_T len);
 
 /* ~~~ Level 2: User ~~~ */
+SMKFS_STATUS path_split(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_parent, PCHAR out_name);
 SMKFS_STATUS path_lookup(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record);
 LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags);
 

@@ -389,6 +389,8 @@ SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM pe
 
 SMKFS_STATUS smkfs_delete_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID record_id;
+    SMKFS_RECORD_ID parent_id;
+    CHAR name[SMKFS_NAME_LEN];
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
@@ -398,7 +400,11 @@ SMKFS_STATUS smkfs_delete_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
         return SMKFS_ERR_NOTFOUND;
     }
 
-    return smkfs_delete_record(mnt, record_id);
+    if (path_split(mnt, path, &parent_id, name) != SMKFS_OK) {
+        return SMKFS_ERR_INVAL;
+    }
+
+    return smkfs_delete_record(mnt, parent_id, name, record_id);
 }
 
 SMKFS_STATUS smkfs_mkdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
@@ -441,6 +447,8 @@ SMKFS_STATUS smkfs_mkdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
 
 SMKFS_STATUS smkfs_rmdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID record_id;
+    SMKFS_RECORD_ID parent_id;
+    CHAR name[SMKFS_NAME_LEN];
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
@@ -450,5 +458,9 @@ SMKFS_STATUS smkfs_rmdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
         return SMKFS_ERR_NOTFOUND;
     }
 
-    return smkfs_delete_record(mnt, record_id);
+    if (path_split(mnt, path, &parent_id, name)) {
+        return SMKFS_ERR_INVAL;
+    }
+
+    return smkfs_delete_record(mnt, parent_id, name, record_id);
 }

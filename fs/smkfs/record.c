@@ -42,13 +42,14 @@ SMKFS_STATUS record_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RE
     SMKFS_STATUS ret;
     SMKFS_BLOCK phys_block;
     SMKFS_STATUS mrt_ret;
+    SMKFS_GENERATION generation;
 
     if (!rec || !attr_buf) return SMKFS_ERR_INVAL;
 
     block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
     if (!block) return SMKFS_ERR_NOMEM;
 
-    mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, &generation);
     if (mrt_ret != SMKFS_OK) {
         free(block);
         return mrt_ret;
@@ -74,12 +75,6 @@ SMKFS_STATUS record_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RE
     if (header_checksum_verify(&rec->header, block, rec->header.length) != SMKFS_OK) {
         free(block);
         return SMKFS_ERR_CORRUPT;
-    }
-
-    SMKFS_GENERATION generation;
-    if (mrt_resolve(mnt, record_id, NULL, NULL, &generation) != SMKFS_OK) {
-        free(block);
-        return SMKFS_ERR_INVAL;
     }
 
     if (rec->generation != generation) {

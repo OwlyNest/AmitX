@@ -24,6 +24,7 @@
 /* --- Includes ---*/
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
+#include <lib/string.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -65,5 +66,29 @@ SMKFS_STATUS path_lookup(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *ou
     }
 
     if (out_record) *out_record = current;
+    return SMKFS_OK;
+}
+
+SMKFS_STATUS path_split(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_parent, PCHAR out_name) {
+    PCCHAR last_slash = strrchr(path, '/');
+    if (!last_slash || last_slash == path + 2) {
+        *out_parent = mnt->sb.root_record_id;
+        LONG len = strlen(path + 3);
+        if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
+        memcpy(out_name, path + 3, len + 1);
+    } else {
+        CHAR parent_path[SMKFS_NAME_LEN];
+        LONG len = last_slash - path;
+        if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
+        memcpy(parent_path, path, len);
+        parent_path[len] = '\0';
+        if (path_lookup(mnt, parent_path, out_parent) != SMKFS_OK) {
+            return SMKFS_ERR_NOTFOUND;
+        }
+
+        LONG name_len = strlen(last_slash + 1);
+        if (name_len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
+        memcpy(out_name, last_slash + 1, name_len + 1);
+    }
     return SMKFS_OK;
 }

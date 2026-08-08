@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <lib/string.h>
+#include <lib/ctype.h>
 
 #ifndef ACPI_USE_NATIVE_DIVIDE
 

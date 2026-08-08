@@ -1,3 +1,17 @@
+# --------------------------------------------------------------------	
+# Phonon Makefile
+#
+# Windows-native build:
+# PowerShell + GNU Make
+# --------------------------------------------------------------------
+
+# --------------------------------------------------------------------
+# Shell
+# --------------------------------------------------------------------
+
+SHELL := powershell.exe
+.SHELLFLAGS := -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+
 # --------------------------------------------------------------------
 # Toolchain
 # --------------------------------------------------------------------
@@ -18,170 +32,245 @@ RUSTC    ?= rustc
 CARGO    ?= cargo
 
 # --------------------------------------------------------------------
+# Windows filesystem helpers
+# --------------------------------------------------------------------
+
+ifeq ($(OS),Windows_NT)
+
+define RM_DIR
+	if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Recurse -Force }
+endef
+
+define RM_FILE
+	if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Force }
+endef
+
+else
+
+define RM_DIR
+	rm -rf "$(1)"
+endef
+
+define RM_FILE
+	rm -f "$(1)"
+endef
+
+endif
+
+# --------------------------------------------------------------------
 # Project layout
 # --------------------------------------------------------------------
 
-TARGET     := kernel.elf
-BUILD_DIR  := build
+TARGET       := kernel.elf
+BUILD_DIR    := build
+
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
 SRC_DIRS := \
-    shell \
-    fs \
-    boot \
-    arch/x86 \
-    drivers \
-    lib \
-    mm \
-    kernel \
-    screen \
-    tests \
-    logo \
-    ui \
-    hw \
-    gfx \
-    exec \
-    sync \
-    acpi
+	shell \
+	fs \
+	boot \
+	arch/x86 \
+	drivers \
+	lib \
+	mm \
+	kernel \
+	screen \
+	tests \
+	logo \
+	ui \
+	hw \
+	gfx \
+	exec \
+	sync \
+	acpi
 
 ACPICA_DIR := third_party/acpica/components
 ACPICA_INC := third_party/acpica/include
 
+# --------------------------------------------------------------------
+# Compiler flags
+# --------------------------------------------------------------------
+
 COMMON_FLAGS := \
-    -m32 \
-    -ffreestanding \
-    -fno-stack-protector \
-    -fno-asynchronous-unwind-tables \
-    -fno-unwind-tables \
-    -fno-pic \
-    -fno-pie \
-    -O2 \
-    -MMD \
-    -MP \
-    -D__OWLYNEST__ \
-    -Iinclude
+	-m32 \
+	-ffreestanding \
+	-fno-stack-protector \
+	-fno-asynchronous-unwind-tables \
+	-fno-unwind-tables \
+	-fno-pic \
+	-fno-pie \
+	-O2 \
+	-MMD \
+	-MP \
+	-D__OWLYNEST__ \
+	-Iinclude
 
 CFLAGS := \
-    $(COMMON_FLAGS) \
-    -Wall \
-    -Wextra \
-    -Werror \
-    -DPHONON_BUILD_DATE="\"$(shell date +%Y-%m-%d)\"" \
-    -include include/internal/phonon_types.h \
-    -isystem $(ACPICA_INC)
+	$(COMMON_FLAGS) \
+	-Wall \
+	-Wextra \
+	-Werror \
+	-DPHONON_BUILD_DATE='\"$(PHONON_BUILD_DATE)\"' \
+	-include include/internal/phonon_types.h \
+	-isystem $(ACPICA_INC)
 
 ACPICA_CFLAGS := \
-    $(COMMON_FLAGS) \
-    -Wall \
-    -Wno-unused-parameter \
-    -Wno-sign-compare \
-    -I$(ACPICA_INC)
+	$(COMMON_FLAGS) \
+	-Wall \
+	-Wno-unused-parameter \
+	-Wno-sign-compare \
+	-I$(ACPICA_INC)
 
 CXXFLAGS := \
-    $(COMMON_FLAGS) \
-    -Wall \
-    -Wextra \
-    -Werror \
-    -fno-exceptions \
-    -fno-rtti \
-    -fno-threadsafe-statics \
-    -fno-use-cxa-atexit \
-    -std=c++20
+	$(COMMON_FLAGS) \
+	-Wall \
+	-Wextra \
+	-Werror \
+	-fno-exceptions \
+	-fno-rtti \
+	-fno-threadsafe-statics \
+	-fno-use-cxa-atexit \
+	-std=c++20
 
 RUSTFLAGS := \
-    -C panic=abort \
-    -C opt-level=2 \
-    -C relocation-model=static \
-    -C force-frame-pointers=no
+	-C panic=abort \
+	-C opt-level=2 \
+	-C relocation-model=static \
+	-C force-frame-pointers=no
 
 LDFLAGS := \
-    -T boot/linker.ld \
-    -nostdlib
+	-T boot/linker.ld \
+	-nostdlib
 
 LIBS := -lgcc
 
-rwildcard = $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+# --------------------------------------------------------------------
+# Generated build files
+# --------------------------------------------------------------------
 
-C_SRCS    := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.c))
-CPP_SRCS  := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.cpp))
-ASM_SRCS  := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.S))
-RUST_SRCS := $(foreach d,$(SRC_DIRS),$(call rwildcard,$(d),*.rs))
-ACPICA_SRCS := $(shell find $(ACPICA_DIR) -name '*.c')
+-include shell/build.mk
+-include fs/build.mk
+-include fs/smkfs/build.mk
+-include boot/build.mk
+-include arch/x86/build.mk
+-include drivers/build.mk
+-include lib/build.mk
+-include mm/build.mk
+-include kernel/build.mk
+-include screen/build.mk
+-include tests/build.mk
+-include logo/build.mk
+-include ui/build.mk
+-include hw/build.mk
+-include gfx/build.mk
+-include exec/build.mk
+-include sync/build.mk
+-include acpi/build.mk
+-include acpica.mk
 
-C_OBJS    := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
-CPP_OBJS  := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
-ASM_OBJS  := $(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SRCS))
+# --------------------------------------------------------------------
+# Object lists
+# --------------------------------------------------------------------
+
+C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
+CPP_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
+ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SRCS))
 ACPICA_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ACPICA_SRCS))
-$(ACPICA_OBJS): CFLAGS := $(ACPICA_CFLAGS)
 RUST_OBJS := $(patsubst %.rs,$(BUILD_DIR)/%.o,$(RUST_SRCS))
 
+$(ACPICA_OBJS): CFLAGS := $(ACPICA_CFLAGS)
+
 OBJS := \
-    $(C_OBJS) \
-    $(CPP_OBJS) \
-    $(ASM_OBJS) \
-    $(ACPICA_OBJS) \
-    $(RUST_OBJS)
-
-all: $(TARGET)
-
-$(TARGET): $(OBJS)
-	@printf " LD  %-6s\n" "$@"
-	@$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(C_OBJS) \
+	$(CPP_OBJS) \
+	$(ASM_OBJS) \
+	$(ACPICA_OBJS) \
+	$(RUST_OBJS)
 
 DEPS := $(OBJS:.o=.d)
 
+# --------------------------------------------------------------------
+# Targets
+# --------------------------------------------------------------------
+
+.PHONY: all clean size sections symbols readelf acpica-only
+
+all: $(TARGET)
+
+# --------------------------------------------------------------------
+# Link
+# --------------------------------------------------------------------
+
+$(TARGET): $(OBJS)
+	@Write-Host "LD  $@"
+	@& "$(LD)" $(LDFLAGS) -o "$@" $^ $(LIBS)
+
+# --------------------------------------------------------------------
+# C
+# --------------------------------------------------------------------
+
 $(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	@printf " CC  %-6s\n" "$<"
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
+	@Write-Host "CC  $<"
+	@& "$(CC)" $(CFLAGS) -c "$<" -o "$@"
+
+# --------------------------------------------------------------------
+# C++
+# --------------------------------------------------------------------
 
 $(BUILD_DIR)/%.o: %.cpp
-	@mkdir -p $(dir $@)
-	@printf " CXX  %-6s\n" "$<"
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
+	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
+	@Write-Host "CXX $<"
+	@& "$(CXX)" $(CXXFLAGS) -c "$<" -o "$@"
+
+# --------------------------------------------------------------------
+# Assembly
+# --------------------------------------------------------------------
 
 $(BUILD_DIR)/%.o: %.S
-	@mkdir -p $(dir $@)
-	@printf " AS  %-6s\n" "$<"
-	@$(CC) $(COMMON_FLAGS) -c $< -o $@
+	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
+	@Write-Host "AS  $<"
+	@& "$(CC)" $(COMMON_FLAGS) -c "$<" -o "$@"
+
+# --------------------------------------------------------------------
+# Rust
+# --------------------------------------------------------------------
 
 $(BUILD_DIR)/%.o: %.rs
-	@mkdir -p $(dir $@)
-	@printf " RS  %-6s\n" "$<"
-	@$(RUSTC) \
-        --crate-type lib \
-        --emit=obj \
-        $(RUSTFLAGS) \
-        -o $@ \
-        $<
+	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
+	@Write-Host "RS  $<"
+	@& "$(RUSTC)" --crate-type lib --emit=obj $(RUSTFLAGS) -o "$@" "$<"
 
+# --------------------------------------------------------------------
+# Dependencies
+# --------------------------------------------------------------------
 
 -include $(DEPS)
 
-.PHONY: \
-    all \
-    clean \
-    size \
-    sections \
-    symbols \
-    readelf \
-    acpica-only
-
+# --------------------------------------------------------------------
+# Cleaning
+# --------------------------------------------------------------------
 
 clean:
-	$(RM) -r $(BUILD_DIR)
-	$(RM) $(TARGET)
+	@Write-Host "Cleaning build directory..."
+	$(call RM_DIR,$(BUILD_DIR))
+	@Write-Host "Cleaning kernel..."
+	$(call RM_FILE,$(TARGET))
+
+# --------------------------------------------------------------------
+# Inspection
+# --------------------------------------------------------------------
 
 size:
-	$(SIZE) $(TARGET)
+	@& "$(SIZE)" "$(TARGET)"
 
 sections:
-	$(OBJDUMP) -h $(TARGET)
+	@& "$(OBJDUMP)" -h "$(TARGET)"
 
 symbols:
-	$(NM) -n $(TARGET)
+	@& "$(NM)" -n "$(TARGET)"
 
 readelf:
-	$(READELF) -l $(TARGET)
-
+	@& "$(READELF)" -l "$(TARGET)"

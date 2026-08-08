@@ -6,7 +6,7 @@ VERBOSE=0
 REBUILD=1
 FULL=1
 
-# Check for flags (break verwijderd zodat ALLE argumenten worden gecontroleerd)
+# Check for flags
 for arg in "$@"; do
     case "$arg" in
         --verbose|-v)
@@ -20,6 +20,22 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+lines_total=$(
+    find . \
+        \( -name '*.c' -o -name '*.h' -o -name '*.S' \) -print | xargs wc -l | tail -n 1
+)
+
+lines_phonon=$(
+    find . \
+        \( -path './build' -o -path './third_party/acpica' -o -path './out' \) -prune -o \
+        \( -name '*.c' -o -name '*.h' -o -name '*.S' \) -print | xargs wc -l | tail -n 1
+)
+
+lines_smkfs=$(
+    find ./fs/smkfs \
+    \( -name '*.c' -o -name '*.h' -o -name '*.S' \) -print | xargs wc -l | tail -n 1
+)
 
 run() {
     if [[ $VERBOSE -eq 1 ]]; then
@@ -42,7 +58,11 @@ if [[ $REBUILD -eq 1 ]]; then
     else
         run "make -j"
     fi
-    find . -name '*.c' -o -name '*.h' -o -name '*.S' | sed 's/.*/"&"/' | xargs wc -l | tail -n 1
+    
+    echo -e "\e[33m[x] Source lines: $lines_total\e[0m"
+    echo -e "\e[33m[x] Phonon lines: $lines_phonon\e[0m"
+    echo -e "\e[33m[x] SmKFS lines:  $lines_smkfs\e[0m"
+
     make size
     make readelf
     make sections
@@ -74,7 +94,7 @@ echo -e "\e[33m[x] Launching QEMU (Testing Image)...\e[0m"
 set +e
 
 GDK_BACKEND=x11 qemu-system-i386 \
-    -cpu Haswell \
+    -cpu max \
     -cdrom amitx.iso \
     -drive file=disk.img,format=raw,if=ide \
     -boot d \

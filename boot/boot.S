@@ -1,21 +1,22 @@
 .set MB2_MAGIC, 0xE85250D6
 .set MB2_ARCH,  0          /* i386 protected mode */
 .set MB2_LENGTH, (mb2_header_end - mb2_header_start)
+.set MB2_CHECKSUM, 0x17ADAEFA
 
-.section .multiboot
+.section .multiboot, "a"
 .align 8
 mb2_header_start:
     .long MB2_MAGIC
     .long MB2_ARCH
     .long MB2_LENGTH
-    .long -(MB2_MAGIC + MB2_ARCH + MB2_LENGTH)  /* checksum */
+    .long MB2_CHECKSUM  /* checksum */
 
 /* Information request tag */
 .align 8
 mb2_tag_info:
     .short 1        /* type = information request */
     .short 0        /* flags */
-    .long 24        /* size = 8 + 4*num_requests */
+    .long 20        /* size = 8 + 4*num_requests */
     .long 4         /* basic memory info */
     .long 6         /* memory map */
     .long 9         /* ELF sections */

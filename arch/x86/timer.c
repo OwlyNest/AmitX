@@ -24,6 +24,7 @@
 /* --- Includes ---*/
 #include <arch/x86/timer.h>
 #include <arch/x86/io.h>
+#include <arch/x86/interrupts.h>
 #include <screen/printk.h>
 #include <internal/phonon_consts.h>
 #include <internal/kscope.h>
@@ -33,7 +34,6 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-extern void register_interrupt_handler(int n, int (*handler)());
 
 /* Handler signature must match interrupt_frame_t* */
 static int (*timer_handler)(interrupt_frame_t *) = NULL;

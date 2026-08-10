@@ -244,12 +244,18 @@ static int storage_init(void) {
         }
 
         char path_hello[SMKFS_NAME_LEN];
+        char path_hello2[SMKFS_NAME_LEN];
         char path_readme[SMKFS_NAME_LEN];
         char path_nested[SMKFS_NAME_LEN];
         path_hello[0] = drive_letter;
         path_hello[1] = ':';
         path_hello[2] = '/';
         strncpy(path_hello + 3, "helloworld.txt", SMKFS_NAME_LEN - 3);
+
+        path_hello2[0] = drive_letter;
+        path_hello2[1] = ':';
+        path_hello2[2] = '/';
+        strncpy(path_hello2 + 3, "docs/helloworld.txt", SMKFS_NAME_LEN - 3);
 
         path_readme[0] = drive_letter;
         path_readme[1] = ':';
@@ -278,6 +284,22 @@ static int storage_init(void) {
             smkfs_close(&mnt, fd);
         } else {
             printk("[storage] Failed to open %s for readback\n", path_hello);
+        }
+
+        smkfs_link(&mnt, path_hello,  path_hello2);
+        fd = smkfs_open(&mnt, path_hello2, SMKFS_O_RDONLY);
+        if (fd >= 0) {
+            len = smkfs_read_file(&mnt, fd, buf, sizeof(buf) - 1);
+            printk("len = %d\n", len);
+            if (len > 0) {
+                buf[len] = '\0';
+                printk("[storage] Read back %s: %s\n", path_hello2, buf);
+            } else {
+                printk("[storage] Read back %s: error\n", path_hello2);
+            }
+            smkfs_close(&mnt, fd);
+        } else {
+            printk("[storage] Failed to open %s for readback\n", path_hello2);
         }
 
         fd = smkfs_open(&mnt, path_readme, SMKFS_O_RDONLY);

@@ -165,7 +165,7 @@ SMKFS_STATUS smkfs_create_record(_SMKFS_MOUNT *mnt, SMKFS_OBJECT_TYPE object_typ
     header_init(&new_rec.header, SMKFS_ST_RECORD, sizeof(_SMKFS_RECORD) + sizeof(_SMKFS_ATTR_HEADER), 0);
     new_rec.record_id = new_id;
     new_rec.object_type = object_type;
-    new_rec.attr_count = btree_root ? 3 : 2;
+    new_rec.attr_count = btree_root ? 2 : 1;
     new_rec.link_count = 1;
     new_rec.generation = new_gen; /* What's the point of tracking generation if alloctating resets it? */
     new_rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(new_attr);

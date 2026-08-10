@@ -596,7 +596,8 @@ SMKFS_STATUS smkfs_setattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_A
 SMKFS_STATUS path_split(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_parent, PCHAR out_name);
 SMKFS_STATUS path_lookup(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out_record);
 LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags);
-
+SMKFS_STATUS smkfs_link(_SMKFS_MOUNT *mnt, SMKFS_PATH existing_path, SMKFS_PATH new_path);
+SMKFS_STATUS smkfs_unlink(_SMKFS_MOUNT *mnt, SMKFS_PATH path);
 SMKFS_STATUS smkfs_close(_SMKFS_MOUNT *mnt, LONG fd);
 LONG smkfs_read_file(_SMKFS_MOUNT *mnt, LONG fd, PVOID buf, SIZE_T len);
 LONG smkfs_write_file(_SMKFS_MOUNT *mnt, LONG fd, PCVOID buf, SIZE_T len);

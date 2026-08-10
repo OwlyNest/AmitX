@@ -155,9 +155,11 @@ LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
             return SMKFS_ERR_IO;
         }
 
-        record_add_attr(final_attr_buf, sizeof(final_attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
-        if (record_write(mnt, record_id, &final_rec, final_attr_buf) != SMKFS_OK) {
-            return SMKFS_ERR_IO;
+        if (record_add_attr(final_attr_buf, sizeof(final_attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
+            final_rec.attr_count++;
+            if (record_write(mnt, record_id, &final_rec, final_attr_buf) != SMKFS_OK) {
+                return SMKFS_ERR_IO;
+            }
         }
     }
 
@@ -212,10 +214,13 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
         }
     }
 
-    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size));
-    rec.attr_count++;
-    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
-    return record_write(mnt, record_id, &rec, attr_buf);
+    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
+        rec.attr_count++;
+        rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+        return record_write(mnt, record_id, &rec, attr_buf);
+    }
+
+    return SMKFS_ERR_NOSPC;
 }
 
 LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags) {

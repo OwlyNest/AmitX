@@ -25,6 +25,7 @@
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <lib/string.h>
+#include <mm/heap.h>
 
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -77,14 +78,19 @@ SMKFS_STATUS path_split(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_RECORD_ID *out
         if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
         memcpy(out_name, path + 3, len + 1);
     } else {
-        CHAR parent_path[SMKFS_NAME_LEN];
         LONG len = last_slash - path;
-        if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
+        if (len >= SMKFS_PATH_LEN) return SMKFS_ERR_TOO_BIG;
+
+        CHAR *parent_path = malloc((size_t)len + 1);
+        if (!parent_path) return SMKFS_ERR_NOMEM;
+
         memcpy(parent_path, path, len);
         parent_path[len] = '\0';
         if (path_lookup(mnt, parent_path, out_parent) != SMKFS_OK) {
+            free(parent_path);
             return SMKFS_ERR_NOTFOUND;
         }
+        free(parent_path);
 
         LONG name_len = strlen(last_slash + 1);
         if (name_len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;

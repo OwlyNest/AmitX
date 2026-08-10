@@ -82,9 +82,17 @@ static int storage_init(void) {
             case 0x01: {  /* IDE */
                 if (found_ide)
                     break;
-            
-                /* QEMU disk is on primary channel */
-                ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
+
+                /* QEMU disk is on primary channel
+                 * Use PCI-assigned I/O BARs when available so we don't
+                 * clobber legacy port mapping by reassigning BARs.
+                 */
+                if (dev->bars[0].is_io && dev->bars[0].base != 0 && dev->bars[1].is_io && dev->bars[1].base != 0) {
+                    ide_init((uint16_t)dev->bars[0].base, (uint16_t)dev->bars[1].base);
+                } else {
+                    /* Fallback to legacy ports when PCI BARs are not usable */
+                    ide_init(IDE_PRIMARY_DATA, IDE_PRIMARY_CTRL);
+                }
             
                 ide_identify_t identify;
                 int present_drive = -1;
@@ -140,23 +148,23 @@ static int storage_init(void) {
 
                 printk("created directory\n");
             
-                char path_hello[SMKFS_NAME_LEN];
-                char path_readme[SMKFS_NAME_LEN];
-                char path_nested[SMKFS_NAME_LEN];
+                char path_hello[20];
+                char path_readme[16];
+                char path_nested[24];
                 path_hello[0] = drive_letter;
                 path_hello[1] = ':';
                 path_hello[2] = '/';
-                strncpy(path_hello + 3, "helloworld.txt", SMKFS_NAME_LEN - 3);
+                strcpy(path_hello + 3, "helloworld.txt");
 
                 path_readme[0] = drive_letter;
                 path_readme[1] = ':';
                 path_readme[2] = '/';
-                strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
+                strcpy(path_readme + 3, "README");
 
                 path_nested[0] = drive_letter;
                 path_nested[1] = ':';
                 path_nested[2] = '/';
-                strncpy(path_nested + 3, "docs/nested.txt", SMKFS_NAME_LEN - 3);
+                strcpy(path_nested + 3, "docs/nested.txt");
 
                 int fd = smkfs_open(&mnt, path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
                 if (fd < 0 || smkfs_write_file(&mnt, fd, "Hello from SmKFS!\n", 19) < 0) {
@@ -243,29 +251,29 @@ static int storage_init(void) {
             printk("[storage] smkfs_readdir failed on %s\n", root_path);
         }
 
-        char path_hello[SMKFS_NAME_LEN];
-        char path_hello2[SMKFS_NAME_LEN];
-        char path_readme[SMKFS_NAME_LEN];
-        char path_nested[SMKFS_NAME_LEN];
+        char path_hello[20];
+        char path_hello2[24];
+        char path_readme[16];
+        char path_nested[24];
         path_hello[0] = drive_letter;
         path_hello[1] = ':';
         path_hello[2] = '/';
-        strncpy(path_hello + 3, "helloworld.txt", SMKFS_NAME_LEN - 3);
+        strcpy(path_hello + 3, "helloworld.txt");
 
         path_hello2[0] = drive_letter;
         path_hello2[1] = ':';
         path_hello2[2] = '/';
-        strncpy(path_hello2 + 3, "docs/helloworld.txt", SMKFS_NAME_LEN - 3);
+        strcpy(path_hello2 + 3, "docs/helloworld.txt");
 
         path_readme[0] = drive_letter;
         path_readme[1] = ':';
         path_readme[2] = '/';
-        strncpy(path_readme + 3, "README", SMKFS_NAME_LEN - 3);
+        strcpy(path_readme + 3, "README");
 
         path_nested[0] = drive_letter;
         path_nested[1] = ':';
         path_nested[2] = '/';
-        strncpy(path_nested + 3, "docs/nested.txt", SMKFS_NAME_LEN - 3);
+        strcpy(path_nested + 3, "docs/nested.txt");
 
         char buf[256];
         int len;

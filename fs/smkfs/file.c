@@ -25,6 +25,7 @@
 #include <fs/smkfs.h>
 #include <fs/smkfs_internal.h>
 #include <lib/string.h>
+#include <mm/heap.h>
 #include <screen/printk.h>
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -346,37 +347,15 @@ LONG smkfs_seek(_SMKFS_MOUNT *mnt, LONG fd, LONGLONG offset, LONG whence) {
 SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
     SMKFS_RECORD_ID parent;
     CHAR name[SMKFS_NAME_LEN];
-    PCCHAR last_slash;
-    PCCHAR name_start;
     SMKFS_RECORD_ID new_record;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
     }
 
-    last_slash = strrchr(path, '/');
-    if (!last_slash || last_slash == path + 2) {
-        parent = mnt->sb.root_record_id;
-        name_start = path + 3;
-    } else {
-        CHAR parent_path[SMKFS_NAME_LEN];
-        LONG len = last_slash - path;
-        if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
-        memcpy(parent_path, path, len);
-        parent_path[len] = '\0';
-        if (path_lookup(mnt, parent_path, &parent) != SMKFS_OK) {
-            return SMKFS_ERR_NOTFOUND;
-        }
-
-        name_start = last_slash + 1;
+    if (path_split(mnt, path, &parent, name) != SMKFS_OK) {
+        return SMKFS_ERR_NOTFOUND;
     }
-
-    LONG i = 0;
-    while (*name_start && *name_start != '/' && i < SMKFS_NAME_LEN - 1) {
-        name[i++] = *name_start++;
-    }
-
-    name[i] = '\0';
 
     if (smkfs_create_record(mnt, SMKFS_ROT_FILE, parent, name, &new_record) != SMKFS_OK) {
         return SMKFS_ERR_NOSPC;
@@ -415,37 +394,15 @@ SMKFS_STATUS smkfs_delete_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
 SMKFS_STATUS smkfs_mkdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path) {
     SMKFS_RECORD_ID parent;
     CHAR name[SMKFS_NAME_LEN];
-    PCCHAR last_slash;
-    PCCHAR name_start;
     SMKFS_RECORD_ID new_record;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
     }
 
-    last_slash = strrchr(path, '/');
-    if (!last_slash || last_slash == path + 2) {
-        parent = mnt->sb.root_record_id;
-        name_start = path + 3;
-    } else {
-        CHAR parent_path[SMKFS_NAME_LEN];
-        LONG len = last_slash - path;
-        if (len >= SMKFS_NAME_LEN) return SMKFS_ERR_TOO_BIG;
-        memcpy(parent_path, path, len);
-        parent_path[len] = '\0';
-        if (path_lookup(mnt, parent_path, &parent) != SMKFS_OK) {
-            return SMKFS_ERR_NOTFOUND;
-        }
-
-        name_start = last_slash + 1;
+    if (path_split(mnt, path, &parent, name) != SMKFS_OK) {
+        return SMKFS_ERR_NOTFOUND;
     }
-
-    LONG i = 0;
-    while (*name_start && *name_start != '/' && i < SMKFS_NAME_LEN - 1) {
-        name[i++] = *name_start++;
-    }
-
-    name[i] = '\0';
 
     return smkfs_create_record(mnt, SMKFS_ROT_DIR, parent, name, &new_record);
 }

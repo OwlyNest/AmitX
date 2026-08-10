@@ -45,6 +45,7 @@
  *  Level 1 is the Administrative-interface, these functions, create, check, repair and dump the file system
  *
 */
+
 /*
  * Every "ground" (version) comes with it's own design rules:
  *
@@ -104,9 +105,11 @@
 */
 
 #define SMKFS_NAME_LEN          256
+#define SMKFS_PATH_LEN          4096
 /*
  * Same as Linux and Windows, with a distinction, this currently includes the entire path, not just the file name
- * Which is a problem for later
+ * Which is a problem for later.
+ * Better[[[]]]
 */
 
 /* Block Size */

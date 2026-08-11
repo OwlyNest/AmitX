@@ -68,6 +68,10 @@ SMKFS_STATUS smkfs_mount(UCHAR drive, _SMKFS_MOUNT *mnt) {
     mnt->sb.flags &= ~SMKFS_SBF_CLEAN;
 
     journal_replay(mnt);
+    if (bitmap_init_regions(mnt) != SMKFS_OK) {
+        printk("[SMKFS] Failed to init region cache\n");
+        return SMKFS_ERR_NOMEM;
+    }
     mnt->mounted = 1;
     printk("[SmKFS] Mounted drive %d, %llu blocks, %llu free\n", drive, mnt->sb.total_blocks, mnt->sb.free_blocks);
 
@@ -105,6 +109,7 @@ SMKFS_STATUS smkfs_unmount(_SMKFS_MOUNT *mnt) {
         return SMKFS_ERR_IO;
     }
 
+    bitmap_shutdown(mnt);
     mnt->mounted = 0;
     printk("[SmKFS] Unmounted\n");
     return SMKFS_OK;

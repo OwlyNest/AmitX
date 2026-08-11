@@ -111,6 +111,7 @@
  * Which is a problem for later.
  * Better[[[]]]
 */
+#define SMKFS_REGION_BLOCKS    256
 
 /* Block Size */
 // #define SMKFS_SECTOR_SIZE       512
@@ -269,7 +270,6 @@
  *
  *
 */
-
 typedef LONG SMKFS_STATUS;
 
 #define SMKFS_OK                0
@@ -555,6 +555,11 @@ typedef struct {
     LONG            flags;
 } _SMKFS_FD;
 
+typedef struct {
+    ULONG free_count;
+    ULONG alloc_hint;
+} _SMKFS_REGION;
+
 /* Per-mount context (G1 multi-mount support) */
 typedef struct {
     UCHAR               drive_num;
@@ -563,7 +568,10 @@ typedef struct {
     ULONGLONG           journal_next_sequence;
     LONG                journal_in_transaction;
     ULONGLONG           journal_write_pos;
-    _SMKFS_FD          fd_table[SMKFS_FD_MAX];
+    _SMKFS_FD           fd_table[SMKFS_FD_MAX];
+    _SMKFS_REGION      *regions;
+    ULONG               region_count;
+    ULONG               alloc_hint_region;
 } _SMKFS_MOUNT;
 
 /* Read Directory Context */
@@ -573,6 +581,26 @@ typedef struct {
     SIZE_T          count;
 } _SMKFS_READDIR_CTX;
 
+/* Itterate Attribute Context */
+typedef struct {
+    SMKFS_LBLOCK    block;
+    _SMKFS_EXTENT  *out;
+    UCHAR           found;
+} _SMKFS_ATTR_CTX;
+
+typedef struct {
+    _SMKFS_EXTENT *extents;
+    ULONG          count;
+} _SMKFS_EXT_REMOVE_CTX;
+
+typedef struct _SMKFS_EXT_MERGE_CTX {
+    SMKFS_LBLOCK logical_block;
+    SMKFS_BLOCK physical_block;
+    ULONG count;
+    SMKFS_ATTR_ID matched_id;
+    _SMKFS_EXTENT merged;
+    int found;
+} _SMKFS_EXT_MERGE_CTX;
 
 /* --- Prototypes --- */
 

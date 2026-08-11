@@ -59,6 +59,8 @@ LONG bitmap_test(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block);
 SMKFS_BLOCK bitmap_alloc_range(_SMKFS_MOUNT *mnt, ULONG count);
 SMKFS_BLOCK bitmap_alloc(_SMKFS_MOUNT *mnt);
 VOID bitmap_free_range(_SMKFS_MOUNT *mnt, SMKFS_BLOCK start, ULONG count);
+SMKFS_STATUS bitmap_init_regions(_SMKFS_MOUNT *mnt);
+VOID bitmap_shutdown(_SMKFS_MOUNT *mnt);
 
 /* --- Record --- */
 LONG record_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size);

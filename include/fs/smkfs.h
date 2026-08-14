@@ -266,6 +266,12 @@
 #define SMKFS_PERM_EXEC         0x0040
 #define SMKFS_PERM_READ         0x0100
 
+/* Block buffer cache entry
+ *
+ *
+*/
+#define SMKFS_CACHE_SLOTS 16
+
 /* Error Codes
  *
  *
@@ -560,6 +566,13 @@ typedef struct {
     ULONG alloc_hint;
 } _SMKFS_REGION;
 
+typedef struct {
+    SMKFS_BLOCK block;
+    UCHAR data[SMKFS_BLOCK_SIZE];
+    LONG dirty;
+    LONG valid;
+} _SMKFS_BLOCK_BUF;
+
 /* Per-mount context (G1 multi-mount support) */
 typedef struct {
     UCHAR               drive_num;
@@ -572,6 +585,7 @@ typedef struct {
     _SMKFS_REGION      *regions;
     ULONG               region_count;
     ULONG               alloc_hint_region;
+    _SMKFS_BLOCK_BUF   *block_cache; // allocated in block_cache_init
 } _SMKFS_MOUNT;
 
 /* Read Directory Context */

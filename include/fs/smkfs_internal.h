@@ -31,8 +31,17 @@
 /* --- Prototypes ---*/
 
 /* --- Block I/O --- */
+SMKFS_STATUS disk_read_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PVOID buf);
 SMKFS_STATUS read_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PVOID buf);
+SMKFS_STATUS disk_write_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PCVOID  buf);
 SMKFS_STATUS write_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PCVOID  buf);
+
+/* --- Block Cache --- */
+VOID block_cache_init(_SMKFS_MOUNT *mnt);
+SMKFS_STATUS block_cache_read(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, _SMKFS_BLOCK_BUF **out_buf);
+SMKFS_STATUS block_cache_write(_SMKFS_MOUNT *mnt, _SMKFS_BLOCK_BUF *buf);
+SMKFS_STATUS block_cache_flush(_SMKFS_MOUNT *mnt);
+VOID block_cache_shutdown(_SMKFS_MOUNT *mnt);
 
 /* --- Header --- */
 VOID header_init(_SMKFS_HEADER *h, SMKFS_STRUCT_TYPE type, ULONG length, ULONG flags);

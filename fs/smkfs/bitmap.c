@@ -84,6 +84,8 @@ SMKFS_STATUS bitmap_init_regions(_SMKFS_MOUNT *mnt) {
     for (ULONGLONG bb = 0; bb < mnt->sb.bitmap_length; bb++) {
         if (read_block(mnt, mnt->sb.bitmap_start + bb, buf) != 0) {
             free(buf);
+            free(mnt->regions);
+            mnt->regions = NULL;
             return SMKFS_ERR_IO;
         }
 
@@ -97,14 +99,18 @@ SMKFS_STATUS bitmap_init_regions(_SMKFS_MOUNT *mnt) {
 
             if (byte == 0xFF) {
                 ULONG bits_in_byte = 8;
-                if (bit_base + 8 > data_blocks)
+                if (bit_base + 8 > data_blocks) {
                     bits_in_byte = (ULONG)(data_blocks - bit_base);
+                }
+
                 for (ULONG bi = 0; bi < bits_in_byte; bi++) {
                     ULONGLONG bit = bit_base + bi;
                     ULONG region = (ULONG)(bit / SMKFS_REGION_BLOCKS);
-                    if (mnt->regions[region].free_count > 0)
+                    if (mnt->regions[region].free_count > 0) {
                         mnt->regions[region].free_count--;
+                    }
                 }
+
                 continue;
             }
 

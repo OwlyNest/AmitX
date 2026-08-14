@@ -125,8 +125,7 @@ SMKFS_STATUS extent_add(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLO
 
     if (ctx.found) {
         record_remove_attr_id(attr_buf, SMKFS_ATTRT_EXTENTS, ctx.matched_id);
-        if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS,
-                            &ctx.merged, sizeof(ctx.merged)) != SMKFS_OK) {
+        if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS, &ctx.merged, sizeof(ctx.merged)) != SMKFS_OK) {
             return SMKFS_ERR_NOSPC;
         }
     } else {
@@ -134,13 +133,13 @@ SMKFS_STATUS extent_add(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLO
         new_ext.logical_offset = logical_block;
         new_ext.physical_block = physical_block;
         new_ext.block_count = count;
-        if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS,
-                            &new_ext, sizeof(new_ext)) != SMKFS_OK) {
+        if (record_add_attr(attr_buf, attr_space, SMKFS_ATTRT_EXTENTS, &new_ext, sizeof(new_ext)) != SMKFS_OK) {
             return SMKFS_ERR_NOSPC;
         }
     }
 
     rec->header.length = sizeof(_SMKFS_RECORD);
+    rec->attr_count = 0;
     PUCHAR ptr = attr_buf;
     while (1) {
         _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;

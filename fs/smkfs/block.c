@@ -26,6 +26,8 @@
 #include <fs/smkfs_internal.h>
 #include <hw/ide.h>
 #include <screen/printk.h>
+#include <lib/string.h>
+
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
@@ -35,13 +37,13 @@
 /* --- Functions ---*/
 
 /*
- * SMKFS_STATUS read_block
+ * SMKFS_STATUS disk_read_block
  * Convert block to sectors, read sectors into buffer
  * return status code
 */
-SMKFS_STATUS read_block(_SMKFS_MOUNT *mnt, /* Needs drive number and sector size */
-                        SMKFS_BLOCK block,  /* Block to read*/
-                        PVOID buf           /* Buffer to read into */
+SMKFS_STATUS disk_read_block(_SMKFS_MOUNT *mnt, /* Needs drive number and sector size */
+                        SMKFS_BLOCK block,      /* Block to read*/
+                        PVOID buf               /* Buffer to read into */
                        ) {
     if (SMKFS_BLOCK_SIZE % mnt->sb.sector_size != 0) {
         return SMKFS_ERR_IO;
@@ -59,12 +61,20 @@ SMKFS_STATUS read_block(_SMKFS_MOUNT *mnt, /* Needs drive number and sector size
     return SMKFS_OK;
 }
 
+SMKFS_STATUS read_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PVOID buf) {
+    _SMKFS_BLOCK_BUF *slot;
+    SMKFS_STATUS status = block_cache_read(mnt, block, &slot);
+    if (status != SMKFS_OK) return status;
+    memcpy(buf, slot->data, SMKFS_BLOCK_SIZE);
+    return SMKFS_OK;
+}
+
 /*
- * SMKFS_STATUS write_block
+ * SMKFS_STATUS disk_write_block
  * Convert block to sectors, write buffer to sectors on disk
  * return status code
 */
-SMKFS_STATUS write_block(_SMKFS_MOUNT *mnt, /* Mount context, needs drive number and sector size */
+SMKFS_STATUS disk_write_block(_SMKFS_MOUNT *mnt, /* Mount context, needs drive number and sector size */
                          SMKFS_BLOCK block,  /* The physical block to write to*/
                          PCVOID buf          /* (Pointer to Const VOID), data to write to block*/
                         ) {
@@ -83,4 +93,12 @@ SMKFS_STATUS write_block(_SMKFS_MOUNT *mnt, /* Mount context, needs drive number
         }
     }
     return SMKFS_OK;
+}
+
+SMKFS_STATUS write_block(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PCVOID buf) {
+    _SMKFS_BLOCK_BUF *slot;
+    SMKFS_STATUS status = block_cache_read(mnt, block, &slot);
+    if (status != SMKFS_OK) return status;
+    memcpy(slot->data, buf, SMKFS_BLOCK_SIZE);
+    return block_cache_write(mnt, slot);
 }

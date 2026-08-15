@@ -127,8 +127,9 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
     *out_count = 0;
 
     for (size_t i = 0; i < registry_count; i++) {
-        if (visited[i] == 2)
+        if (visited[i] == 2) {
             continue;
+        }
 
         /* DFS stack: node index */
         size_t stack[KSCOPE_MAX_NODES];
@@ -254,14 +255,16 @@ void kscope_shutdown_all(void) {
     kscope_node_t *order[KSCOPE_MAX_NODES];
     size_t order_count = 0;
 
-    if (kscope_topo_sort(order, &order_count) != 0)
+    if (kscope_topo_sort(order, &order_count) != 0) {
         return;
+    }
 
     for (size_t i = order_count; i > 0; i--) {
         kscope_node_t *node = order[i - 1];
 
-        if (node->state != KSCOPE_STATE_OK)
+        if (node->state != KSCOPE_STATE_OK) {
             continue;
+        }
 
         if (node->shutdown) {
             printk("[kscope] Shutdown: %s...\n", node->name);

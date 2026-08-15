@@ -183,6 +183,9 @@ SMKFS_STATUS journal_commit(_SMKFS_MOUNT *mnt) {
     }
 
     mnt->journal_in_transaction = 0;
+
+    block_cache_flush(mnt);
+    
     return SMKFS_OK;
 }
 

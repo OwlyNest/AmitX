@@ -56,6 +56,7 @@
 /* --- Globals ---*/
 extern uint32_t multiboot_info_ptr;
 extern cpu_info_t info;
+extern void c3_test(void);
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -414,6 +415,7 @@ void kernel_setup(void) {
     kscope_register_all();
     kscope_probe_all();
     kscope_dump();
+    c3_test();
 
     syscall_init();
 

@@ -17,8 +17,9 @@ SHELL := powershell.exe
 # --------------------------------------------------------------------
 
 CC       := i686-elf-gcc
+C3       := c3c
 CXX      := i686-elf-g++
-LD       := $(CC)
+LD       := i686-elf-ld
 AS       := $(CC)
 
 AR       := i686-elf-ar
@@ -116,6 +117,12 @@ CFLAGS := \
 	-include include/internal/phonon_types.h \
 	-isystem $(ACPICA_INC)
 
+C3FLAGS := \
+	--target elf-x86 \
+	--use-stdlib=no \
+	--emit-stdlib=no \
+	-g0
+
 ACPICA_CFLAGS := \
 	$(COMMON_FLAGS) \
 	-Wall \
@@ -144,7 +151,8 @@ LDFLAGS := \
 	-T boot/linker.ld \
 	-nostdlib
 
-LIBS := -lgcc
+LIBGCC := $(shell $(CC) -print-libgcc-file-name)
+LIBS := $(LIBGCC)
 
 # --------------------------------------------------------------------
 # Generated build files
@@ -175,6 +183,7 @@ LIBS := -lgcc
 # --------------------------------------------------------------------
 
 C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SRCS))
+C3_OBJS := $(patsubst %.c3,$(BUILD_DIR)/%.o,$(C3_SRCS))
 CPP_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
 ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SRCS))
 ACPICA_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ACPICA_SRCS))
@@ -184,6 +193,7 @@ $(ACPICA_OBJS): CFLAGS := $(ACPICA_CFLAGS)
 
 OBJS := \
 	$(C_OBJS) \
+	$(C3_OBJS) \
 	$(CPP_OBJS) \
 	$(ASM_OBJS) \
 	$(ACPICA_OBJS) \
@@ -215,6 +225,15 @@ $(BUILD_DIR)/%.o: %.c
 	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
 	@Write-Host "CC  $<"
 	@& "$(CC)" $(CFLAGS) -c "$<" -o "$@"
+
+# --------------------------------------------------------------------
+# C3
+# --------------------------------------------------------------------
+
+$(BUILD_DIR)/%.o: %.c3
+	@New-Item -ItemType Directory -Force -Path "$(dir $@)" | Out-Null
+	@Write-Host "C3  $<"
+	@& "$(C3)" compile-only "$<" $(C3FLAGS) --obj-out "$(dir $@)" --emit-only "$(basename $(notdir $<))"
 
 # --------------------------------------------------------------------
 # C++

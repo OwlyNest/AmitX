@@ -401,3 +401,7 @@ void printk(const char *fmt, ...) {
     puts(buf);
     serial_puts_default(buf);
 }
+
+void c3_test_printk(void) {
+    printk("Hello from C3!\n");
+}

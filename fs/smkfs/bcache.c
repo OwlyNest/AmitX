@@ -42,8 +42,7 @@ VOID block_cache_init(_SMKFS_MOUNT *mnt) {
     ULONG i;
 
     if (!mnt->block_cache) {
-        mnt->block_cache = (_SMKFS_BLOCK_BUF *)malloc(
-            sizeof(_SMKFS_BLOCK_BUF) * SMKFS_CACHE_SLOTS);
+        mnt->block_cache = (_SMKFS_BLOCK_BUF *)malloc(sizeof(_SMKFS_BLOCK_BUF) * SMKFS_CACHE_SLOTS);
         if (!mnt->block_cache) return;
     }
 

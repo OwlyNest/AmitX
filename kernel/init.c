@@ -404,8 +404,7 @@ void pci_log_to_fs(void) {
         dev = dev->next;
     }
 
-    pos += ksnprintf(buf + pos, 4096 - pos,
-        "=== End of Inventory ===\n");
+    pos += ksnprintf(buf + pos, 4096 - pos, "=== End of Inventory ===\n");
 
     amfs_write("/pci_devices.txt", buf, pos);
     free(buf);

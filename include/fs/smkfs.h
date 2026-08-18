@@ -456,18 +456,58 @@ typedef struct {
 } __attribute__((__packed__)) _SMKFS_BTREE_NODE;
 _Static_assert(sizeof(_SMKFS_BTREE_NODE) == 56, "B+ tree node size changed");
 
-/* In-memory leaf entry (264B) */
+/* On-disk leaf entry (264B): filename -> record ID */
 typedef struct {
     SMKFS_RECORD_ID record_id;
     CHAR            name[SMKFS_NAME_LEN];
 } _SMKFS_BTREE_LEAF_ENTRY;
+_Static_assert(sizeof(_SMKFS_BTREE_LEAF_ENTRY) == 264, "SmKFS B+ tree leaf entry size changed");
 
-/* In-memory index entry (25B) */
+/*
+ * On-disk internal (index) node entry (264B).
+ *
+ * Each entry pairs a child pointer with that child's fence key:
+ * the lowest key reachable through child_block. An internal node
+ * with key_count == n therefore has exactly n children, and entry
+ * 0's key is the lowest key of the whole subtree.
+ *
+ * The full 256-byte key is stored (no prefix truncation) so that
+ * names sharing more than a few leading bytes still separate
+ * correctly; leaf and index entries are deliberately the same size.
+*/
 typedef struct {
     SMKFS_BLOCK child_block;
-    CHAR        prefix[16];
-    UCHAR     prefix_len;
+    CHAR        key[SMKFS_NAME_LEN];
 } _SMKFS_BTREE_INDEX_ENTRY;
+_Static_assert(sizeof(_SMKFS_BTREE_INDEX_ENTRY) == 264, "SmKFS B+ tree index entry size changed");
+
+/*
+ * Node capacities are derived from the block and entry sizes, so they
+ * stay correct if the layouts ever change.
+ *
+ * A full node holds MAX entries; after a delete a non-root node must
+ * still hold at least MIN entries, otherwise it borrows an entry from
+ * a sibling or merges with one.
+*/
+
+enum {
+    SMKFS_BTR_LEAF_MAX  = (SMKFS_BLOCK_SIZE - sizeof(_SMKFS_BTREE_NODE)) / sizeof(_SMKFS_BTREE_LEAF_ENTRY),
+    SMKFS_BTR_INDEX_MAX = (SMKFS_BLOCK_SIZE - sizeof(_SMKFS_BTREE_NODE)) / sizeof(_SMKFS_BTREE_INDEX_ENTRY),
+    SMKFS_BTR_LEAF_MIN  = SMKFS_BTR_LEAF_MAX / 2,
+    SMKFS_BTR_INDEX_MIN = SMKFS_BTR_INDEX_MAX / 2
+};
+
+/*
+ * Result of a recursive insert: whether the node split, and if so the
+ * freshly allocated right neighbor plus its low key, which the parent
+ * stores as the separator (fence) for the new child.
+*/
+
+typedef struct {
+    LONG        split;
+    SMKFS_BLOCK right_block;
+    CHAR        sep_key[SMKFS_NAME_LEN];
+} _SMKFS_BTREE_SPLIT;
 
 /* Record header v2 (56B) */
 typedef struct {
@@ -634,6 +674,7 @@ SMKFS_STATUS smkfs_rename(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID old_parent, SMKFS_N
 LONG smkfs_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf);
 LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PCVOID buf);
 SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size);
+SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len);
 SMKFS_STATUS smkfs_getattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size);
 SMKFS_STATUS smkfs_setattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID  data, SIZE_T len);
 
@@ -647,6 +688,7 @@ SMKFS_STATUS smkfs_close(_SMKFS_MOUNT *mnt, LONG fd);
 LONG smkfs_read_file(_SMKFS_MOUNT *mnt, LONG fd, PVOID buf, SIZE_T len);
 LONG smkfs_write_file(_SMKFS_MOUNT *mnt, LONG fd, PCVOID buf, SIZE_T len);
 LONG smkfs_seek(_SMKFS_MOUNT *mnt, LONG fd, LONGLONG offset, LONG whence);
+SMKFS_STATUS smkfs_ftruncate(_SMKFS_MOUNT *mnt, LONG fd, ULONGLONG new_size);
 SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions);
 SMKFS_STATUS smkfs_delete_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path);
 SMKFS_STATUS smkfs_mkdir(_SMKFS_MOUNT *mnt, SMKFS_PATH path);

@@ -36,6 +36,104 @@
 
 /* --- Functions ---*/
 
+/* --- Byte-aligned Block I/O Helpers --- */
+
+/*
+ * block_read_byte
+ * Read `len` bytes from `offset` within logical block `lblock`.
+ * Holes read as zero.  Returns bytes read or negative error.
+ */
+static LONG block_read_byte(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLOCK lblock, SIZE_T offset, SIZE_T len, PVOID buf) {
+    _SMKFS_EXTENT ext;
+    UCHAR *block = (UCHAR *)malloc(sizeof(UCHAR) * SMKFS_BLOCK_SIZE);
+    if (!block) {
+        return SMKFS_ERR_NOMEM;
+    }
+
+    if (offset + len > SMKFS_BLOCK_SIZE) {
+        free(block);
+        return SMKFS_ERR_INVAL;
+    }
+    if (len == 0) {
+        free(block);
+        return 0;
+    }
+    
+    if (extent_resolve(mnt, record_id, lblock, &ext) == SMKFS_OK) {
+        SMKFS_BLOCK phys = ext.physical_block + (lblock - ext.logical_offset);
+        if (read_block(mnt, phys, block) != SMKFS_OK) {
+            free(block);
+            return SMKFS_ERR_IO;
+        }
+        memcpy(buf, block + offset, len);
+    } else {
+        /* Sparse hole */
+        memset(buf, 0, len);
+    }
+
+    free(block);
+    return (LONG)len;
+}
+
+/*
+ * block_write_byte
+ * Write `len` bytes to `offset` within logical block `lblock`.
+ * RMW on existing blocks; allocates and zero-fills new blocks.
+ * Returns bytes written or negative error.
+ */
+static LONG block_write_byte(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLOCK lblock, SIZE_T offset, SIZE_T len, PCVOID src) {
+    _SMKFS_EXTENT ext;
+    UCHAR *block = (UCHAR *)malloc(sizeof(UCHAR) * SMKFS_BLOCK_SIZE);
+    if (!block) {
+        return SMKFS_ERR_NOMEM;
+    }
+
+    SMKFS_BLOCK phys;
+
+    if (offset + len > SMKFS_BLOCK_SIZE) {
+        free(block);
+        return SMKFS_ERR_INVAL;
+    }
+
+    if (len == 0) {
+        free(block);
+        return 0;
+    }
+
+    if (extent_resolve(mnt, record_id, lblock, &ext) == SMKFS_OK) {
+        phys = ext.physical_block + (lblock - ext.logical_offset);
+        if (read_block(mnt, phys, block) != SMKFS_OK) {
+            free(block);
+            return SMKFS_ERR_IO;
+        }
+    } else {
+        phys = bitmap_alloc(mnt);
+        if (phys == 0) {
+            free(block);
+            return SMKFS_ERR_NOSPC;
+        }
+
+        if (extent_add(mnt, record_id, lblock, phys, 1) != SMKFS_OK) {
+            bitmap_clear(mnt, phys);
+            free(block);
+            return SMKFS_ERR_NOSPC;;
+        }
+
+        memset(block, 0, SMKFS_BLOCK_SIZE);
+    }
+
+
+    memcpy(block + offset, src, len);
+
+    if (write_block(mnt, phys, block) != SMKFS_OK) {
+        free(block);
+        return SMKFS_ERR_IO;
+    }
+
+    free(block);
+    return (LONG)len;
+}
+
 LONG smkfs_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len, PVOID buf) {
     UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
     _SMKFS_RECORD rec;
@@ -51,38 +149,33 @@ LONG smkfs_read(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offse
     
     if (rec.object_type != SMKFS_ROT_FILE) return SMKFS_ERR_INVAL;
     if (record_find_attr(attr_buf, SMKFS_ATTRT_FSIZE, (PVOID *)&fsize_ptr, NULL) != SMKFS_OK) {
-        return SMKFS_ERR_NOTFOUND;
+        file_size = 0;
+    } else {
+        file_size = *fsize_ptr;
     }
 
-    file_size = *fsize_ptr;
+    /*
+     * Successfully fail, by reading nothing. 
+    */
     if (offset >= file_size) return 0;
+    
     to_read = len;
     if (offset + to_read > file_size) {
         to_read = (SIZE_T)(file_size - offset);
     }
 
     for (SIZE_T done = 0; done < to_read; ) {
-        SMKFS_LBLOCK logical_block = (offset + done) / SMKFS_BLOCK_SIZE;
-        SIZE_T block_offset = (offset + done) % SMKFS_BLOCK_SIZE;
-        _SMKFS_EXTENT ext;
-        UCHAR block[SMKFS_BLOCK_SIZE];
-        SIZE_T chunk;
-
-        if (extent_resolve(mnt, record_id, logical_block, &ext) != SMKFS_OK) {
-            return SMKFS_ERR_NOTFOUND;
-        }
-
-        if (read_block(mnt, ext.physical_block + (logical_block - ext.logical_offset), block) != SMKFS_OK) {
-            return SMKFS_ERR_IO;
-        }
-
-        chunk = to_read - done;
+        SMKFS_LBLOCK logical_block = (SMKFS_LBLOCK)((offset + done) / SMKFS_BLOCK_SIZE);
+        SIZE_T block_offset = (SIZE_T)((offset + done) % SMKFS_BLOCK_SIZE);
+        SIZE_T chunk = to_read - done;
         if (chunk > SMKFS_BLOCK_SIZE - block_offset) {
             chunk = SMKFS_BLOCK_SIZE - block_offset;
         }
 
-        memcpy(out + done, block + block_offset, chunk);
-        done += chunk;
+        LONG r = block_read_byte(mnt, record_id, logical_block, block_offset, chunk, out + done);
+        if (r < 0) return r;
+
+        done += (SIZE_T)r;
     }
 
     return (LONG)to_read;
@@ -112,59 +205,52 @@ LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
     if (new_size < file_size) new_size = file_size;
 
     for (SIZE_T done = 0; done < len; ) {
-        SMKFS_LBLOCK logical_block = (offset + done) / SMKFS_BLOCK_SIZE;
-        SIZE_T block_offset = (offset + done) % SMKFS_BLOCK_SIZE;
-        _SMKFS_EXTENT ext;
-        UCHAR block[SMKFS_BLOCK_SIZE];
-        SIZE_T chunk;
-        SMKFS_BLOCK phys_block;
-
-        if (extent_resolve(mnt, record_id, logical_block, &ext) == SMKFS_OK) {
-            phys_block = ext.physical_block + (logical_block - ext.logical_offset);
-            if (read_block(mnt, phys_block, block) != SMKFS_OK) {
-                return SMKFS_ERR_IO;
-            }
-        } else {
-            phys_block = bitmap_alloc(mnt);
-            if (phys_block == 0) return SMKFS_ERR_NOSPC;
-            if (extent_add(mnt, record_id, logical_block, phys_block, 1) != SMKFS_OK) {
-                bitmap_clear(mnt, phys_block);
-                return SMKFS_ERR_NOSPC;
-            }
-
-            memset(block, 0, sizeof(block));
-        }
-
-        chunk = len - done;
+        SMKFS_LBLOCK logical_block = (SMKFS_LBLOCK)((offset + done) / SMKFS_BLOCK_SIZE);
+        SIZE_T block_offset = (SIZE_T)((offset + done) % SMKFS_BLOCK_SIZE);
+        SIZE_T chunk = len - done;
         if (chunk > SMKFS_BLOCK_SIZE - block_offset) {
             chunk = SMKFS_BLOCK_SIZE - block_offset;
         }
 
-        memcpy(block + block_offset, in + done, chunk);
-        if (write_block(mnt, phys_block, block) != SMKFS_OK) {
-            return SMKFS_ERR_IO;
-        }
+        LONG r = block_write_byte(mnt, record_id, logical_block, block_offset, chunk, in + done);
+        if (r < 0) return r;
 
-        done += chunk;
+        done += (SIZE_T)r;
     }
 
     if (new_size != file_size) {
-        UCHAR final_attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+        UCHAR final_attr[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
         _SMKFS_RECORD final_rec;
 
-        if (record_read(mnt, record_id, &final_rec, final_attr_buf, sizeof(final_attr_buf)) < 0) {
+        if (record_read(mnt, record_id, &final_rec, final_attr, sizeof(final_attr)) < 0) {
             return SMKFS_ERR_IO;
         }
 
-        if (record_add_attr(final_attr_buf, sizeof(final_attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
-            final_rec.attr_count++;
-            if (record_write(mnt, record_id, &final_rec, final_attr_buf) != SMKFS_OK) {
+        if (record_add_attr(final_attr, sizeof(final_attr), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
+            final_rec.attr_count++; /* approximate, attr_add handles uniqueness */
+            if (record_write(mnt, record_id, &final_rec, final_attr) != SMKFS_OK) {
                 return SMKFS_ERR_IO;
             }
         }
     }
 
     return (LONG)len;
+}
+
+static LONG truncate_collect_cb(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, PVOID ctx) {
+    _SMKFS_EXT_REMOVE_CTX *c = (_SMKFS_EXT_REMOVE_CTX *)ctx;
+
+    (VOID)attr_id;
+    if (len != sizeof(_SMKFS_EXTENT)) {
+        return 0;
+    }
+
+    if (c->count >= 32) {
+        return 0;
+    }
+
+    c->extents[c->count] = *(_SMKFS_EXTENT *)data;
+    return 0;
 }
 
 SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGLONG new_size) {
@@ -194,34 +280,55 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
         new_blocks = (new_size + SMKFS_BLOCK_SIZE - 1) / SMKFS_BLOCK_SIZE;
 
         if (new_blocks < old_blocks) {
+            _SMKFS_EXTENT all_ext[32];
+            _SMKFS_EXT_REMOVE_CTX collect;
             PVOID ext_data;
             SIZE_T ext_len;
-            if (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &ext_data, &ext_len) == SMKFS_OK) {
-                ULONG num = ext_len / sizeof(_SMKFS_EXTENT);
-                _SMKFS_EXTENT *ext = (_SMKFS_EXTENT *)ext_data;
-                for (ULONG i = 0; i < num; i++) {
-                    ULONGLONG ext_end = ext[i].logical_offset + ext[i].block_count;
-                    if (ext[i].logical_offset >= new_blocks) {
-                        bitmap_free_range(mnt, ext[i].physical_block, ext[i].block_count);
-                        ext[i].block_count = 0;
-                    } else if (ext_end > new_blocks) {
-                        ULONGLONG keep = new_blocks - ext[i].logical_offset;
-                        bitmap_free_range(mnt, ext[i].physical_block + keep, ext[i].block_count - (ULONG)keep);
-                        ext[i].block_count = (ULONG)keep;
-                    }
+
+            collect.extents = all_ext;
+            collect.count = 0;
+
+            /* Gather every extent attribute instance */
+            record_iterate_attr(attr_buf, SMKFS_ATTRT_EXTENTS, truncate_collect_cb, &collect);
+
+            /* Strip every extent attribute from the buffer */
+            while (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &ext_data, &ext_len) == SMKFS_OK) {
+                record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
+            }
+
+            /* Rewrite only the extents that survive truncation */
+            for (ULONG i = 0; i < collect.count; i++) {
+                ULONGLONG ext_start = all_ext[i].logical_offset;
+                ULONGLONG ext_end   = ext_start + all_ext[i].block_count;
+
+                if (ext_start >= new_blocks) {
+                    /* Entire extent is past the new EOF: free all blocks */
+                    bitmap_free_range(mnt, all_ext[i].physical_block, all_ext[i].block_count);
+                } else if (ext_end > new_blocks) {
+                    /* Extent straddles the truncation point: trim tail */
+                    ULONGLONG keep = new_blocks - ext_start;
+                    bitmap_free_range(mnt, all_ext[i].physical_block + keep, all_ext[i].block_count - (ULONG)keep);
+                    all_ext[i].block_count = (ULONG)keep;
+                    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT));
+                } else {
+                    /* Entire extent is before the new EOF: keep as-is */
+                    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT));
                 }
-                record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, ext, num * sizeof(_SMKFS_EXTENT));
             }
         }
     }
+    /* Growing (new_size > old_size): sparse — just update FSIZE,
+     * no block allocation.  Holes read as zero via block_read_byte.
+    */
 
-    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
-        rec.attr_count++;
-        rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
-        return record_write(mnt, record_id, &rec, attr_buf);
+    /* Update FSIZE */
+    record_remove_attr(attr_buf, SMKFS_ATTRT_FSIZE);
+    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) != SMKFS_OK) {
+        return SMKFS_ERR_NOSPC;
     }
 
-    return SMKFS_ERR_NOSPC;
+    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+    return record_write(mnt, record_id, &rec, attr_buf);
 }
 
 LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags) {
@@ -342,6 +449,150 @@ LONG smkfs_seek(_SMKFS_MOUNT *mnt, LONG fd, LONGLONG offset, LONG whence) {
     if (new_offset < 0) return SMKFS_ERR_INVAL;
     mnt->fd_table[fd].offset = (ULONGLONG)new_offset;
     return (LONG)mnt->fd_table[fd].offset;
+}
+
+SMKFS_STATUS smkfs_ftruncate(_SMKFS_MOUNT *mnt, LONG fd, ULONGLONG new_size) {
+    if (fd < 0 || fd >= SMKFS_FD_MAX) return SMKFS_ERR_INVAL;
+    if (!mnt->fd_table[fd].used) return SMKFS_ERR_INVAL;
+
+    return smkfs_truncate(mnt, mnt->fd_table[fd].record_id, new_size);
+}
+
+static LONG punc_collect_cb(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, PVOID ctx) {
+    _SMKFS_EXT_REMOVE_CTX *c = (_SMKFS_EXT_REMOVE_CTX *)ctx;
+
+    (VOID)attr_id;
+
+    if (len != sizeof(_SMKFS_EXTENT)) {
+        return 0;
+    }
+
+    if (c->count > 32) {
+        return 0;
+    }
+
+    c->extents[c->count++] = *(_SMKFS_EXTENT *)data;
+    return 0;
+}
+
+SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offset, SIZE_T len) {
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
+    ULONGLONG *fsize_ptr;
+    ULONGLONG file_size;
+    SMKFS_LBLOCK hole_start, hole_end;
+    _SMKFS_EXTENT all_ext[32];
+    _SMKFS_EXT_REMOVE_CTX collect;
+    PVOID ext_data;
+    SIZE_T ext_len;
+
+    if (!mnt->mounted || record_id == 0 || len == 0) {
+        return SMKFS_ERR_INVAL;
+    }
+
+    if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
+        return SMKFS_ERR_IO;
+    }
+
+    if (rec.object_type != SMKFS_ROT_FILE) {
+        return SMKFS_ERR_INVAL;
+    }
+
+    if (record_find_attr(attr_buf, SMKFS_ATTRT_FSIZE, (PVOID *)&fsize_ptr, NULL) != SMKFS_OK) {
+        file_size = 0;
+    } else {
+        file_size = *fsize_ptr;
+    }
+
+    if (offset >= file_size) {
+        return SMKFS_OK;
+    }
+
+    /* Clamp punch to EOF; punch never changes file size */
+    if (offset + len > file_size) {
+        len = (SIZE_T)(file_size - offset);
+    }
+
+    hole_start = (SMKFS_LBLOCK)(offset / SMKFS_BLOCK_SIZE);
+    hole_end   = (SMKFS_LBLOCK)((offset + len + SMKFS_BLOCK_SIZE - 1) / SMKFS_BLOCK_SIZE);
+
+    /* Collect every extent attribute instance */
+    collect.extents = all_ext;
+    collect.count = 0;
+    record_iterate_attr(attr_buf, SMKFS_ATTRT_EXTENTS, punc_collect_cb, &collect);
+
+    /* Strip all extent attributes from the buffer */
+    while (record_find_attr(attr_buf, SMKFS_ATTRT_EXTENTS, &ext_data, &ext_len) == SMKFS_OK) {
+        record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
+    }
+
+    /* Rebuild: keep, split, or drop each extent based on hole overlap */
+    for (ULONG i = 0; i < collect.count; i++) {
+        _SMKFS_EXTENT *e = &all_ext[i];
+        SMKFS_LBLOCK ext_start = e->logical_offset;
+        SMKFS_LBLOCK ext_end   = ext_start + e->block_count;
+
+        /* Case 1: no overlap — keep as-is */
+        if (ext_end <= hole_start || ext_start >= hole_end) {
+            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+            continue;
+        }
+
+        /* Case 2: full overlap — free all, drop extent */
+        if (ext_start >= hole_start && ext_end <= hole_end) {
+            bitmap_free_range(mnt, e->physical_block, e->block_count);
+            continue;
+        }
+
+        /* Case 3: hole in the middle — split into two extents */
+        if (ext_start < hole_start && ext_end > hole_end) {
+            ULONGLONG left_cnt  = hole_start - ext_start;
+            ULONGLONG hole_cnt  = hole_end - hole_start;
+            ULONGLONG right_cnt = ext_end - hole_end;
+
+            _SMKFS_EXTENT left = *e;
+            left.block_count = (ULONG)left_cnt;
+            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &left, sizeof(left));
+
+            bitmap_free_range(mnt, e->physical_block + left_cnt, (ULONG)hole_cnt);
+
+            _SMKFS_EXTENT right = *e;
+            right.logical_offset = hole_end;
+            right.physical_block = e->physical_block + left_cnt + hole_cnt;
+            right.block_count = (ULONG)right_cnt;
+            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &right, sizeof(right));
+            continue;
+        }
+
+        /* Case 4: hole covers tail — shrink, free tail */
+        if (ext_start < hole_start && ext_end <= hole_end) {
+            ULONGLONG keep_cnt = hole_start - ext_start;
+            ULONGLONG free_cnt = ext_end - hole_start;
+
+            e->block_count = (ULONG)keep_cnt;
+            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+
+            bitmap_free_range(mnt, e->physical_block + keep_cnt, (ULONG)free_cnt);
+            continue;
+        }
+
+        /* Case 5: hole covers head — move start, free head */
+        if (ext_start >= hole_start && ext_end > hole_end) {
+            ULONGLONG free_cnt = hole_end - ext_start;
+            ULONGLONG keep_cnt = ext_end - hole_end;
+
+            bitmap_free_range(mnt, e->physical_block, (ULONG)free_cnt);
+
+            e->logical_offset = hole_end;
+            e->physical_block = e->physical_block + free_cnt;
+            e->block_count = (ULONG)keep_cnt;
+            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+            continue;
+        }
+    }
+
+    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+    return record_write(mnt, record_id, &rec, attr_buf);
 }
 
 SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {

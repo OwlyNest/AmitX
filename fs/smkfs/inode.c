@@ -46,19 +46,54 @@ SMKFS_STATUS smkfs_getattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, _SMKFS_
 SMKFS_STATUS smkfs_setattr(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_ATTR_TYPE attr_type, PCVOID data, SIZE_T len) {
     UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
     _SMKFS_RECORD rec;
+    SMKFS_STATUS ret;
 
-    if (!mnt->mounted || !data || record_id == 0) return SMKFS_ERR_INVAL;
+    if (!mnt->mounted || !data || record_id == 0) {
+        return SMKFS_ERR_INVAL;
+    }
+
     if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
         return SMKFS_ERR_IO;
     }
 
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
     if (record_add_attr(attr_buf, sizeof(attr_buf), attr_type, data, len) != SMKFS_OK) {
+        journal_abort(mnt);
         return SMKFS_ERR_NOSPC;
     }
 
-    rec.attr_count++;
+    /* UNIQUE attributes replace the previous instance; non-unique add one.
+       Recompute so the in-memory count stays accurate. */
+    rec.attr_count = 0;
+    {
+        PUCHAR ptr = attr_buf;
+        while (1) {
+            _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
+            if (ah->type == SMKFS_ATTRT_END) {
+                break;
+            }
+
+            rec.attr_count++;
+            ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+        }
+    }
+
     rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
-    return record_write(mnt, record_id, &rec, attr_buf);
+
+    ret = record_write(mnt, record_id, &rec, attr_buf);
+    if (ret != SMKFS_OK) {
+        journal_abort(mnt);
+        return ret;
+    }
+
+    if (journal_commit(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    return SMKFS_OK;
 }
 
 SMKFS_STATUS smkfs_stat(_SMKFS_MOUNT *mnt, SMKFS_PATH path, _SMKFS_RECORD *rec, PVOID attr_buf, SIZE_T buf_size) {

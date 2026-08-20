@@ -48,83 +48,83 @@ SMKFS_STATUS smkfs_link(_SMKFS_MOUNT *mnt, SMKFS_PATH existing_path, SMKFS_PATH 
     SMKFS_BLOCK     new_root;
 
 	if (!mnt->mounted || !existing_path || !new_path) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_INVAL;
     }
 
     if (existing_path[1] != ':' || existing_path[2] != '/') {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_INVAL;
     }
 
     if (new_path[1] != ':' || new_path[2] != '/') {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_INVAL;
     }
 
 	/* Resolve the existing record */
     if (path_lookup(mnt, existing_path, &existing_id) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_NOTFOUND;
     }
 
     if (record_read(mnt, existing_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_IO;
     }
 
     /* G1: hard links to directories are forbidden */
     if (rec.object_type == SMKFS_ROT_DIR) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_INVAL;
     }
 
     /* Target must not already exist */
     if (path_lookup(mnt, new_path, &tmp_id) == SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_EXISTS;
     }
 
 	/* Split new path into parent directory and name */
     if (path_split(mnt, new_path, &new_parent, new_name) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_INVAL;
     }
 
     if (journal_start_transaction(mnt) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_JOURNAL;
     }
 
     /* Read parent directory and locate its B+ tree root */
     if (record_read(mnt, new_parent, &parent_rec, parent_attr, sizeof(parent_attr)) < 0) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_IO;
     }
 
 	if (record_find_attr(parent_attr, SMKFS_ATTRT_DATA, (PVOID *)&parent_btree, NULL) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_NOTFOUND;
     }
 
     /* Insert the new directory entry */
     new_root = *parent_btree;
     if (btree_insert(mnt, *parent_btree, new_name, existing_id, &new_root) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_NOSPC;
     }
 
 	record_add_attr(parent_attr, sizeof(parent_attr), SMKFS_ATTRT_DATA, &new_root, sizeof(new_root));
 
     if (record_write(mnt, new_parent, &parent_rec, parent_attr) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_IO;
     }
 
     /* Increment link_count on the target record */
     rec.link_count++;
     if (record_write(mnt, existing_id, &rec, attr_buf) != SMKFS_OK) {
-        journal_commit(mnt);
+        journal_abort(mnt);
         return SMKFS_ERR_IO;
     }
 

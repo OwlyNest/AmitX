@@ -342,7 +342,7 @@ typedef const char * SMKFS_NAME;     /* Path */
  *   0x00  magic[4]      Object signature ("SmKF")
  *   0x04  version       SMKFS format version
  *   0x06  type          Object type (SMKFS_ST_*)
- *   0x08  length        Size of the object payload, excluding this header
+ *   0x08  length        Size of the object payload, including including ~~excluding~~ this header
  *   0x0C  flags         Object-specific flags
  *   0x10  checksum      CRC32C checksum
  *   0x14  reserved[3]   Reserved; MUST be written as zero and ignored
@@ -379,7 +379,7 @@ typedef struct {
     /*  0 */ CHAR  magic[4];    /* SMKFS magic: "SmKF" (SMKFS_MAGIC) */
     /*  4 */ SHORT version;     /* On-disk format version (SMKFS_VERSION) */
     /*  6 */ SHORT type;        /* Structure type (SMKFS_ST_*) */
-    /*  8 */ ULONG length;      /* Payload length in bytes; excludes header */
+    /*  8 */ ULONG length;      /* Payload length in bytes; includes ~~excludes~~ header */
     /* 12 */ ULONG flags;       /* Structure-specific flags */
     /* 16 */ ULONG checksum;    /* CRC32C(header with checksum field zeroed) */
     /* 20 */ ULONG reserved[3]; /* Reserved; MUST be zero */
@@ -705,5 +705,7 @@ SMKFS_STATUS smkfs_dump_superblock(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS smkfs_dump_record(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id);
 SMKFS_STATUS smkfs_dump_journal(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS smkfs_dump_btree(_SMKFS_MOUNT *mnt, SMKFS_BLOCK root_block);
+PCCHAR smkfs_strerror(SMKFS_STATUS err);
+VOID smkfs_fserror(SMKFS_STATUS err);
 
 #endif

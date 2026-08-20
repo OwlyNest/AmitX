@@ -33,170 +33,386 @@
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
+static ULONGLONG journal_next_pos(_SMKFS_MOUNT *mnt, ULONGLONG pos);
+static LONG      journal_is_full(_SMKFS_MOUNT *mnt);
+static SMKFS_STATUS journal_write_entry(_SMKFS_MOUNT *mnt, SMKFS_JOP operation, SMKFS_BLOCK target_block, ULONG data_length, SMKFS_RECORD_ID record_id, PCVOID payload);
+static SMKFS_STATUS journal_redo_entry(_SMKFS_MOUNT *mnt, const _SMKFS_JOURNAL_ENTRY *ent, PCVOID payload);
 
 /* --- Functions ---*/
 
-SMKFS_STATUS journal_start_transaction(_SMKFS_MOUNT *mnt) {
-    if (mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
-    mnt->journal_in_transaction = 1;
-    return SMKFS_OK;
+/* Advance a journal position with wrap-around */
+static ULONGLONG journal_next_pos(_SMKFS_MOUNT *mnt, ULONGLONG pos)
+{
+    pos++;
+    if (pos >= mnt->sb.journal_length) {
+        pos = 0;
+    }
+
+    return pos;
 }
 
-SMKFS_STATUS journal_log_write(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PCVOID old_data, PCVOID new_data, SIZE_T len) {
+/* Journal is full when the next write would overwrite the tail */
+static LONG journal_is_full(_SMKFS_MOUNT *mnt) {
+    return journal_next_pos(mnt, mnt->sb.journal_head) == mnt->sb.journal_tail;
+}
+
+/*
+ * Common path used by every log_* function.
+ * Allocates a full block, fills a journal entry + optional payload,
+ * writes it at sb.journal_head and advances the head.
+ */
+
+static SMKFS_STATUS journal_write_entry(_SMKFS_MOUNT *mnt, SMKFS_JOP operation, SMKFS_BLOCK target_block, ULONG data_length, SMKFS_RECORD_ID record_id, PCVOID payload) {
     PUCHAR buf;
     _SMKFS_JOURNAL_ENTRY *ent;
     SIZE_T total_len;
     SMKFS_STATUS ret;
 
-    if (!mnt->journal_in_transaction || len > SMKFS_BLOCK_SIZE) {
+    if (!mnt->journal_in_transaction) {
         return SMKFS_ERR_JOURNAL;
     }
 
-    if (len > 0 && (!old_data || !new_data)) {
-        return SMKFS_ERR_INVAL;
+    if (journal_is_full(mnt)) {
+        return SMKFS_ERR_NOSPC;
     }
 
-    total_len = sizeof(_SMKFS_JOURNAL_ENTRY) + len;
-    if (total_len > SMKFS_BLOCK_SIZE) return SMKFS_ERR_TOO_BIG;
+    if (data_length > SMKFS_BLOCK_SIZE - sizeof(_SMKFS_JOURNAL_ENTRY)) {
+        return SMKFS_ERR_TOO_BIG;
+    }
+
+    total_len = sizeof(_SMKFS_JOURNAL_ENTRY) + data_length;
 
     buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (!buf) return SMKFS_ERR_NOMEM;
+    if (!buf) {
+        return SMKFS_ERR_NOMEM;
+    }
 
     memset(buf, 0, SMKFS_BLOCK_SIZE);
-    ent = (_SMKFS_JOURNAL_ENTRY *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(_SMKFS_JOURNAL_ENTRY) + len, 0);
-    ent->sequence = mnt->journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_WRITE;
-    ent->data_length = (ULONG)len;
-    ent->record_id = 0;
 
-    if (len > 0) {
-        memcpy(buf + sizeof(_SMKFS_JOURNAL_ENTRY), new_data, len);
+    ent = (_SMKFS_JOURNAL_ENTRY *)buf;
+    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, (ULONG)total_len, 0);
+    ent->sequence     = mnt->journal_next_sequence++;
+    ent->target_block = target_block;
+    ent->operation    = operation;
+    ent->data_length  = data_length;
+    ent->record_id    = record_id;
+
+    if (data_length > 0 && payload) {
+        memcpy(buf + sizeof(_SMKFS_JOURNAL_ENTRY), payload, data_length);
     }
 
     header_checksum_update(&ent->header, buf, ent->header.length);
 
-    ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
+    ret = write_block(mnt, mnt->sb.journal_start + mnt->sb.journal_head, buf);
     free(buf);
+
     if (ret != SMKFS_OK) {
-        printk("[SmKFS] journal_log_write FAILED at journal block %llu\n", mnt->sb.journal_start + mnt->journal_write_pos);
+        printk("[SmKFS] journal_write_entry FAILED at journal block %llu\n", mnt->sb.journal_start + mnt->sb.journal_head);
         return SMKFS_ERR_IO;
     }
 
-    mnt->journal_write_pos++;
-    if (mnt->journal_write_pos >= mnt->sb.journal_length) {
-        mnt->journal_write_pos = 0;
-    }
+    mnt->sb.journal_head = journal_next_pos(mnt, mnt->sb.journal_head);
+    mnt->journal_write_pos = mnt->sb.journal_head;
 
     return SMKFS_OK;
+}
+
+SMKFS_STATUS journal_start_transaction(_SMKFS_MOUNT *mnt) {
+    if (mnt->journal_in_transaction) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    mnt->journal_in_transaction = 1;
+    return SMKFS_OK;
+}
+
+/*
+ * Pure redo: only the *new* data is stored.
+ * old_data is accepted for API compatibility but ignored.
+ */
+
+SMKFS_STATUS journal_log_write(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PCVOID old_data, PCVOID new_data, SIZE_T len) {
+    (void)old_data;
+
+    if (len > 0 && !new_data)
+        return SMKFS_ERR_INVAL;
+
+    return journal_write_entry(mnt, SMKFS_JOP_WRITE, block, (ULONG)len, 0, new_data);
 }
 
 SMKFS_STATUS journal_log_alloc(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, ULONG count) {
-    PUCHAR buf;
-    _SMKFS_JOURNAL_ENTRY *ent;
-    SMKFS_STATUS ret;
-
-    if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
-
-    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (!buf) return SMKFS_ERR_NOMEM;
-
-    memset(buf, 0, SMKFS_BLOCK_SIZE);
-    ent = (_SMKFS_JOURNAL_ENTRY *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(_SMKFS_JOURNAL_ENTRY), 0);
-    ent->sequence = mnt->journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_ALLOC;
-    ent->data_length = count;
-    ent->record_id = 0;
-    header_checksum_update(&ent->header, buf, ent->header.length);
-
-    ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
-    free(buf);
-    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
-
-    mnt->journal_write_pos++;
-    if (mnt->journal_write_pos >= mnt->sb.journal_length) mnt->journal_write_pos = 0;
-    return SMKFS_OK;
+    return journal_write_entry(mnt, SMKFS_JOP_ALLOC, block, count, 0, NULL);
 }
 
 SMKFS_STATUS journal_log_free(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, ULONG count) {
-    PUCHAR buf;
-    _SMKFS_JOURNAL_ENTRY *ent;
+    return journal_write_entry(mnt, SMKFS_JOP_FREE, block, count, 0, NULL);
+}
+
+static SMKFS_STATUS journal_persist_superblock(_SMKFS_MOUNT *mnt) {
+    UCHAR block[SMKFS_BLOCK_SIZE];
     SMKFS_STATUS ret;
 
-    if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
+    memset(block, 0, sizeof(block));
+    memcpy(block, &mnt->sb, sizeof(mnt->sb));
+    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
 
-    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (!buf) return SMKFS_ERR_NOMEM;
-
-    memset(buf, 0, SMKFS_BLOCK_SIZE);
-    ent = (_SMKFS_JOURNAL_ENTRY *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(_SMKFS_JOURNAL_ENTRY), 0);
-    ent->sequence = mnt->journal_next_sequence++;
-    ent->target_block = block;
-    ent->operation = SMKFS_JOP_FREE;
-    ent->data_length = count;
-    ent->record_id = 0;
-    header_checksum_update(&ent->header, buf, ent->header.length);
-
-    ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
-    free(buf);
-    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
-
-    mnt->journal_write_pos++;
-    if (mnt->journal_write_pos >= mnt->sb.journal_length) {
-        mnt->journal_write_pos = 0;
+    ret = write_block(mnt, 0, block);
+    if (ret != SMKFS_OK) {
+        return SMKFS_ERR_IO;
     }
 
-    return SMKFS_OK;
+    /* Make sure the superblock itself is on stable storage */
+    return block_cache_flush(mnt);
 }
 
 SMKFS_STATUS journal_commit(_SMKFS_MOUNT *mnt) {
-    PUCHAR buf;
-    _SMKFS_JOURNAL_ENTRY *ent;
     SMKFS_STATUS ret;
 
-    if (!mnt->journal_in_transaction) return SMKFS_ERR_JOURNAL;
-
-    buf = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (!buf) return SMKFS_ERR_NOMEM;
-
-    memset(buf, 0, SMKFS_BLOCK_SIZE);
-    ent = (_SMKFS_JOURNAL_ENTRY *)buf;
-    header_init(&ent->header, SMKFS_ST_JOURNAL_ENT, sizeof(_SMKFS_JOURNAL_ENTRY), 0);
-    ent->sequence = mnt->journal_next_sequence++;
-    ent->target_block = 0;
-    ent->operation = SMKFS_JOP_COMMIT;
-    ent->data_length = 0;
-    ent->record_id = 0;
-    header_checksum_update(&ent->header, buf, ent->header.length);
-
-    ret = write_block(mnt, mnt->sb.journal_start + mnt->journal_write_pos, buf);
-    free(buf);
-    if (ret != SMKFS_OK) return SMKFS_ERR_IO;
-
-    mnt->journal_write_pos++;
-    if (mnt->journal_write_pos >= mnt->sb.journal_length) {
-        mnt->journal_write_pos = 0;
+    if (!mnt->journal_in_transaction) {
+        return SMKFS_ERR_JOURNAL;
     }
 
+    ret = journal_write_entry(mnt, SMKFS_JOP_COMMIT, 0, 0, 0, NULL);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
+    mnt->sb.journal_sequence = mnt->journal_next_sequence;
     mnt->journal_in_transaction = 0;
 
-    block_cache_flush(mnt);
-    
+    /* Journal blocks must be durable before we publish the new head */
+    ret = block_cache_flush(mnt);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
+    /* Publish the new head/sequence so recovery can see this transaction */
+    ret = journal_persist_superblock(mnt);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
+    /*
+     * Everything is now durable on the final locations.
+     * There is nothing left to redo, so the journal can be considered empty.
+     * Advancing the tail here is what prevents the circular buffer from
+     * filling up during a long-running mount.
+    */
+
+    mnt->sb.journal_tail = mnt->sb.journal_head;
+    mnt->journal_write_pos = mnt->sb.journal_head;
+
+    /* Persist the new tail as well */
+    return journal_persist_superblock(mnt);
+}
+
+/*
+ * Apply a single committed journal entry (redo).
+ * Called only for entries that belong to a transaction that reached COMMIT.
+ */
+
+static SMKFS_STATUS journal_redo_entry(_SMKFS_MOUNT *mnt, const _SMKFS_JOURNAL_ENTRY *ent, PCVOID payload) {
+    ULONG i;
+    SMKFS_STATUS ret;
+
+    switch (ent->operation) {
+    case SMKFS_JOP_WRITE:
+        if (ent->data_length == 0) {
+            return SMKFS_OK;
+        }
+
+        /* Write the logged new data to its final location */
+        ret = write_block(mnt, ent->target_block, payload);
+        if (ret != SMKFS_OK) {
+            return SMKFS_ERR_IO;
+        }
+
+        break;
+
+    case SMKFS_JOP_ALLOC:
+        /* data_length holds the block count */
+        for (i = 0; i < ent->data_length; i++) {
+            bitmap_set(mnt, ent->target_block + i);
+        }
+
+        break;
+
+    case SMKFS_JOP_FREE:
+        for (i = 0; i < ent->data_length; i++) {
+            bitmap_clear(mnt, ent->target_block + i);
+        }
+
+        break;
+
+    case SMKFS_JOP_COMMIT:
+    case SMKFS_JOP_CHECKPOINT:
+        /* Nothing to redo for these markers */
+        break;
+
+        case SMKFS_JOP_MRT_UPDATE: {
+            UCHAR mrt_block[SMKFS_BLOCK_SIZE];
+            _SMKFS_MRT_ENTRY *entries;
+            ULONG entries_per_block;
+            SMKFS_BLOCK block_id;
+            ULONG entry_id;
+        
+            if (ent->data_length != sizeof(_SMKFS_MRT_ENTRY) || !payload) {
+                return SMKFS_ERR_CORRUPT;
+            }
+            
+            if (ent->record_id >= mnt->sb.mrt_capacity) {
+                return SMKFS_ERR_CORRUPT;
+            }
+        
+            entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+            block_id = mnt->sb.mrt_start + ent->record_id / entries_per_block;
+            entry_id = (ULONG)(ent->record_id % entries_per_block);
+        
+            if (read_block(mnt, block_id, mrt_block) != SMKFS_OK) {
+                return SMKFS_ERR_IO;
+            }
+        
+            entries = (_SMKFS_MRT_ENTRY *)mrt_block;
+            entries[entry_id] = *(_SMKFS_MRT_ENTRY *)payload;
+        
+            if (write_block(mnt, block_id, mrt_block) != SMKFS_OK) {
+                return SMKFS_ERR_IO;
+            }
+            break;
+        }
+
+    default:
+        printk("[SmKFS] journal_redo: unknown op %u seq %llu\n", ent->operation, ent->sequence);
+        return SMKFS_ERR_CORRUPT;
+    }
+
     return SMKFS_OK;
 }
 
+/*
+ * Redo-only journal recovery.
+ *
+ * 1. Scan the circular buffer from tail → head.
+ * 2. Discover the highest sequence number that has a COMMIT.
+ * 3. Re-apply every entry whose sequence ≤ that value (in order).
+ * 4. Discard everything after the last commit.
+ * 5. Advance tail = head so the journal is clean.
+ *
+ * Called from smkfs_mount before any other metadata work.
+ */
+
 SMKFS_STATUS journal_replay(_SMKFS_MOUNT *mnt) {
     UCHAR buf[SMKFS_BLOCK_SIZE];
+    ULONGLONG pos;
+    ULONGLONG last_commit_seq;
+    LONG found_commit;
+    SMKFS_STATUS ret;
+    _SMKFS_JOURNAL_ENTRY *ent;
+    PCVOID payload;
 
-    for (ULONGLONG i = 0; i < mnt->sb.journal_length; i++) {
-        memset(buf, 0, sizeof(buf));
-        write_block(mnt, mnt->sb.journal_start + i, buf);
+    /* Empty journal? */
+    if (mnt->sb.journal_head == mnt->sb.journal_tail) {
+        mnt->journal_next_sequence = mnt->sb.journal_sequence;
+        mnt->journal_write_pos = mnt->sb.journal_head;
+        return SMKFS_OK;
     }
 
-    mnt->journal_write_pos = 0;
+    /* ---------- Pass 1: find the last committed sequence ---------- */
+    last_commit_seq = 0;
+    found_commit = 0;
+    pos = mnt->sb.journal_tail;
+
+    while (pos != mnt->sb.journal_head) {
+        memset(buf, 0, sizeof(buf));
+        ret = read_block(mnt, mnt->sb.journal_start + pos, buf);
+        if (ret != SMKFS_OK) {
+            printk("[SmKFS] journal_replay: read failed at slot %llu\n", pos);
+            return SMKFS_ERR_IO;
+        }
+
+        ent = (_SMKFS_JOURNAL_ENTRY *)buf;
+
+        if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != SMKFS_OK ||
+            header_checksum_verify(&ent->header, buf, ent->header.length) != SMKFS_OK) {
+            printk("[SmKFS] journal_replay: corrupt entry at slot %llu\n", pos);
+            return SMKFS_ERR_CORRUPT;
+        }
+
+        if (ent->operation == SMKFS_JOP_COMMIT) {
+            if (ent->sequence >= last_commit_seq) {
+                last_commit_seq = ent->sequence;
+                found_commit = 1;
+            }
+        }
+
+        pos = journal_next_pos(mnt, pos);
+    }
+
+    if (!found_commit) {
+        /* Nothing ever reached COMMIT – discard the whole journal */
+        printk("[SmKFS] journal_replay: no COMMIT found, discarding journal\n");
+        goto clean;
+    }
+
+    /* ---------- Pass 2: redo every entry up to last_commit_seq ---------- */
+    pos = mnt->sb.journal_tail;
+
+    while (pos != mnt->sb.journal_head) {
+        memset(buf, 0, sizeof(buf));
+        ret = read_block(mnt, mnt->sb.journal_start + pos, buf);
+        if (ret != SMKFS_OK) {
+            return SMKFS_ERR_IO;
+        }
+
+        ent = (_SMKFS_JOURNAL_ENTRY *)buf;
+
+        /* Re-validate (cheap and safe) */
+        if (header_validate(&ent->header, SMKFS_ST_JOURNAL_ENT) != SMKFS_OK || header_checksum_verify(&ent->header, buf, ent->header.length) != SMKFS_OK) {
+            return SMKFS_ERR_CORRUPT;
+        }
+
+        if (ent->sequence <= last_commit_seq) {
+            payload = (ent->data_length > 0) ? (PCVOID)(buf + sizeof(_SMKFS_JOURNAL_ENTRY)) : NULL;
+
+            ret = journal_redo_entry(mnt, ent, payload);
+            if (ret != SMKFS_OK) {
+                printk("[SmKFS] journal_replay: redo failed seq %llu op %u\n", ent->sequence, ent->operation);
+                return ret;
+            }
+        }
+
+        pos = journal_next_pos(mnt, pos);
+    }
+
+    printk("[SmKFS] journal_replay: redid up to sequence %llu\n", last_commit_seq);
+
+clean:
+    /* Journal is now clean – advance tail to head */
+    mnt->sb.journal_tail = mnt->sb.journal_head;
+    mnt->journal_write_pos = mnt->sb.journal_head;
+    mnt->journal_next_sequence = mnt->sb.journal_sequence;
+
+    /* Make sure any blocks we just rewrote are durable */
+    block_cache_flush(mnt);
+
     return SMKFS_OK;
+}
+
+SMKFS_STATUS journal_abort(_SMKFS_MOUNT *mnt) {
+    if (!mnt->journal_in_transaction) {
+        return SMKFS_OK;          /* already clean */
+    }
+
+    mnt->journal_in_transaction = 0;
+    /* Do NOT write a COMMIT and do NOT advance head.
+       The next mount’s replay will see no COMMIT and discard
+       everything after the previous tail. */
+    return SMKFS_OK;
+}
+
+SMKFS_STATUS journal_log_mrt_update(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, const _SMKFS_MRT_ENTRY *entry) {
+    if (!entry) {
+        return SMKFS_ERR_INVAL;
+    }
+    return journal_write_entry(mnt, SMKFS_JOP_MRT_UPDATE, 0, sizeof(_SMKFS_MRT_ENTRY), record_id, entry);
 }

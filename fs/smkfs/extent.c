@@ -138,7 +138,7 @@ SMKFS_STATUS extent_add(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLO
         }
     }
 
-    rec->header.length = sizeof(_SMKFS_RECORD);
+    rec->header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
     rec->attr_count = 0;
     PUCHAR ptr = attr_buf;
     while (1) {
@@ -150,8 +150,7 @@ SMKFS_STATUS extent_add(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_LBLO
     }
     rec->attr_count--;
 
-    header_checksum_update(&rec->header, block, rec->header.length);
-    return write_block(mnt, phys_block, block);
+    return record_write(mnt, record_id, rec, attr_buf);
 }
 
 static LONG extent_remove_cb(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, PVOID ctx) {
@@ -175,31 +174,27 @@ static LONG extent_remove_cb(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, PVOI
 }
 
 void extent_remove_all(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
-    PUCHAR block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (!block) return;
-
+    UCHAR block[SMKFS_BLOCK_SIZE];
     _SMKFS_RECORD *rec = (_SMKFS_RECORD *)block;
-
+    PUCHAR attr_buf;
+    _SMKFS_EXTENT extents[32];
+    _SMKFS_EXT_REMOVE_CTX ctx;
     SMKFS_BLOCK phys_block;
-    SMKFS_STATUS mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
+    SMKFS_STATUS mrt_ret;
+
+    mrt_ret = mrt_resolve(mnt, record_id, &phys_block, NULL, NULL);
     if (mrt_ret != SMKFS_OK) {
-        free(block);
         return;
     }
 
     if (read_block(mnt, phys_block, block) != SMKFS_OK) {
-        free(block);
         return;
     }
 
-    PUCHAR attr_buf = block + sizeof(_SMKFS_RECORD);
-
-    _SMKFS_EXTENT extents[32];
-    _SMKFS_EXT_REMOVE_CTX ctx;
+    attr_buf = block + sizeof(_SMKFS_RECORD);
 
     ctx.extents = extents;
     ctx.count = 0;
-
     record_iterate_attr(attr_buf, SMKFS_ATTRT_EXTENTS, extent_remove_cb, &ctx);
 
     for (ULONG i = 0; i < ctx.count; i++) {
@@ -208,16 +203,22 @@ void extent_remove_all(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
 
     record_remove_attr(attr_buf, SMKFS_ATTRT_EXTENTS);
 
-    rec->header.length = sizeof(_SMKFS_RECORD);
-    PUCHAR ptr = attr_buf;
-    while (1) {
-        _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
-        rec->header.length += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
-        if (ah->type == SMKFS_ATTRT_END) break;
-        ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+    /* Recount attributes and recompute length */
+    rec->attr_count = 0;
+    {
+        PUCHAR ptr = attr_buf;
+        while (1) {
+            _SMKFS_ATTR_HEADER *ah = (_SMKFS_ATTR_HEADER *)ptr;
+            if (ah->type == SMKFS_ATTRT_END) {
+                break;
+            }
+            rec->attr_count++;
+            ptr += sizeof(_SMKFS_ATTR_HEADER) + ah->length;
+        }
     }
 
-    header_checksum_update(&rec->header, block, rec->header.length);
-    write_block(mnt, phys_block, block);
-    free(block);
+    rec->header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+
+    /* Journalled write of the cleaned record */
+    record_write(mnt, record_id, rec, attr_buf);
 }

@@ -173,7 +173,8 @@ static int storage_init(void) {
                 strcpy(path_nested + 3, "docs/nested.txt");
 
                 int fd = smkfs_open(mnt, path_hello, SMKFS_O_WRONLY | SMKFS_O_CREATE);
-                if (fd < 0 || smkfs_write_file(mnt, fd, "Hello from SmKFS!\n", 19) < 0) {
+                SMKFS_STATUS err = smkfs_write_file(mnt, fd, "Hello from SmKFS!\n", 19);
+                if (fd < 0 || err < 0) {
                     printk("[storage] Failed to write %s\n", path_hello);
                 }
                 if (fd >= 0) smkfs_close(mnt, fd);

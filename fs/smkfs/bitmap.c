@@ -308,7 +308,15 @@ found:
             result = 0;
         } else {
             mnt->sb.free_blocks -= count;
-            journal_log_alloc(mnt, result, count);
+            if (journal_log_alloc(mnt, result, count) != SMKFS_OK) {
+                /* undo the bits we just set */
+                for (ULONG j = 0; j < count; j++) {
+                    bitmap_clear(mnt, result + j);
+                }
+
+                result = 0;
+            }
+            
             mnt->regions[region].free_count -= count;
             mnt->regions[region].alloc_hint =
                 (ULONG)((run_start + count - region_start_bit) % SMKFS_REGION_BLOCKS);
@@ -344,6 +352,7 @@ static SMKFS_BLOCK bitmap_alloc_range_linear(_SMKFS_MOUNT *mnt, ULONG count) {
     total_bits = mnt->sb.total_blocks - mnt->sb.data_start;
 
     for (bb = 0; bb < mnt->sb.bitmap_length; bb++) {
+
         if (read_block(mnt, mnt->sb.bitmap_start + bb, buf) != 0) {
             free(buf);
             free(j_buf);
@@ -370,7 +379,6 @@ static SMKFS_BLOCK bitmap_alloc_range_linear(_SMKFS_MOUNT *mnt, ULONG count) {
                             ULONGLONG j_bb = idx / (SMKFS_BLOCK_SIZE * 8);
                             ULONGLONG j_bo = (idx % (SMKFS_BLOCK_SIZE * 8)) / 8;
                             ULONGLONG j_bi = idx % 8;
-
                             if (read_block(mnt, mnt->sb.bitmap_start + j_bb, j_buf) != 0) {
                                 free(buf);
                                 free(j_buf);
@@ -385,27 +393,33 @@ static SMKFS_BLOCK bitmap_alloc_range_linear(_SMKFS_MOUNT *mnt, ULONG count) {
                         }
 
                         mnt->sb.free_blocks -= count;
-                        journal_log_alloc(mnt, first_block, count);
+                        if (journal_log_alloc(mnt, first_block, count) != SMKFS_OK) {
+                            /* undo the bits we just set */
+                            for (ULONG j = 0; j < count; j++) {
+                                bitmap_clear(mnt, first_block + j);
+                            }
+                            
+                            first_block = 0;
+                        }
 
                         if (mnt->regions) {
                             for (j = 0; j < count; j++) {
                                 ULONGLONG bit = run_start + j;
                                 ULONG region = (ULONG)(bit / SMKFS_REGION_BLOCKS);
-                                if (region < mnt->region_count &&
-                                    mnt->regions[region].free_count > 0)
+                                if (region < mnt->region_count && mnt->regions[region].free_count > 0) {
                                     mnt->regions[region].free_count--;
+                                }
                             }
                         }
-
                         free(buf);
                         free(j_buf);
+                        printk("first block = %llu\n", first_block);
                         return first_block;
                     }
                 }
             }
         }
     }
-
     free(buf);
     free(j_buf);
     return 0;
@@ -503,7 +517,12 @@ VOID bitmap_free_range(_SMKFS_MOUNT *mnt, SMKFS_BLOCK start, ULONG count) {
     }
 
     if (actually_freed > 0) {
-        journal_log_free(mnt, start, actually_freed);
+        if (journal_log_free(mnt, start, actually_freed) != SMKFS_OK) {
+            /* undo the bits we just set */
+            for (ULONG j = 0; j < actually_freed; j++) {
+                bitmap_clear(mnt, start + j);
+            }
+        }
         mnt->sb.free_blocks += actually_freed;
     }
     free(buf);

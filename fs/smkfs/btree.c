@@ -178,8 +178,11 @@ static SMKFS_STATUS btree_store(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, PUCHAR raw
         memset(old_raw, 0, SMKFS_BLOCK_SIZE);
     }
 
-    journal_log_write(mnt, block, old_raw, raw, node->header.length);
+    ret = journal_log_write(mnt, block, old_raw, raw, node->header.length);
     free(old_raw);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
 
     ret = write_block(mnt, block, raw);
     if (ret != SMKFS_OK) {

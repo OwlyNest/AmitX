@@ -106,5 +106,7 @@ SMKFS_STATUS journal_log_alloc(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, ULONG count
 SMKFS_STATUS journal_log_free(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block, ULONG count);
 SMKFS_STATUS journal_commit(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS journal_replay(_SMKFS_MOUNT *mnt);
+SMKFS_STATUS journal_abort(_SMKFS_MOUNT *mnt);
+SMKFS_STATUS journal_log_mrt_update(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, const _SMKFS_MRT_ENTRY *entry);
 
 #endif

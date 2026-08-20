@@ -111,12 +111,22 @@ SMKFS_STATUS mrt_alloc_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID *out_record_id, 
             if (candidate == 0) continue; /* reserved for Superblock */
             if (entries[j].flags & SMKFS_MRTF_ALLOCATED) continue; /* Already in use */
 
+            _SMKFS_MRT_ENTRY old = entries[j];
+
             entries[j].flags |= SMKFS_MRTF_ALLOCATED;
             entries[j].physical_block = UINT64_MAX;
             entries[j].generation++;
 
             if (write_block(mnt, mnt->sb.mrt_start + i, block) != 0) {
                 return SMKFS_ERR_IO;
+            }
+
+            if (mnt->journal_in_transaction) {
+                if (journal_log_mrt_update(mnt, candidate, &entries[j]) != SMKFS_OK) {
+                    entries[j] = old;
+                    write_block(mnt, mnt->sb.mrt_start + i, block);
+                    return SMKFS_ERR_IO;
+                }
             }
 
             mnt->sb.mrt_free_count--;
@@ -131,6 +141,10 @@ SMKFS_STATUS mrt_alloc_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID *out_record_id, 
 
 SMKFS_STATUS mrt_update_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_BLOCK new_physical_block, SMKFS_MRT_FLAGS flags) {
     UCHAR block[SMKFS_BLOCK_SIZE];
+    ULONG entries_per_block;
+    SMKFS_BLOCK block_id;
+    ULONG entry_id;
+    _SMKFS_MRT_ENTRY old;
 
     /* I'm not gonna reason this one again */
     ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
@@ -139,21 +153,30 @@ SMKFS_STATUS mrt_update_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKF
         return SMKFS_ERR_INVAL;
     }
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+    entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+    block_id = mnt->sb.mrt_start + record_id / entries_per_block;
+    entry_id = record_id % entries_per_block;
 
-    SMKFS_BLOCK block_id = mnt->sb.mrt_start + record_id / entries_per_block;
     if (read_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
     }
 
     _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
-    ULONG entry_id = record_id % entries_per_block;
+    old = entries[entry_id];
 
     entries[entry_id].physical_block = new_physical_block;
     entries[entry_id].flags |= flags;
 
     if (write_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
+    }
+
+    if (mnt->journal_in_transaction) {
+        if (journal_log_mrt_update(mnt, record_id, &entries[entry_id]) != SMKFS_OK) {
+            entries[entry_id] = old;
+            write_block(mnt, block_id, block);
+            return SMKFS_ERR_JOURNAL;
+        }
     }
     
     return SMKFS_OK;
@@ -162,6 +185,10 @@ SMKFS_STATUS mrt_update_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKF
 SMKFS_STATUS mrt_free_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
 
     UCHAR block[SMKFS_BLOCK_SIZE];
+    ULONG entries_per_block;
+    SMKFS_BLOCK block_id;
+    ULONG entry_id;
+    _SMKFS_MRT_ENTRY old;
 
     /* I'm not gonna reason this one again */
     ASSERT(power_of_two(sizeof(_SMKFS_MRT_ENTRY)) != 0);
@@ -170,15 +197,16 @@ SMKFS_STATUS mrt_free_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
         return SMKFS_ERR_INVAL;
     }
 
-    ULONG entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+    entries_per_block = SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY);
+    block_id = mnt->sb.mrt_start + record_id / entries_per_block;
+    entry_id = record_id % entries_per_block;
 
-    SMKFS_BLOCK block_id = mnt->sb.mrt_start + record_id / entries_per_block;
     if (read_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
     }
 
     _SMKFS_MRT_ENTRY *entries = (_SMKFS_MRT_ENTRY *)block;
-    ULONG entry_id = record_id % entries_per_block;
+    old = entries[entry_id];
 
     entries[entry_id].physical_block = UINT64_MAX; /* 64 ZiB, safe for now */
     entries[entry_id].flags = 0; /* Zero flags, also means unallocated */
@@ -189,6 +217,14 @@ SMKFS_STATUS mrt_free_entry(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
 
     if (write_block(mnt, block_id, block) != 0) {
         return SMKFS_ERR_IO;
+    }
+
+    if (mnt->journal_in_transaction) {
+        if (journal_log_mrt_update(mnt, record_id, &entries[entry_id]) != SMKFS_OK) {
+            entries[entry_id] = old;
+            write_block(mnt, block_id, block);
+            return SMKFS_ERR_JOURNAL;
+        }
     }
 
     mnt->sb.mrt_free_count++;

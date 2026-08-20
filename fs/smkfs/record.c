@@ -158,7 +158,12 @@ SMKFS_STATUS record_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, const _S
     memcpy(block + sizeof(_SMKFS_RECORD), attr_buf, attr_len);
     header_checksum_update(&wrec->header, block, total_len);
 
-    journal_log_write(mnt, phys_block, old_block, block, total_len);
+    ret = journal_log_write(mnt, phys_block, old_block, block, total_len);
+    if (ret != SMKFS_OK) {
+        free(block);
+        free(old_block);
+        return ret;
+    }
 
     ret = write_block(mnt, phys_block, block);
     free(block);
@@ -212,30 +217,38 @@ SMKFS_RECORD_ID record_alloc(_SMKFS_MOUNT *mnt, SMKFS_OBJECT_TYPE object_type) {
 }
 
 VOID record_free(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id) {
-    PUCHAR block;
+    UCHAR block[SMKFS_BLOCK_SIZE];
+    _SMKFS_RECORD *rec;
     SMKFS_BLOCK phys_block;
+    PUCHAR attr_buf;
 
     if (mrt_resolve(mnt, record_id, &phys_block, NULL, NULL) != SMKFS_OK) {
         return;
     }
 
+    /* Free all data extents and journal the cleaned record image */
     extent_remove_all(mnt, record_id);
 
-    block = (PUCHAR)malloc(SMKFS_BLOCK_SIZE);
-    if (block) {
-        if (read_block(mnt, phys_block, block) == SMKFS_OK) {
-            _SMKFS_RECORD *rec = (_SMKFS_RECORD *)block;
-            rec->header.flags |= SMKFS_FLA_DELETED;
-            header_checksum_update(&rec->header, block, rec->header.length);
-            write_block(mnt, phys_block, block);
-        }
+    /* Mark the record deleted (still under the caller's transaction) */
+    if (read_block(mnt, phys_block, block) == SMKFS_OK) {
+        rec = (_SMKFS_RECORD *)block;
+        attr_buf = block + sizeof(_SMKFS_RECORD);
 
-        free(block);
+        rec->header.flags |= SMKFS_FLA_DELETED;
+        rec->header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+        /* record_write journals the final image */
+        record_write(mnt, record_id, rec, attr_buf);
     }
 
-    bitmap_clear(mnt, phys_block);
+    /* Free the record's own block – journalled */
+    bitmap_free_range(mnt, phys_block, 1);
+
+    /* Free the MRT slot – now journalled via JOP_MRT_UPDATE */
     mrt_free_entry(mnt, record_id);
-    mnt->sb.record_count--;
+
+    if (mnt->sb.record_count > 0) {
+        mnt->sb.record_count--;
+    }
 }
 
 SIZE_T attr_buf_total_len(PCVOID attr_buf) {

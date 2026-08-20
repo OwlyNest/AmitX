@@ -70,7 +70,11 @@ SMKFS_STATUS smkfs_mount(UCHAR drive, _SMKFS_MOUNT *mnt) {
         return SMKFS_ERR_CORRUPT;
     }
 
-    journal_replay(mnt);
+    SMKFS_STATUS ret = journal_replay(mnt);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
     if (bitmap_init_regions(mnt) != SMKFS_OK) {
         printk("[SMKFS] Failed to init region cache\n");
         bitmap_shutdown(mnt);
@@ -169,6 +173,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         printk("[MKFS] Failed to allocate mount context\n");
         return -1;
     }
+
     memset(mnt, 0, sizeof(_SMKFS_MOUNT));
     mnt->drive_num = drive;
     block_cache_init(mnt);
@@ -192,9 +197,12 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     bitmap_blocks = (total_blocks + SMKFS_BLOCK_SIZE * 8 - 1) / (SMKFS_BLOCK_SIZE * 8);
     if (bitmap_blocks < 1) bitmap_blocks = 1;
 
-    journal_blocks = 4;
+    journal_blocks = (total_blocks / 64) + 8;   /* or (total_blocks / 64) + 8, whatever you prefer */
     if (journal_blocks >= total_blocks - 1 - bitmap_blocks) {
         journal_blocks = total_blocks - 1 - bitmap_blocks - 1;
+    }
+    if (journal_blocks < 8) {
+        journal_blocks = 8;
     }
 
     mrt_blocks = (total_blocks + (SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY)) - 1) / (SMKFS_BLOCK_SIZE / sizeof(_SMKFS_MRT_ENTRY));
@@ -249,8 +257,9 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         }
     }
 
-    /* --- Zero bitmap region; nothing is pre-marked, everything below
-     *     allocates through bitmap_alloc like normal operation would --- */
+    /* Zero bitmap region; nothing is pre-marked, everything below
+     * allocates through bitmap_alloc like normal operation would
+     */
     memset(block, 0, sizeof(block));
     for (uint64_t i = 0; i < bitmap_blocks; i++) {
         if (write_block(mnt, mnt->sb.bitmap_start + i, block) != 0) {
@@ -260,17 +269,26 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         }
     }
 
-    /* --- Format MRT region --- */
+    /* Format MRT region */
     if (mrt_format(mnt, mrt_start, mrt_blocks) != SMKFS_OK) {
         block_cache_shutdown(mnt);
         free(mnt);
         return SMKFS_ERR_IO;
     }
 
-    /* --- Allocate the root B+ tree node. Not a record, same convention
-     *     btree_insert already uses for new leaves: bitmap_alloc. --- */
+    /* From here on we allocate real blocks and must journal them. */
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        block_cache_shutdown(mnt);
+        free(mnt);
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    /* Allocate the root B+ tree node. Not a record, same convention
+     * btree_insert already uses for new leaves: bitmap_alloc.
+     */
     btree_root = bitmap_alloc(mnt);
     if (btree_root == 0) {
+        journal_abort(mnt);
         block_cache_shutdown(mnt);
         free(mnt);
         return SMKFS_ERR_NOSPC;
@@ -285,15 +303,18 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
     node->right_sibling = 0;
     header_checksum_update(&node->header, block, sizeof(_SMKFS_BTREE_NODE));
     if (write_block(mnt, btree_root, block) != SMKFS_OK) {
+        journal_abort(mnt);
         block_cache_shutdown(mnt);
         free(mnt);
         return SMKFS_ERR_IO;
     }
 
-    /* --- Allocate the root directory record through the same two-phase
-     *     MRT/bitmap path every other record uses. --- */
+    /* Allocate the root directory record through the same two-phase
+     * MRT/bitmap path every other record uses.
+     */
     root_id = record_alloc(mnt, SMKFS_ROT_DIR);
     if (root_id == 0) {
+        journal_abort(mnt);
         block_cache_shutdown(mnt);
         free(mnt);
         return SMKFS_ERR_NOSPC;
@@ -304,12 +325,14 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         _SMKFS_RECORD root_rec;
 
         if (record_read(mnt, root_id, &root_rec, attr_buf, sizeof(attr_buf)) < 0) {
+            journal_abort(mnt);
             block_cache_shutdown(mnt);
             free(mnt);
             return SMKFS_ERR_IO;
         }
 
         if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_DATA, &btree_root, sizeof(btree_root)) != SMKFS_OK) {
+            journal_abort(mnt);
             block_cache_shutdown(mnt);
             free(mnt);
             return SMKFS_ERR_NOSPC;
@@ -319,6 +342,7 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
         root_rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
 
         if (record_write(mnt, root_id, &root_rec, attr_buf) != SMKFS_OK) {
+            journal_abort(mnt);
             block_cache_shutdown(mnt);
             free(mnt);
             return SMKFS_ERR_IO;
@@ -327,7 +351,14 @@ SMKFS_STATUS smkfs_mkfs(UCHAR drive, ULONGLONG total_blocks, ULONGLONG sector_si
 
     mnt->sb.root_record_id = root_id;
 
-    /* --- Now that every field reflects reality, persist the superblock --- */
+    /* All metadata is now consistent – commit the format transaction. */
+    if (journal_commit(mnt) != SMKFS_OK) {
+        block_cache_shutdown(mnt);
+        free(mnt);
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    /* Now that every field reflects reality, persist the superblock */
     memset(block, 0, sizeof(block));
     memcpy(block, &mnt->sb, sizeof(mnt->sb));
     header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));

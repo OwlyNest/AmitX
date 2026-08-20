@@ -223,3 +223,26 @@ SMKFS_STATUS smkfs_dump_btree(_SMKFS_MOUNT *mnt, SMKFS_BLOCK root_block) {
     printk("===============\n\n");
     return SMKFS_OK;
 }
+
+PCCHAR smkfs_strerror(SMKFS_STATUS err) {
+    switch (err) {
+    case SMKFS_OK:            return "OK";
+    case SMKFS_ERR_IO:        return "I/O error";
+    case SMKFS_ERR_NOMEM:     return "out of memory";
+    case SMKFS_ERR_NOTFOUND:  return "not found";
+    case SMKFS_ERR_EXISTS:    return "already exists";
+    case SMKFS_ERR_NOSPC:     return "no space left";
+    case SMKFS_ERR_INVAL:     return "invalid argument";
+    case SMKFS_ERR_CORRUPT:   return "filesystem corrupt";
+    case SMKFS_ERR_NOTEMPTY:  return "directory not empty";
+    case SMKFS_ERR_ROFS:      return "read-only filesystem";
+    case SMKFS_ERR_JOURNAL:   return "journal error";
+    case SMKFS_ERR_TOO_BIG:   return "too big";
+    case SMKFS_ERR_NOT_YET_BOUND: return "MRT entry not yet bound";
+    default:                  return "unknown error";
+    }
+}
+
+VOID smkfs_fserror(SMKFS_STATUS err) {
+    printk("[SmKFS] File System Error: %s (%d)\n", smkfs_strerror(err), err);
+}

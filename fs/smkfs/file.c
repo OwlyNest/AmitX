@@ -204,6 +204,10 @@ LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
     new_size = offset + len;
     if (new_size < file_size) new_size = file_size;
 
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
     for (SIZE_T done = 0; done < len; ) {
         SMKFS_LBLOCK logical_block = (SMKFS_LBLOCK)((offset + done) / SMKFS_BLOCK_SIZE);
         SIZE_T block_offset = (SIZE_T)((offset + done) % SMKFS_BLOCK_SIZE);
@@ -213,8 +217,10 @@ LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
         }
 
         LONG r = block_write_byte(mnt, record_id, logical_block, block_offset, chunk, in + done);
-        if (r < 0) return r;
-
+        if (r < 0) {
+            journal_abort(mnt);
+            return r;
+        }
         done += (SIZE_T)r;
     }
 
@@ -223,15 +229,21 @@ LONG smkfs_write(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS_OFFSET offs
         _SMKFS_RECORD final_rec;
 
         if (record_read(mnt, record_id, &final_rec, final_attr, sizeof(final_attr)) < 0) {
+            journal_abort(mnt);
             return SMKFS_ERR_IO;
         }
 
         if (record_add_attr(final_attr, sizeof(final_attr), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) == SMKFS_OK) {
-            final_rec.attr_count++; /* approximate, attr_add handles uniqueness */
+            final_rec.attr_count++;
             if (record_write(mnt, record_id, &final_rec, final_attr) != SMKFS_OK) {
+                journal_abort(mnt);
                 return SMKFS_ERR_IO;
             }
         }
+    }
+
+    if (journal_commit(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
     }
 
     return (LONG)len;
@@ -249,7 +261,7 @@ static LONG truncate_collect_cb(SMKFS_ATTR_ID attr_id, PVOID data, SIZE_T len, P
         return 0;
     }
 
-    c->extents[c->count] = *(_SMKFS_EXTENT *)data;
+    c->extents[c->count++] = *(_SMKFS_EXTENT *)data;
     return 0;
 }
 
@@ -260,6 +272,7 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
     ULONGLONG old_size;
     ULONGLONG old_blocks;
     ULONGLONG new_blocks;
+    SMKFS_STATUS ret;
 
     if (!mnt->mounted || record_id == 0) return SMKFS_ERR_INVAL;
     if (record_read(mnt, record_id, &rec, attr_buf, sizeof(attr_buf)) < 0) {
@@ -273,7 +286,13 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
         old_size = *fsize_ptr;
     }
 
-    if (new_size == old_size) return SMKFS_OK;
+    if (new_size == old_size) {
+        return SMKFS_OK;
+    }
+
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
 
     if (new_size < old_size) {
         old_blocks = (old_size + SMKFS_BLOCK_SIZE - 1) / SMKFS_BLOCK_SIZE;
@@ -309,10 +328,16 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
                     ULONGLONG keep = new_blocks - ext_start;
                     bitmap_free_range(mnt, all_ext[i].physical_block + keep, all_ext[i].block_count - (ULONG)keep);
                     all_ext[i].block_count = (ULONG)keep;
-                    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT));
+                    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT)) != SMKFS_OK) {
+                        journal_abort(mnt);
+                        return SMKFS_ERR_NOSPC;
+                    }
                 } else {
                     /* Entire extent is before the new EOF: keep as-is */
-                    record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT));
+                    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &all_ext[i], sizeof(_SMKFS_EXTENT)) != SMKFS_OK) {
+                        journal_abort(mnt);
+                        return SMKFS_ERR_NOSPC;
+                    }
                 }
             }
         }
@@ -324,11 +349,23 @@ SMKFS_STATUS smkfs_truncate(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, ULONGL
     /* Update FSIZE */
     record_remove_attr(attr_buf, SMKFS_ATTRT_FSIZE);
     if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_FSIZE, &new_size, sizeof(new_size)) != SMKFS_OK) {
+        journal_abort(mnt);
         return SMKFS_ERR_NOSPC;
     }
 
     rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
-    return record_write(mnt, record_id, &rec, attr_buf);
+
+    ret = record_write(mnt, record_id, &rec, attr_buf);
+    if (ret != SMKFS_OK) {
+        journal_abort(mnt);
+        return ret;
+    }
+
+    if (journal_commit(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    return SMKFS_OK;
 }
 
 LONG smkfs_open(_SMKFS_MOUNT *mnt, SMKFS_PATH path, LONG flags) {
@@ -485,6 +522,7 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
     _SMKFS_EXT_REMOVE_CTX collect;
     PVOID ext_data;
     SIZE_T ext_len;
+    SMKFS_STATUS ret;
 
     if (!mnt->mounted || record_id == 0 || len == 0) {
         return SMKFS_ERR_INVAL;
@@ -516,6 +554,10 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
     hole_start = (SMKFS_LBLOCK)(offset / SMKFS_BLOCK_SIZE);
     hole_end   = (SMKFS_LBLOCK)((offset + len + SMKFS_BLOCK_SIZE - 1) / SMKFS_BLOCK_SIZE);
 
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
     /* Collect every extent attribute instance */
     collect.extents = all_ext;
     collect.count = 0;
@@ -534,7 +576,10 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
 
         /* Case 1: no overlap — keep as-is */
         if (ext_end <= hole_start || ext_start >= hole_end) {
-            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+            if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e)) != SMKFS_OK) {
+                journal_abort(mnt);
+                return SMKFS_ERR_NOSPC;
+            }
             continue;
         }
 
@@ -552,7 +597,10 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
 
             _SMKFS_EXTENT left = *e;
             left.block_count = (ULONG)left_cnt;
-            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &left, sizeof(left));
+            if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &left, sizeof(left)) != SMKFS_OK) {
+                journal_abort(mnt);
+                return SMKFS_ERR_NOSPC;
+            }
 
             bitmap_free_range(mnt, e->physical_block + left_cnt, (ULONG)hole_cnt);
 
@@ -560,7 +608,10 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
             right.logical_offset = hole_end;
             right.physical_block = e->physical_block + left_cnt + hole_cnt;
             right.block_count = (ULONG)right_cnt;
-            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &right, sizeof(right));
+            if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, &right, sizeof(right)) != SMKFS_OK) {
+                journal_abort(mnt);
+                return SMKFS_ERR_NOSPC;
+            }
             continue;
         }
 
@@ -570,7 +621,10 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
             ULONGLONG free_cnt = ext_end - hole_start;
 
             e->block_count = (ULONG)keep_cnt;
-            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+            if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e)) != SMKFS_OK) {
+                journal_abort(mnt);
+                return SMKFS_ERR_NOSPC;
+            }
 
             bitmap_free_range(mnt, e->physical_block + keep_cnt, (ULONG)free_cnt);
             continue;
@@ -586,19 +640,35 @@ SMKFS_STATUS smkfs_punc_hole(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, SMKFS
             e->logical_offset = hole_end;
             e->physical_block = e->physical_block + free_cnt;
             e->block_count = (ULONG)keep_cnt;
-            record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e));
+            if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_EXTENTS, e, sizeof(*e)) != SMKFS_OK) {
+                journal_abort(mnt);
+                return SMKFS_ERR_NOSPC;
+            }
             continue;
         }
     }
 
     rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
-    return record_write(mnt, record_id, &rec, attr_buf);
+    ret = record_write(mnt, record_id, &rec, attr_buf);
+    if (ret != SMKFS_OK) {
+        journal_abort(mnt);
+        return ret;
+    }
+
+    if (journal_commit(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    return SMKFS_OK;
 }
 
 SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM permissions) {
     SMKFS_RECORD_ID parent;
     CHAR name[SMKFS_NAME_LEN];
     SMKFS_RECORD_ID new_record;
+    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
+    _SMKFS_RECORD rec;
+    SMKFS_STATUS ret;
 
     if (!mnt->mounted || !path || path[1] != ':' || path[2] != '/') {
         return SMKFS_ERR_INVAL;
@@ -608,17 +678,39 @@ SMKFS_STATUS smkfs_create_file(_SMKFS_MOUNT *mnt, SMKFS_PATH path, SMKFS_PERM pe
         return SMKFS_ERR_NOTFOUND;
     }
 
+    /* create_record runs its own transaction and commits on success */
     if (smkfs_create_record(mnt, SMKFS_ROT_FILE, parent, name, &new_record) != SMKFS_OK) {
         return SMKFS_ERR_NOSPC;
     }
 
-    UCHAR attr_buf[SMKFS_BLOCK_SIZE - sizeof(_SMKFS_RECORD)];
-    _SMKFS_RECORD rec;
-    if (record_read(mnt, new_record, &rec, attr_buf, sizeof(attr_buf)) >= 0) {
-        record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions));
-        rec.attr_count++;
-        record_write(mnt, new_record, &rec, attr_buf);
+    /* Second short transaction for the PERMISSIONS attribute */
+    if (journal_start_transaction(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
     }
+
+    if (record_read(mnt, new_record, &rec, attr_buf, sizeof(attr_buf)) < 0) {
+        journal_abort(mnt);
+        return SMKFS_ERR_IO;
+    }
+
+    if (record_add_attr(attr_buf, sizeof(attr_buf), SMKFS_ATTRT_PERMISSIONS, &permissions, sizeof(permissions)) != SMKFS_OK) {
+        journal_abort(mnt);
+        return SMKFS_ERR_NOSPC;
+    }
+
+    rec.attr_count++;
+    rec.header.length = sizeof(_SMKFS_RECORD) + attr_buf_total_len(attr_buf);
+
+    ret = record_write(mnt, new_record, &rec, attr_buf);
+    if (ret != SMKFS_OK) {
+        journal_abort(mnt);
+        return ret;
+    }
+
+    if (journal_commit(mnt) != SMKFS_OK) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
     return SMKFS_OK;
 }
 

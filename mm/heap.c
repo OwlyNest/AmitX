@@ -1,60 +1,83 @@
-#include <mm/heap.h>
-#include <mm/pmm.h>
-#include <sync/spinlock.h>
-#include <screen/screen.h>
-#include <screen/printk.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <arch/x86/interrupts.h>
-#include <internal/phonon_consts.h>
-#include <lib/string.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <internal/phonon_consts.h>
+#include <lib/string.h>
+#include <mm/heap.h>
+#include <mm/paging.h>
+#include <mm/pmm.h>
+#include <screen/printk.h>
+#include <screen/screen.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <sync/spinlock.h>
 
 #define ALIGN16(x) (((x) + 15) & ~15)
 
 typedef struct Block {
-    size_t size;
-    struct Block* next;
-    int free;
+  size_t size;
+  struct Block *next;
+  int free;
 } __attribute__((aligned(16))) Block;
 
 #define BLOCK_SIZE sizeof(Block)
-#define HEAP_SIZE           (32 * 1024 * 1024)
-#define HEAP_INITIAL_PAGES  8
-#define HEAP_ARENA_PAGES    (HEAP_SIZE / FRAME_SIZE)
+#define HEAP_SIZE HEAP_VIRT_SIZE
+#define HEAP_INITIAL_PAGES 8
+#define HEAP_ARENA_PAGES (HEAP_SIZE / FRAME_SIZE)
 
-uint8_t* heap_base;
-uint8_t* heap_end;
-uint8_t* heap_break;
+uint8_t *heap_base;
+uint8_t *heap_end;
+uint8_t *heap_break;
 
-static Block* head = NULL;
+static Block *head = NULL;
 static spinlock_t heap_lock;
 
-static int heap_init(void) {
-    const boot_info_t *info = pmm_get_boot_info();
-    if (!info || !info->valid) {
-        printk("[heap] Boot info not available\n");
-        return -1;
+/* Commits [heap_end, target_end) by allocating + mapping individual
+ * physical frames. They do NOT need to be contiguous in physical
+ * memory — only within this virtual arena. Caller holds heap_lock. */
+static int heap_commit_to(uint8_t *target_end) {
+  uint8_t *page = heap_end;
+
+  while (page < target_end) {
+    void *frame = pmm_alloc_frame();
+    if (!frame) {
+      printk("[heap] Out of physical memory while growing heap "
+             "(committed %u KB)\n",
+             (uint32_t)((heap_end - heap_base) / 1024));
+      return -1;
     }
 
-    uintptr_t start = (info->kernel_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
-
-    if (pmm_is_region_free(start, HEAP_SIZE) != 0) {
-        printk("[heap] heap region not free\n");
-        panic("The heap is doing it again", 0xFFFF, 0xDEAD);
+    if (map_page((uintptr_t)frame, (uintptr_t)page, PAGE_WRITABLE) != 0) {
+      printk("[heap] map_page failed while growing heap\n");
+      pmm_free_frame(frame);
+      return -1;
     }
-    printk("[heap] heap region free\n");
-    pmm_reserve_region(start, HEAP_SIZE);
 
-    heap_base = (uint8_t *)start;
-    heap_end  = heap_base + (HEAP_INITIAL_PAGES * FRAME_SIZE);
-    heap_break = heap_base;
+    page += PAGE_SIZE;
+    heap_end = page;
+  }
 
-    spinlock_init(&heap_lock);
+  return 0;
+}
 
-    printk("[heap] Initialized at %p, initial %u pages, total arena %u MB\n", heap_base, HEAP_INITIAL_PAGES, HEAP_SIZE / (1024*1024));
-    return 0;
+static int heap_init(VOID) {
+  heap_base = (uint8_t *)HEAP_VIRT_BASE;
+  heap_end = heap_base;
+  heap_break = heap_base;
+
+  spinlock_init(&heap_lock);
+
+  uint32_t flags = spinlock_acquire(&heap_lock);
+  int ok = heap_commit_to(heap_base + HEAP_INITIAL_PAGES * PAGE_SIZE);
+  spinlock_release(&heap_lock, flags);
+
+  if (ok != 0)
+    panic("Heap allocation failed", 0xFFFF, 0xDEAD);
+
+  printk("[heap] Initialized at %p, initial %u pages, "
+         "virtual arena %u MB (physically non-contiguous)\n",
+         heap_base, HEAP_INITIAL_PAGES, HEAP_SIZE / (1024 * 1024));
+  return 0;
 }
 
 kscope_node_t heap_node = {
@@ -69,223 +92,237 @@ kscope_node_t heap_node = {
     .init = heap_init,
 };
 
-void* malloc(size_t size) {
-    if (size == 0) return NULL;
+void *malloc(size_t size) {
+  if (size == 0)
+    return NULL;
 
-    size = ALIGN16(size);
+  size = ALIGN16(size);
 
-    uint32_t flags = spinlock_acquire(&heap_lock);
+  uint32_t flags = spinlock_acquire(&heap_lock);
 
-    if (!head) {
-        void* allocated = sbrk(BLOCK_SIZE + size);
-        if (allocated == (void*)-1) {
-            spinlock_release(&heap_lock, flags);
-            return NULL;
-        }
-        head = (Block*)heap_base;
-        head->size = size;
-        head->next = NULL;
-        head->free = 0;
-        spinlock_release(&heap_lock, flags);
-        return (void*)(head + 1);
+  if (!head) {
+    void *allocated = sbrk(BLOCK_SIZE + size);
+    if (allocated == (void *)-1) {
+      spinlock_release(&heap_lock, flags);
+      return NULL;
     }
-
-    Block* current = head;
-    while (current) {
-        if (current->free && current->size >= size) {
-
-            size_t leftover = current->size - size;
-            if (leftover > BLOCK_SIZE + 8) {
-                Block* new_block = (Block*)((uint8_t*)(current + 1) + size);
-                new_block->size = leftover - BLOCK_SIZE;
-                new_block->free = 1;
-                new_block->next = current->next;
-
-                current->size = size;
-                current->free = 0;
-                current->next = new_block;
-
-                spinlock_release(&heap_lock, flags);
-                return (void*)(current + 1);
-            } else {
-                current->free = 0;
-                spinlock_release(&heap_lock, flags);
-                return (void*)(current + 1);
-            }
-        }
-
-        if (!current->next) break;
-        current = current->next;
-    }
-
-    uint8_t* next_addr = (uint8_t*)current + BLOCK_SIZE + current->size;
-    uint8_t* alloc = sbrk(BLOCK_SIZE + size);
-    if (alloc == (void*)-1 || alloc != next_addr) {
-        spinlock_release(&heap_lock, flags);
-        return NULL;
-    }
-
-    Block* new_block = (Block*)next_addr;
-    new_block->size = size;
-    new_block->free = 0;
-    new_block->next = NULL;
-    current->next = new_block;
-
+    head = (Block *)heap_base;
+    head->size = size;
+    head->next = NULL;
+    head->free = 0;
     spinlock_release(&heap_lock, flags);
-    return (void*)(new_block + 1);
+    return (void *)(head + 1);
+  }
+
+  Block *current = head;
+  while (current) {
+    if (current->free && current->size >= size) {
+
+      size_t leftover = current->size - size;
+      if (leftover > BLOCK_SIZE + 8) {
+        Block *new_block = (Block *)((uint8_t *)(current + 1) + size);
+        new_block->size = leftover - BLOCK_SIZE;
+        new_block->free = 1;
+        new_block->next = current->next;
+
+        current->size = size;
+        current->free = 0;
+        current->next = new_block;
+
+        spinlock_release(&heap_lock, flags);
+        return (void *)(current + 1);
+      } else {
+        current->free = 0;
+        spinlock_release(&heap_lock, flags);
+        return (void *)(current + 1);
+      }
+    }
+
+    if (!current->next)
+      break;
+    current = current->next;
+  }
+
+  uint8_t *next_addr = (uint8_t *)current + BLOCK_SIZE + current->size;
+  uint8_t *alloc = sbrk(BLOCK_SIZE + size);
+  if (alloc == (void *)-1 || alloc != next_addr) {
+    spinlock_release(&heap_lock, flags);
+    return NULL;
+  }
+
+  Block *new_block = (Block *)next_addr;
+  new_block->size = size;
+  new_block->free = 0;
+  new_block->next = NULL;
+  current->next = new_block;
+
+  spinlock_release(&heap_lock, flags);
+  return (void *)(new_block + 1);
 }
 
-void free(void* ptr) {
-    if (!ptr) return;
-    if ((uintptr_t)ptr & 0xF) return;
+void free(void *ptr) {
+  if (!ptr)
+    return;
+  if ((uintptr_t)ptr & 0xF)
+    return;
 
-    uint32_t flags = spinlock_acquire(&heap_lock);
+  uint32_t flags = spinlock_acquire(&heap_lock);
 
-    Block* block = (Block*)ptr - 1;
-    if ((uint8_t*)block < heap_base || (uint8_t*)block >= heap_end) {
-        spinlock_release(&heap_lock, flags);
-        return;
-    }
-
-    if (block->free) {
-        spinlock_release(&heap_lock, flags);
-        return;
-    }
-    block->free = 1;
-
-    Block* next = block->next;
-    if (next && next->free) {
-        block->size += BLOCK_SIZE + next->size;
-        block->next = next->next;
-    }
-
-    Block* prev = head;
-    while (prev && prev->next != block) {
-        prev = prev->next;
-    }
-    if (prev && prev->free) {
-        prev->size += BLOCK_SIZE + block->size;
-        prev->next = block->next;
-    }
-
+  Block *block = (Block *)ptr - 1;
+  if ((uint8_t *)block < heap_base || (uint8_t *)block >= heap_end) {
     spinlock_release(&heap_lock, flags);
+    return;
+  }
+
+  if (block->free) {
+    spinlock_release(&heap_lock, flags);
+    return;
+  }
+  block->free = 1;
+
+  Block *next = block->next;
+  if (next && next->free) {
+    block->size += BLOCK_SIZE + next->size;
+    block->next = next->next;
+  }
+
+  Block *prev = head;
+  while (prev && prev->next != block) {
+    prev = prev->next;
+  }
+  if (prev && prev->free) {
+    prev->size += BLOCK_SIZE + block->size;
+    prev->next = block->next;
+  }
+
+  spinlock_release(&heap_lock, flags);
 }
 
-void* calloc(size_t num, size_t size) {
-    if (num == 0 || size == 0) return NULL;
-    if (SIZE_MAX / num < size) return NULL;
-    size_t total = num * size;
-    void* ptr = malloc(total);
-    if (ptr) memset(ptr, 0, total);
-    return ptr;
+void *calloc(size_t num, size_t size) {
+  if (num == 0 || size == 0)
+    return NULL;
+  if (SIZE_MAX / num < size)
+    return NULL;
+  size_t total = num * size;
+  void *ptr = malloc(total);
+  if (ptr)
+    memset(ptr, 0, total);
+  return ptr;
 }
 
-void* realloc(void* ptr, size_t new_size) {
-    if (!ptr) return malloc(new_size);
-    if (new_size == 0) {
-        free(ptr);
-        return NULL;
-    }
-
-    uint32_t flags = spinlock_acquire(&heap_lock);
-
-    Block* block = (Block*)ptr - 1;
-    if (block->size >= new_size) {
-        size_t leftover = block->size - new_size;
-        if (leftover > BLOCK_SIZE + 16) {
-            Block* new_block = (Block*)((uint8_t*)(block + 1) + new_size);
-            new_block->size = leftover - BLOCK_SIZE;
-            new_block->free = 1;
-            new_block->next = block->next;
-
-            block->size = new_size;
-            block->next = new_block;
-
-            if (new_block->next && new_block->next->free) {
-                new_block->size += BLOCK_SIZE + new_block->next->size;
-                new_block->next = new_block->next->next;
-            }
-        }
-        spinlock_release(&heap_lock, flags);
-        return ptr;
-    }
-
-    if (block->next && block->next->free) {
-        size_t combined = block->size + BLOCK_SIZE + block->next->size;
-        if (combined >= new_size) {
-            block->size = combined;
-            block->next = block->next->next;
-            spinlock_release(&heap_lock, flags);
-            return ptr;
-        }
-    }
-
-    spinlock_release(&heap_lock, flags);
-
-    /* Falls outside the lock: malloc/free below re-acquire on their own,
-       and copying doesn't touch shared heap state */
-    void* new_ptr = malloc(new_size);
-    if (!new_ptr) return NULL;
-
-    memcpy(new_ptr, ptr, block->size);
+void *realloc(void *ptr, size_t new_size) {
+  if (!ptr)
+    return malloc(new_size);
+  if (new_size == 0) {
     free(ptr);
-    return new_ptr;
+    return NULL;
+  }
+
+  uint32_t flags = spinlock_acquire(&heap_lock);
+
+  Block *block = (Block *)ptr - 1;
+  if (block->size >= new_size) {
+    size_t leftover = block->size - new_size;
+    if (leftover > BLOCK_SIZE + 16) {
+      Block *new_block = (Block *)((uint8_t *)(block + 1) + new_size);
+      new_block->size = leftover - BLOCK_SIZE;
+      new_block->free = 1;
+      new_block->next = block->next;
+
+      block->size = new_size;
+      block->next = new_block;
+
+      if (new_block->next && new_block->next->free) {
+        new_block->size += BLOCK_SIZE + new_block->next->size;
+        new_block->next = new_block->next->next;
+      }
+    }
+    spinlock_release(&heap_lock, flags);
+    return ptr;
+  }
+
+  if (block->next && block->next->free) {
+    size_t combined = block->size + BLOCK_SIZE + block->next->size;
+    if (combined >= new_size) {
+      block->size = combined;
+      block->next = block->next->next;
+      spinlock_release(&heap_lock, flags);
+      return ptr;
+    }
+  }
+
+  spinlock_release(&heap_lock, flags);
+
+  /* Falls outside the lock: malloc/free below re-acquire on their own,
+     and copying doesn't touch shared heap state */
+  void *new_ptr = malloc(new_size);
+  if (!new_ptr)
+    return NULL;
+
+  memcpy(new_ptr, ptr, block->size);
+  free(ptr);
+  return new_ptr;
 }
 
-void print_block(Block* b) {
-    puts("Block @ ");
-    puthex((uint32_t)b);
-    puts(", size=");
-    char buf[12];
-    int_to_ascii((int)b->size, buf);
-    puts(buf);
-    puts(", free=");
-    puts(b->free ? "yes" : "no");
-    puts("\n");
+void print_block(Block *b) {
+  puts("Block @ ");
+  puthex((uint32_t)b);
+  puts(", size=");
+  char buf[12];
+  int_to_ascii((int)b->size, buf);
+  puts(buf);
+  puts(", free=");
+  puts(b->free ? "yes" : "no");
+  puts("\n");
 }
 
 void print_heap_state() {
-    Block* current = head;
-    puts("Heap blocks:\n");
-    while (current) {
-        print_block(current);
-        current = current->next;
-    }
+  Block *current = head;
+  puts("Heap blocks:\n");
+  while (current) {
+    print_block(current);
+    current = current->next;
+  }
 }
 
-void* sbrk(ptrdiff_t increment) {
-    uint32_t flags = spinlock_acquire(&heap_lock);
+void *sbrk(ptrdiff_t increment) {
+  uint32_t flags = spinlock_acquire(&heap_lock);
 
-    uint8_t* prev_break = heap_break;
-    uint8_t* new_break = heap_break + increment;
+  uint8_t *prev_break = heap_break;
+  uint8_t *new_break = heap_break + increment;
 
-    if (increment == 0) {
-        spinlock_release(&heap_lock, flags);
-        return prev_break;
-    }
-
-    if (new_break < heap_base) {
-        printk("[heap] sbrk: cannot shrink below heap base\n");
-        spinlock_release(&heap_lock, flags);
-        return (void*)-1;
-    }
-
-    if (new_break > heap_base + HEAP_SIZE) {
-        printk("[heap] sbrk: heap arena exhausted (need %p, limit %p)\n", new_break, heap_base + HEAP_SIZE);
-        spinlock_release(&heap_lock, flags);
-        return (void*)-1;
-    }
-
-    if (new_break > heap_end) {
-        uint32_t needed = (uint32_t)(new_break - heap_end);
-        uint32_t frames = (needed + FRAME_SIZE - 1) >> FRAME_SIZE_SHIFT;
-        if (frames == 0) frames = 1;
-
-        printk("[heap] sbrk: growing committed region %p -> %p (+%u frames)\n", heap_end, heap_end + frames * FRAME_SIZE, frames);
-        heap_end += frames * FRAME_SIZE;
-    }
-
-    heap_break = new_break;
+  if (increment == 0) {
     spinlock_release(&heap_lock, flags);
     return prev_break;
+  }
+
+  if (new_break < heap_base) {
+    printk("[heap] sbrk: cannot shrink below heap base\n");
+    spinlock_release(&heap_lock, flags);
+    return (void *)-1;
+  }
+
+  if (new_break > heap_base + HEAP_SIZE) {
+    printk("[heap] sbrk: heap arena exhausted (need %p, limit %p)\n", new_break,
+           heap_base + HEAP_SIZE);
+    spinlock_release(&heap_lock, flags);
+    return (void *)-1;
+  }
+
+  if (new_break > heap_end) {
+    uint8_t *target = (uint8_t *)(((uintptr_t)new_break + PAGE_SIZE - 1) &
+                                  ~(uintptr_t)(PAGE_SIZE - 1));
+
+    printk("[heap] sbrk: growing committed region %p -> %p\n", heap_end,
+           target);
+
+    if (heap_commit_to(target) != 0) {
+      spinlock_release(&heap_lock, flags);
+      return (void *)-1;
+    }
+  }
+
+  heap_break = new_break;
+  spinlock_release(&heap_lock, flags);
+  return prev_break;
 }

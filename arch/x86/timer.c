@@ -68,7 +68,6 @@ void init_timer(uint32_t frequency) {
 
     printk("[timer] PIT initialized at %u Hz (divisor %u)\n", PIT_BASE_HZ / divisor, divisor);
 
-    __asm__ __volatile__("sti");
     pic_unmask_irq(0);
 }
 

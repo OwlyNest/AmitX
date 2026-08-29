@@ -1,7 +1,7 @@
-.set MB2_MAGIC, 0xE85250D6
-.set MB2_ARCH,  0          /* i386 protected mode */
-.set MB2_LENGTH, (mb2_header_end - mb2_header_start)
-.set MB2_CHECKSUM, 0x17ADAEFA
+.set MB2_MAGIC,    0xE85250D6
+.set MB2_ARCH,     0
+.set MB2_LENGTH,   (mb2_header_end - mb2_header_start)
+.set MB2_CHECKSUM, -(MB2_MAGIC + MB2_ARCH + MB2_LENGTH)   
 
 .section .multiboot, "a"
 .align 8
@@ -15,13 +15,28 @@ mb2_header_start:
 .align 8
 mb2_tag_info:
     .short 1        /* type = information request */
-    .short 0        /* flags */
-    .long 20        /* size = 8 + 4*num_requests */
+    .short 1        /* flags: bit 0 = optional — don't hard-fail boot
+                       if any requested tag can't be satisfied */
+    .long 32        /* size = 8 + 4*num_requests */
     .long 4         /* basic memory info */
     .long 6         /* memory map */
+    .long 8         /* framebuffer info */
     .long 9         /* ELF sections */
-
+    .long 14        /* ACPI old RSDP */
+    .long 15        /* ACPI new RSDP */
+    
 /* Skip for now, GRUB handles ELF kernels fine */
+/* Optional: ask the bootloader to set a preferred mode.
+ * GRUB2 will try to honor this on BIOS; on UEFI it usually
+ * gives you the current GOP mode regardless. */
+.align 8
+mb2_tag_fb:
+    .short 5        /* type = framebuffer */
+    .short 0
+    .long 20
+    .long 1024      /* preferred width */
+    .long 768       /* preferred height */
+    .long 32        /* preferred bpp */
 
 /* Null terminator */
 .align 8

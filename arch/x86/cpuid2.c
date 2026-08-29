@@ -809,15 +809,13 @@ void cpuid_decode(cpuid_raw_db_t *db, cpu_info_t *info) {
     cpuid_decode_proc(db, &info->proc);
     cpuid_decode_feat(db, &info->features);
     cpuid_decode_ext_feat(db, &info->features_ext);
-
+    cpuid_decode_feat7(db, &info->feat7);
 }
 
 void cpuid_init(cpu_info_t *info) {
-    (void)info;
     cpuid_raw_pass();
     cpuid_dump_db();
     cpuid_decode(&db, info);
-    cpuid_decode_feat7(&db, &info->feat7);
 }
 
 static int kscope_cpuid_init(void) {

@@ -122,6 +122,24 @@ SMKFS_STATUS journal_start_transaction(_SMKFS_MOUNT *mnt) {
         return SMKFS_ERR_JOURNAL;
     }
 
+    /* Journal should be empty after every commit/checkpoint.
+       If it is not, reclaim it first. */
+    if (mnt->sb.journal_head != mnt->sb.journal_tail) {
+        if (journal_checkpoint(mnt) != SMKFS_OK) {
+            return SMKFS_ERR_JOURNAL;
+        }
+    }
+
+    /* Also refuse if a single free slot is all that remains */
+    if (journal_is_full(mnt)) {
+        if (journal_checkpoint(mnt) != SMKFS_OK) {
+            return SMKFS_ERR_NOSPC;
+        }
+        if (journal_is_full(mnt)) {
+            return SMKFS_ERR_NOSPC;
+        }
+    }
+
     mnt->journal_in_transaction = 1;
     return SMKFS_OK;
 }
@@ -415,4 +433,70 @@ SMKFS_STATUS journal_log_mrt_update(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id
         return SMKFS_ERR_INVAL;
     }
     return journal_write_entry(mnt, SMKFS_JOP_MRT_UPDATE, 0, sizeof(_SMKFS_MRT_ENTRY), record_id, entry);
+}
+
+/*
+ * journal_checkpoint
+ *
+ * Make the filesystem consistent on stable storage.
+ * Must not be called while a transaction is open.
+ *
+ * Steps:
+ *   1. Refuse if a transaction is in progress.
+ *   2. Flush the block cache (all dirty metadata + data).
+ *   3. If the journal is non-empty (should not happen after a
+ *      normal commit), reclaim it by advancing the tail.
+ *   4. Optionally write a CHECKPOINT marker for the audit trail.
+ *   5. Persist the superblock.
+*/
+SMKFS_STATUS journal_checkpoint(_SMKFS_MOUNT *mnt) {
+    SMKFS_STATUS ret;
+
+    if (!mnt) {
+        return SMKFS_ERR_INVAL;
+    }
+
+    if (mnt->journal_in_transaction) {
+        return SMKFS_ERR_JOURNAL;
+    }
+
+    /* 1. Everything that is still only in the cache must get on disk */
+    ret = block_cache_flush(mnt);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
+    /* 2. Reclaim any leftover journal entries (belt-and-suspenders) */
+    if (mnt->sb.journal_head != mnt->sb.journal_tail) {
+        mnt->sb.journal_tail = mnt->sb.journal_head;
+        mnt->journal_write_pos = mnt->sb.journal_head;
+    }
+
+    /*
+     * 3. Write a CHECKPOINT marker so the journal history shows
+     *    a clear consistency point.  We temporarily open a
+     *    one-entry "transaction" just for the marker.
+    */
+
+    mnt->journal_in_transaction = 1;
+    ret = journal_write_entry(mnt, SMKFS_JOP_CHECKPOINT, 0, 0, 0, NULL);
+    mnt->journal_in_transaction = 0;
+
+    if (ret != SMKFS_OK) {
+        /* Marker is best-effort; still try to persist the SB */
+        printk("[SmKFS] checkpoint: could not write marker (%d)\n", ret);
+    } else {
+        /* The marker itself is durable; reclaim again */
+        mnt->sb.journal_tail = mnt->sb.journal_head;
+        mnt->journal_write_pos = mnt->sb.journal_head;
+        mnt->sb.journal_sequence = mnt->journal_next_sequence;
+    }
+
+    /* 4. Publish the new tail / sequence */
+    ret = journal_persist_superblock(mnt);
+    if (ret != SMKFS_OK) {
+        return ret;
+    }
+
+    return SMKFS_OK;
 }

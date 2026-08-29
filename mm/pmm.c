@@ -1,23 +1,22 @@
 /*
-	* mm/pmm.c - [Enter description]
-	* Author:   amity
-	* Date:     Mon Jun 15 09:28:58 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * mm/pmm.c - [Enter description]
+ * Author:   amity
+ * Date:     Mon Jun 15 09:28:58 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
 
 /* --- Macros ---*/
 
@@ -25,11 +24,11 @@
 #include "internal/multiboot.h"
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
-#include <mm/pmm.h>
-#include <mm/heap.h>
-#include <screen/printk.h>
-#include <lib/string.h>
 #include <internal/phonon_consts.h>
+#include <lib/string.h>
+#include <mm/heap.h>
+#include <mm/pmm.h>
+#include <screen/printk.h>
 #include <stdint.h>
 
 /* --- Typedefs - Structs - Enums ---*/
@@ -56,120 +55,120 @@ static uint32_t find_first_free_n(uint32_t count);
  * Bitmap bit manipulation
  * ======================================================================= */
 static inline void bitmap_set(uint32_t frame) {
-    bitmap[frame >> 3] |= (1 << (frame & 7));
+  bitmap[frame >> 3] |= (1 << (frame & 7));
 }
 
 static inline void bitmap_clear(uint32_t frame) {
-    bitmap[frame >> 3] &= ~(1 << (frame & 7));
+  bitmap[frame >> 3] &= ~(1 << (frame & 7));
 }
 
 static inline int bitmap_test(uint32_t frame) {
-    return bitmap[frame >> 3] & (1 << (frame & 7));
+  return bitmap[frame >> 3] & (1 << (frame & 7));
 }
 
 /* ==========================================================================
  * Find first free frame (naive linear scan)
  * ======================================================================= */
 static uint32_t find_first_free(void) {
-    for (uint32_t i = 0; i < bitmap_size; i++) {
-        if (bitmap[i] == 0xFF)
-            continue;
-        for (uint32_t j = 0; j < 8; j++) {
-            uint32_t frame = (i << 3) + j;
-            if (frame >= total_frames)
-                return (uint32_t)-1;
-            if (!(bitmap[i] & (1 << j)))
-                return frame;
-        }
+  for (uint32_t i = 0; i < bitmap_size; i++) {
+    if (bitmap[i] == 0xFF)
+      continue;
+    for (uint32_t j = 0; j < 8; j++) {
+      uint32_t frame = (i << 3) + j;
+      if (frame >= total_frames)
+        return (uint32_t)-1;
+      if (!(bitmap[i] & (1 << j)))
+        return frame;
     }
-    return (uint32_t)-1;
+  }
+  return (uint32_t)-1;
 }
 
 /* ==========================================================================
  * Find N contiguous free frames
  * ======================================================================= */
 static uint32_t find_first_free_n(uint32_t count) {
-    if (count == 0)
-        return (uint32_t)-1;
-    if (count == 1)
-        return find_first_free();
-
-    uint32_t run_start = 0;
-    uint32_t run_len = 0;
-
-    for (uint32_t i = 0; i < total_frames; i++) {
-        if (!bitmap_test(i)) {
-            if (run_len == 0)
-                run_start = i;
-            run_len++;
-            if (run_len >= count)
-                return run_start;
-        } else {
-            run_len = 0;
-        }
-    }
+  if (count == 0)
     return (uint32_t)-1;
+  if (count == 1)
+    return find_first_free();
+
+  uint32_t run_start = 0;
+  uint32_t run_len = 0;
+
+  for (uint32_t i = 0; i < total_frames; i++) {
+    if (!bitmap_test(i)) {
+      if (run_len == 0)
+        run_start = i;
+      run_len++;
+      if (run_len >= count)
+        return run_start;
+    } else {
+      run_len = 0;
+    }
+  }
+  return (uint32_t)-1;
 }
 
 /* ==========================================================================
  * Reserve a region of physical memory (mark frames as used)
  * ======================================================================= */
 void pmm_reserve_region(uintptr_t start, size_t length) {
-    if (length == 0)
-        return;
+  if (length == 0)
+    return;
 
-    uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
-    uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
+  uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
+  uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
 
-    if (end_frame > total_frames)
-        end_frame = total_frames;
+  if (end_frame > total_frames)
+    end_frame = total_frames;
 
-    for (uint32_t i = start_frame; i < end_frame; i++) {
-        if (!bitmap_test(i)) {
-            bitmap_set(i);
-            used_frames++;
-        }
+  for (uint32_t i = start_frame; i < end_frame; i++) {
+    if (!bitmap_test(i)) {
+      bitmap_set(i);
+      used_frames++;
     }
+  }
 }
 
 /* ==========================================================================
  * Unreserve a region (mark frames as free)
  * ======================================================================= */
 void pmm_unreserve_region(uintptr_t start, size_t length) {
-    if (length == 0)
-        return;
+  if (length == 0)
+    return;
 
-    uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
-    uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
+  uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
+  uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
 
-    if (end_frame > total_frames)
-        end_frame = total_frames;
+  if (end_frame > total_frames)
+    end_frame = total_frames;
 
-    for (uint32_t i = start_frame; i < end_frame; i++) {
-        if (bitmap_test(i)) {
-            bitmap_clear(i);
-            used_frames--;
-        }
+  for (uint32_t i = start_frame; i < end_frame; i++) {
+    if (bitmap_test(i)) {
+      bitmap_clear(i);
+      used_frames--;
     }
+  }
 }
 
 int pmm_is_region_free(uintptr_t start, size_t length) {
-    if (length == 0)
-        return -1;
+  if (length == 0)
+    return -1;
 
-    uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
-    uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
+  uint32_t start_frame = start >> FRAME_SIZE_SHIFT;
+  uint32_t end_frame = (start + length + FRAME_SIZE_MASK) >> FRAME_SIZE_SHIFT;
 
-    if (end_frame > total_frames) {
-        return -1;
+  if (end_frame > total_frames) {
+    return -1;
+  }
+
+  for (uint32_t i = start_frame; i < end_frame; i++) {
+    if (bitmap_test(i)) {
+      return -1;
     }
-
-    for (uint32_t i = start_frame; i < end_frame; i++) {
-        if (bitmap_test(i)) {
-            return -1;
-        }
-    }
-    return 0;
+  }
+  return 0;
 }
 
 /* ==========================================================================
@@ -178,408 +177,418 @@ int pmm_is_region_free(uintptr_t start, size_t length) {
  * Returns 0 on success, non-zero on fatal error.
  * ======================================================================= */
 int kernel_early_init(uint32_t magic, void *mb_info) {
-    memset(&boot_info, 0, sizeof(boot_info));
-    boot_info.magic = magic;
-    boot_info.valid = 0;
+  memset(&boot_info, 0, sizeof(boot_info));
+  boot_info.magic = magic;
+  boot_info.valid = 0;
 
-    if (magic != MB2_BOOT_MAGIC) {
-        return 1;
-    }
+  if (magic != MB2_BOOT_MAGIC) {
+    return 1;
+  }
 
-    mb2_tag_t *tag;
-    uint64_t available_ram = 0;
-    int has_mmap = 0;
+  /* Max ACPI 2.0+ RSDP size. Lives in BSS so it's guaranteed mapped
+   * before and after paging comes on, regardless of what happens to
+   * the mb_info blob later. */
+  static uint8_t g_rsdp_copy[36];
 
-    MB2_TAG_FOREACH(mb_info, tag) {
-        switch (tag->type) {
-            case MB2_TAG_MMAP: {
-                mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
-                g_mmap_tag = mmap; // Save the tag pointer for later VMM lookups!
-                
-                uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
-                mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
+  mb2_tag_t *tag;
+  uint64_t available_ram = 0;
+  int has_mmap = 0;
 
-                for (uint32_t i = 0; i < num; i++) {
-                    mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
-                    if (e->type == MB2_MMAP_AVAILABLE) {
-                        available_ram += e->length;
-                    }
-                }
-                has_mmap = 1;
-                break;
-            }
-            case MB2_TAG_BASIC_MEM: {
-                if (!has_mmap) {
-                    uint32_t *mem = (uint32_t *)(tag + 1);
-                    available_ram = ((uint64_t)mem[1] + 1024) * 1024;
-                }
-                break;
-            }
-            case MB2_TAG_FRAMEBUFFER: {
-                struct mb2_tag_framebuffer {
-                    mb2_tag_t tag;
-                    uint64_t addr;
-                    uint32_t pitch;
-                    uint32_t width;
-                    uint32_t height;
-                    uint8_t  bpp;
-                    uint8_t  type;
-                    uint16_t reserved;
-                    uint8_t  color_info[0];
-                } __attribute__((packed));
+  MB2_TAG_FOREACH(mb_info, tag) {
+    switch (tag->type) {
+    case MB2_TAG_MMAP: {
+      mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+      g_mmap_tag = mmap; // Save the tag pointer for later VMM lookups!
 
-                struct mb2_tag_framebuffer *fb = (struct mb2_tag_framebuffer *)tag;
+      uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
+      mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
 
-                boot_info.fb.addr   = fb->addr;
-                boot_info.fb.pitch  = fb->pitch;
-                boot_info.fb.width  = fb->width;
-                boot_info.fb.height = fb->height;
-                boot_info.fb.bpp    = fb->bpp;
-                boot_info.fb.type   = fb->type;
-                boot_info.fb.valid  = 1;
-
-                printk("[boot] Framebuffer: %ux%u @ 0x%08x%08x, %u bpp, pitch %u\n",
-                    fb->width, fb->height,
-                    (uint32_t)(fb->addr >> 32), (uint32_t)fb->addr,
-                    fb->bpp, fb->pitch);
-                break;
-            }
+      for (uint32_t i = 0; i < num; i++) {
+        mb2_mmap_entry_t *e =
+            (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
+        if (e->type == MB2_MMAP_AVAILABLE) {
+          available_ram += e->length;
         }
+      }
+      has_mmap = 1;
+      break;
     }
-    if (available_ram == 0) {
-        available_ram = 16 * 1024 * 1024;
+    case MB2_TAG_BASIC_MEM: {
+      if (!has_mmap) {
+        uint32_t *mem = (uint32_t *)(tag + 1);
+        available_ram = ((uint64_t)mem[0] + mem[1]) * 1024;
+      }
+      break;
     }
+    case MB2_TAG_FRAMEBUFFER: {
+      mb2_tag_framebuffer_t *fb = (mb2_tag_framebuffer_t *)tag;
 
-    total_ram = available_ram;
+      boot_info.fb.addr = fb->addr;
+      boot_info.fb.pitch = fb->pitch;
+      boot_info.fb.width = fb->width;
+      boot_info.fb.height = fb->height;
+      boot_info.fb.bpp = fb->bpp;
+      boot_info.fb.type = fb->type;
+      boot_info.fb.valid = 1;
 
-    if (total_ram < PMM_MIN_MEMORY) {
-        return 2;
+      if (fb->type == 1) { /* RGB direct color */
+        uint8_t *ci = fb->color_info;
+        boot_info.fb.red_pos = ci[0];
+        boot_info.fb.red_size = ci[1];
+        boot_info.fb.green_pos = ci[2];
+        boot_info.fb.green_size = ci[3];
+        boot_info.fb.blue_pos = ci[4];
+        boot_info.fb.blue_size = ci[5];
+      }
+
+      printk("[boot] Framebuffer: %ux%u @ 0x%08x%08x, %u bpp, type %u\n",
+             fb->width, fb->height, (uint32_t)(fb->addr >> 32),
+             (uint32_t)fb->addr, fb->bpp, fb->type);
+      break;
     }
+    case MB2_TAG_ACPI_NEW:
+    case MB2_TAG_ACPI_OLD: {
+      mb2_tag_acpi_t *acpi_tag = (mb2_tag_acpi_t *)tag;
+      uint32_t rsdp_len = tag->size - sizeof(mb2_tag_t);
+      if (rsdp_len > sizeof(g_rsdp_copy)) {
+        rsdp_len = sizeof(g_rsdp_copy);
+      }
 
-    boot_info.mb_info = (multiboot_info_t *)mb_info;  /* store for later */
-    boot_info.total_ram = total_ram;
-    boot_info.valid = 1;
-    return 0;
+      /* Prefer ACPI 2.0+ (XSDT-capable) if the loader gave us
+       * both; don't clobber it with an OLD tag seen later. */
+      if (tag->type == MB2_TAG_ACPI_NEW || boot_info.rsdp_addr == 0) {
+        memcpy(g_rsdp_copy, acpi_tag->rsdp, rsdp_len);
+        boot_info.rsdp_addr = (uintptr_t)g_rsdp_copy;
+      }
+      break;
+    }
+    }
+  }
+  if (available_ram == 0) {
+    available_ram = 16 * 1024 * 1024;
+  }
+
+  total_ram = available_ram;
+
+  if (total_ram < PMM_MIN_MEMORY) {
+    return 2;
+  }
+
+  boot_info.mb_info = (multiboot_info_t *)mb_info; /* store for later */
+  boot_info.total_ram = total_ram;
+  boot_info.valid = 1;
+  return 0;
 }
 
 int is_physical_address_mmio(uintptr_t phys_addr) {
-    if (!g_mmap_tag) {
-        return 1;
+  if (!g_mmap_tag) {
+    return 1;
+  }
+
+  uint32_t num_entries = (g_mmap_tag->tag.size - 16) / g_mmap_tag->entry_size;
+  mb2_mmap_entry_t *entries = (mb2_mmap_entry_t *)(g_mmap_tag + 1);
+
+  for (uint32_t i = 0; i < num_entries; i++) {
+    mb2_mmap_entry_t *e =
+        (mb2_mmap_entry_t *)((uint8_t *)entries + i * g_mmap_tag->entry_size);
+
+    if (phys_addr >= e->base_addr && phys_addr < (e->base_addr + e->length)) {
+      return 0;
     }
+  }
 
-    uint32_t num_entries = (g_mmap_tag->tag.size - 16) / g_mmap_tag->entry_size;
-    mb2_mmap_entry_t *entries = (mb2_mmap_entry_t *)(g_mmap_tag + 1);
-
-    for (uint32_t i = 0; i < num_entries; i++) {
-        mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entries + i * g_mmap_tag->entry_size);
-        
-        if (phys_addr >= e->base_addr && phys_addr < (e->base_addr + e->length)) {
-            return 0; 
-        }
-    }
-
-    return 1; 
+  return 1;
 }
-
 
 /* ==========================================================================
  * Initialize PMM from boot info (called after early init, during setup)
  * ======================================================================= */
 int pmm_init(void) {
-    if (!boot_info.valid) {
-        printk("[pmm] Boot info invalid, using 16MB fallback\n");
-        total_ram = 16 * 1024 * 1024;
-    }
+  if (!boot_info.valid) {
+    printk("[pmm] Boot info invalid, using 16MB fallback\n");
+    total_ram = 16 * 1024 * 1024;
+  }
 
-    total_frames = (uint32_t)(total_ram >> FRAME_SIZE_SHIFT);
-    if (total_frames == 0) {
-        printk("[pmm] Warning: zero frames, using 16MB fallback\n");
-        total_ram = 16 * 1024 * 1024;
-        total_frames = total_ram >> FRAME_SIZE_SHIFT;
-    }
+  total_frames = (uint32_t)(total_ram >> FRAME_SIZE_SHIFT);
+  if (total_frames == 0) {
+    printk("[pmm] Warning: zero frames, using 16MB fallback\n");
+    total_ram = 16 * 1024 * 1024;
+    total_frames = total_ram >> FRAME_SIZE_SHIFT;
+  }
 
-    bitmap_size = (total_frames + 7) >> 3;
+  bitmap_size = (total_frames + 7) >> 3;
 
-    /* Place bitmap right after kernel end, page-aligned */
-    uint32_t mb_end = (uint32_t)boot_info.mb_info + *(uint32_t *)boot_info.mb_info;
+  /* Place bitmap right after kernel end, page-aligned */
+  uint32_t mb_end =
+      (uint32_t)boot_info.mb_info + *(uint32_t *)boot_info.mb_info;
 
-    printk("mb_end = 0x%08x\n", mb_end);
-    uint32_t placement = ((uint32_t)_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
+  printk("mb_end = 0x%08x\n", mb_end);
+  uint32_t placement = ((uint32_t)_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
 
-    if (boot_info.mb_info) {
-        uint32_t mb_end =
-            ((uint32_t)boot_info.mb_info +
-            *(uint32_t *)boot_info.mb_info +
-            FRAME_ALIGN - 1)
-            & ~(FRAME_ALIGN - 1);
+  if (boot_info.mb_info) {
+    uint32_t mb_end = ((uint32_t)boot_info.mb_info +
+                       *(uint32_t *)boot_info.mb_info + FRAME_ALIGN - 1) &
+                      ~(FRAME_ALIGN - 1);
 
-        if (mb_end > placement)
-            placement = mb_end;
-    }
+    if (mb_end > placement)
+      placement = mb_end;
+  }
 
-    bitmap = (uint8_t *)placement;
+  bitmap = (uint8_t *)placement;
 
-    printk("_end       = 0x%08x\n", (uint32_t)_end);
-    printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
-    printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
-    printk("mb_info    = 0x%08x\n", (uint32_t)boot_info.mb_info);
+  printk("_end       = 0x%08x\n", (uint32_t)_end);
+  printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
+  printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
+  printk("mb_info    = 0x%08x\n", (uint32_t)boot_info.mb_info);
 
-    /* Mark everything as used, then free available regions */
-    memset(bitmap, 0xFF, bitmap_size);
-    used_frames = total_frames;
+  /* Mark everything as used, then free available regions */
+  memset(bitmap, 0xFF, bitmap_size);
+  used_frames = total_frames;
 
-    /* Parse MB2 memory map if available */
-    if (boot_info.valid && boot_info.mb_info) {
-        mb2_tag_t *tag;
-        int found_mmap = 0;
-        
-        MB2_TAG_FOREACH(boot_info.mb_info, tag) {
-            printk("tag=%p type=%u size=%u\n", tag, tag->type, tag->size);
-            if (tag->type == MB2_TAG_MMAP) {
-                found_mmap = 1;
-                mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
-                uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
-                mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
-                
-                for (uint32_t i = 0; i < num; i++) {
-                    mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
-                    if (e->type == MB2_MMAP_AVAILABLE) {
-                        pmm_unreserve_region((uintptr_t)e->base_addr, (size_t)e->length);
-                    }
-                }
-                break;  /* done with mmap */
-            }
+  /* Parse MB2 memory map if available */
+  if (boot_info.valid && boot_info.mb_info) {
+    mb2_tag_t *tag;
+    int found_mmap = 0;
+
+    MB2_TAG_FOREACH(boot_info.mb_info, tag) {
+      printk("tag=%p type=%u size=%u\n", tag, tag->type, tag->size);
+      if (tag->type == MB2_TAG_MMAP) {
+        found_mmap = 1;
+        mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
+        uint32_t num = (mmap->tag.size - 16) / mmap->entry_size;
+        mb2_mmap_entry_t *entry = (mb2_mmap_entry_t *)(mmap + 1);
+
+        for (uint32_t i = 0; i < num; i++) {
+          mb2_mmap_entry_t *e =
+              (mb2_mmap_entry_t *)((uint8_t *)entry + i * mmap->entry_size);
+          if (e->type == MB2_MMAP_AVAILABLE) {
+            pmm_unreserve_region((uintptr_t)e->base_addr, (size_t)e->length);
+          }
         }
-        
-        if (!found_mmap) {
-            /* Fallback: free 1MB to total_ram */
-            printk("[pmm] No MB2 mmap, freeing 1MB to end of RAM\n");
-            pmm_unreserve_region(0x00100000, (size_t)(total_ram - 0x100000));
-        }
-    } else {
-        /* Ultimate fallback */
-        printk("[pmm] freeing 1MB-16MB\n");
-        pmm_unreserve_region(0x00100000, 15 * 1024 * 1024);
+        break; /* done with mmap */
+      }
     }
 
-    /* Reserve 0-1MB (BIOS, VGA text buffer, EBDA, etc.) */
-    pmm_reserve_region(0x00000000, 0x00100000);
+    if (!found_mmap) {
+      /* Fallback: free 1MB to total_ram */
+      printk("[pmm] No MB2 mmap, freeing 1MB to end of RAM\n");
+      pmm_unreserve_region(0x00100000, (size_t)(total_ram - 0x100000));
+    }
+  } else {
+    /* Ultimate fallback */
+    printk("[pmm] freeing 1MB-16MB\n");
+    pmm_unreserve_region(0x00100000, 15 * 1024 * 1024);
+  }
 
-    /* Reserve kernel area: 0x100000 to end of bitmap */
-    uintptr_t kernel_end = (uintptr_t)bitmap + bitmap_size;
-    pmm_reserve_region(0x00100000, kernel_end - 0x00100000);
+  /* Reserve 0-1MB (BIOS, VGA text buffer, EBDA, etc.) */
+  pmm_reserve_region(0x00000000, 0x00100000);
 
-    /* Reserve VGA text mode memory */
-    pmm_reserve_region(VGA_MEM_PHYS, FRAME_SIZE);
+  /* Reserve kernel area: 0x100000 to end of bitmap */
+  uintptr_t kernel_end = (uintptr_t)bitmap + bitmap_size;
+  pmm_reserve_region(0x00100000, kernel_end - 0x00100000);
 
-    boot_info.total_frames = total_frames;
-    boot_info.kernel_end = kernel_end;
+  /* Reserve VGA text mode memory */
+  pmm_reserve_region(VGA_MEM_PHYS, FRAME_SIZE);
 
-    printk("[pmm] Initialized: %u total frames (%u MB), ...", total_frames, total_ram >> 20);
-    printk("[pmm] Bitmap at 0x%08x, size %u bytes\n",
-           (uint32_t)bitmap, bitmap_size);
-    printk("[pmm] Kernel end: 0x%08x, Total RAM: %u MB\n",
-           kernel_end, (uint32_t)(total_ram >> 20));
-    return 0;
+  boot_info.total_frames = total_frames;
+  boot_info.kernel_end = kernel_end;
+
+  printk("[pmm] Initialized: %u total frames (%u MB), ...", total_frames,
+         total_ram >> 20);
+  printk("[pmm] Bitmap at 0x%08x, size %u bytes\n", (uint32_t)bitmap,
+         bitmap_size);
+  printk("[pmm] Kernel end: 0x%08x, Total RAM: %u MB\n", kernel_end,
+         (uint32_t)(total_ram >> 20));
+  return 0;
 }
 
-kscope_node_t pmm_node = {
-    .name = "pmm",
-    .id = 0x0007,
-    .class = KSCOPE_CLASS_MEMORY,
-    .subclass = KSCOPE_SUBCLASS_MEMORY_PMM,
-    .requires = NULL,
-    .require_count = 0,
-    .provides = (const char *[]){"mem.physical", "mem.pages"},
-    .provide_count = 2
-};
+kscope_node_t pmm_node = {.name = "pmm",
+                          .id = 0x0007,
+                          .class = KSCOPE_CLASS_MEMORY,
+                          .subclass = KSCOPE_SUBCLASS_MEMORY_PMM,
+                          .requires = NULL,
+                          .require_count = 0,
+                          .provides =
+                              (const char *[]){"mem.physical", "mem.pages"},
+                          .provide_count = 2};
 
-void pmm_set_kernel_end(uintptr_t end) {
-    boot_info.kernel_end = end;
-}
+void pmm_set_kernel_end(uintptr_t end) { boot_info.kernel_end = end; }
 
 /* ==========================================================================
  * Allocate a single physical frame
  * ======================================================================= */
 void *pmm_alloc_frame(void) {
-    uint32_t frame = find_first_free();
-    if (frame == (uint32_t)-1) {
-        printk("[pmm] Out of memory!\n");
-        return NULL;
-    }
+  uint32_t frame = find_first_free();
+  if (frame == (uint32_t)-1) {
+    printk("[pmm] Out of memory!\n");
+    return NULL;
+  }
 
-    bitmap_set(frame);
-    used_frames++;
-    return (void *)(frame << FRAME_SIZE_SHIFT);
+  bitmap_set(frame);
+  used_frames++;
+  return (void *)(frame << FRAME_SIZE_SHIFT);
 }
 
 /* ==========================================================================
  * Allocate N contiguous physical frames
  * ======================================================================= */
 void *pmm_alloc_frames(uint32_t count) {
-    uint32_t frame = find_first_free_n(count);
-    if (frame == (uint32_t)-1) {
-        printk("[pmm] Out of memory (contiguous %u frames)!\n", count);
-        return NULL;
-    }
+  uint32_t frame = find_first_free_n(count);
+  if (frame == (uint32_t)-1) {
+    printk("[pmm] Out of memory (contiguous %u frames)!\n", count);
+    return NULL;
+  }
 
-    for (uint32_t i = 0; i < count; i++) {
-        bitmap_set(frame + i);
-        used_frames++;
-    }
-    return (void *)(frame << FRAME_SIZE_SHIFT);
+  for (uint32_t i = 0; i < count; i++) {
+    bitmap_set(frame + i);
+    used_frames++;
+  }
+  return (void *)(frame << FRAME_SIZE_SHIFT);
 }
 
 /* ==========================================================================
  * Free a physical frame
  * ======================================================================= */
 void pmm_free_frame(void *frame) {
-    if (!frame)
-        return;
+  if (!frame)
+    return;
 
-    uint32_t f = (uint32_t)frame >> FRAME_SIZE_SHIFT;
-    if (f >= total_frames)
-        return;
+  uint32_t f = (uint32_t)frame >> FRAME_SIZE_SHIFT;
+  if (f >= total_frames)
+    return;
 
-    if (bitmap_test(f)) {
-        bitmap_clear(f);
-        used_frames--;
-    }
+  if (bitmap_test(f)) {
+    bitmap_clear(f);
+    used_frames--;
+  }
 }
 
 /* ==========================================================================
  * Free N contiguous physical frames
  * ======================================================================= */
 void pmm_free_frames(void *frame, uint32_t count) {
-    if (!frame || count == 0)
-        return;
+  if (!frame || count == 0)
+    return;
 
-    uint32_t f = (uint32_t)frame >> FRAME_SIZE_SHIFT;
-    if (f + count > total_frames)
-        return;
+  uint32_t f = (uint32_t)frame >> FRAME_SIZE_SHIFT;
+  if (f + count > total_frames)
+    return;
 
-    for (uint32_t i = 0; i < count; i++) {
-        if (bitmap_test(f + i)) {
-            bitmap_clear(f + i);
-            used_frames--;
-        }
+  for (uint32_t i = 0; i < count; i++) {
+    if (bitmap_test(f + i)) {
+      bitmap_clear(f + i);
+      used_frames--;
     }
+  }
 }
 
 /* ==========================================================================
  * Get PMM statistics
  * ======================================================================= */
 void pmm_get_stats(pmm_stats_t *stats) {
-    if (!stats)
-        return;
-    stats->total_frames = total_frames;
-    stats->used_frames = used_frames;
-    stats->free_frames = total_frames - used_frames;
-    stats->reserved_frames = used_frames;
+  if (!stats)
+    return;
+  stats->total_frames = total_frames;
+  stats->used_frames = used_frames;
+  stats->free_frames = total_frames - used_frames;
+  stats->reserved_frames = used_frames;
 }
+
+uintptr_t pmm_get_rsdp(void) { return boot_info.rsdp_addr; }
 
 /* ==========================================================================
  * Print memory map summary
  * ======================================================================= */
 void pmm_print_map(void) {
-    printk("[pmm] Memory map:\n");
-    printk("      Total frames:  %u (%u MB)\n",
-           total_frames, (total_frames * FRAME_SIZE) >> 20);
-    printk("      Used frames:   %u (%u MB)\n",
-           used_frames, (used_frames * FRAME_SIZE) >> 20);
-    printk("      Free frames:   %u (%u MB)\n",
-           total_frames - used_frames,
-           ((total_frames - used_frames) * FRAME_SIZE) >> 20);
+  printk("[pmm] Memory map:\n");
+  printk("      Total frames:  %u (%u MB)\n", total_frames,
+         (total_frames * FRAME_SIZE) >> 20);
+  printk("      Used frames:   %u (%u MB)\n", used_frames,
+         (used_frames * FRAME_SIZE) >> 20);
+  printk("      Free frames:   %u (%u MB)\n", total_frames - used_frames,
+         ((total_frames - used_frames) * FRAME_SIZE) >> 20);
 }
 
 /* ==========================================================================
  * Quick accessors
  * ======================================================================= */
-uint32_t pmm_get_total_frames(void) {
-    return total_frames;
-}
+uint32_t pmm_get_total_frames(void) { return total_frames; }
 
-uint32_t pmm_get_free_frames(void) {
-    return total_frames - used_frames;
-}
+uint32_t pmm_get_free_frames(void) { return total_frames - used_frames; }
 
-uint64_t pmm_get_total_ram(void) {
-    return total_ram;
-}
+uint64_t pmm_get_total_ram(void) { return total_ram; }
 
-const boot_info_t *pmm_get_boot_info(void) {
-    return &boot_info;
-}
+const boot_info_t *pmm_get_boot_info(void) { return &boot_info; }
 
 void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames) {
-    if (count == 0 || align_frames == 0) {
-        return NULL;
-    }
-
-    if (align_frames & (align_frames - 1)) {
-        return NULL;
-    }
-
-    if (align_frames == 1) {
-        return pmm_alloc_frames(count);
-    }
-
-    uint32_t i = 0;
-
-    while (i < total_frames) {
-        /* Skip used frames */
-        while (i < total_frames && bitmap_test(i)) {
-            i++;
-        }
-        if (i >= total_frames) {
-            break;
-        }
-
-        uint32_t aligned = (i + align_frames - 1) & ~(align_frames - 1);
-
-        if (aligned + count > total_frames) {
-            break;
-        }
-
-        int ok = 1;
-        for (uint32_t j = aligned; j < aligned + count; j++) {
-            if (bitmap_test(j)) {
-                /* Collision */
-                i = j + 1;
-                ok = 0;
-                break;
-            }
-        }
-
-        if (ok) {
-            for (uint32_t j = aligned; j < aligned + count; j++) {
-                bitmap_set(j);
-                used_frames++;
-            }
-            return (void *)(aligned << FRAME_SIZE_SHIFT);
-        }
-    }
-
-    printk("[pmm] alloc_aligned(%u, %u) failed\n", count, align_frames);
+  if (count == 0 || align_frames == 0) {
     return NULL;
+  }
+
+  if (align_frames & (align_frames - 1)) {
+    return NULL;
+  }
+
+  if (align_frames == 1) {
+    return pmm_alloc_frames(count);
+  }
+
+  uint32_t i = 0;
+
+  while (i < total_frames) {
+    /* Skip used frames */
+    while (i < total_frames && bitmap_test(i)) {
+      i++;
+    }
+    if (i >= total_frames) {
+      break;
+    }
+
+    uint32_t aligned = (i + align_frames - 1) & ~(align_frames - 1);
+
+    if (aligned + count > total_frames) {
+      break;
+    }
+
+    int ok = 1;
+    for (uint32_t j = aligned; j < aligned + count; j++) {
+      if (bitmap_test(j)) {
+        /* Collision */
+        i = j + 1;
+        ok = 0;
+        break;
+      }
+    }
+
+    if (ok) {
+      for (uint32_t j = aligned; j < aligned + count; j++) {
+        bitmap_set(j);
+        used_frames++;
+      }
+      return (void *)(aligned << FRAME_SIZE_SHIFT);
+    }
+  }
+
+  printk("[pmm] alloc_aligned(%u, %u) failed\n", count, align_frames);
+  return NULL;
 }
 
 int pmm_alloc_at(uintptr_t addr, uint32_t count) {
-    uint32_t start_frame = addr >> FRAME_SIZE_SHIFT;
+  uint32_t start_frame = addr >> FRAME_SIZE_SHIFT;
 
-    if (start_frame + count > total_frames) {
-        return -1;
-    }
+  if (start_frame + count > total_frames) {
+    return -1;
+  }
 
-    for (uint32_t i = 0; i < count; i++) {
-        if (bitmap_test(start_frame + i)) {
-            return -1;
-        }
+  for (uint32_t i = 0; i < count; i++) {
+    if (bitmap_test(start_frame + i)) {
+      return -1;
     }
+  }
 
-    for (uint32_t i = 0; i < count; i++) {
-        bitmap_set(start_frame + i);
-        used_frames++;
-    }
-    return 0;
+  for (uint32_t i = 0; i < count; i++) {
+    bitmap_set(start_frame + i);
+    used_frames++;
+  }
+  return 0;
 }

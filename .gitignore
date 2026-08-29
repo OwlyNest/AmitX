@@ -99,3 +99,5 @@ gmon.out
 *.nam
 *.til
 *.i64
+
+.fd

@@ -71,14 +71,13 @@ VOID block_cache_shutdown(_SMKFS_MOUNT *mnt) {
  * from disk. Returns a pointer to the cached buffer.
 */
 SMKFS_STATUS block_cache_read(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block,  _SMKFS_BLOCK_BUF **out_buf) {
-    ULONG i;
     _SMKFS_BLOCK_BUF *slot = NULL;
 
     if (!mnt || !out_buf) {
         return SMKFS_ERR_INVAL;
     }
 
-    for (i = 0; i < SMKFS_CACHE_SLOTS; i++) {
+    for (ULONG i = 0; i < SMKFS_CACHE_SLOTS; i++) {
         if (mnt->block_cache[i].valid &&
             mnt->block_cache[i].block == block) {
             *out_buf = &mnt->block_cache[i];
@@ -86,7 +85,7 @@ SMKFS_STATUS block_cache_read(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block,  _SMKFS_BLOC
         }
     }
 
-    for (i = 0; i < SMKFS_CACHE_SLOTS; i++) {
+    for (ULONG i = 0; i < SMKFS_CACHE_SLOTS; i++) {
         if (!mnt->block_cache[i].valid) {
             slot = &mnt->block_cache[i];
             break;
@@ -94,7 +93,7 @@ SMKFS_STATUS block_cache_read(_SMKFS_MOUNT *mnt, SMKFS_BLOCK block,  _SMKFS_BLOC
     }
 
     if (!slot) {
-        for (i = 0; i < SMKFS_CACHE_SLOTS; i++) {
+        for (ULONG i = 0; i < SMKFS_CACHE_SLOTS; i++) {
             if (!mnt->block_cache[i].dirty) {
                 slot = &mnt->block_cache[i];
                 break;

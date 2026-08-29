@@ -8,9 +8,13 @@
 # --------------------------------------------------------------------
 # Shell
 # --------------------------------------------------------------------
-
+ifeq ($(OS), Windows_NT)
 SHELL := powershell.exe
 .SHELLFLAGS := -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+else
+SHELL := /usr/bin/pwsh
+.SHELLFLAGS := -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+endif
 
 # --------------------------------------------------------------------
 # Toolchain
@@ -109,13 +113,12 @@ COMMON_FLAGS := \
 	-Iinclude
 
 CFLAGS := \
-	$(COMMON_FLAGS) \
-	-Wall \
-	-Wextra \
-	-Werror \
-	-DPHONON_BUILD_DATE='\"$(PHONON_BUILD_DATE)\"' \
-	-include include/internal/phonon_types.h \
-	-isystem $(ACPICA_INC)
+    $(COMMON_FLAGS) \
+    -Wall \
+    -Wextra \
+    -Werror \
+    -include include/internal/phonon_types.h \
+    -isystem $(ACPICA_INC)
 
 C3FLAGS := \
 	--target elf-x86 \

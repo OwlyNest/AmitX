@@ -1,30 +1,29 @@
 /*
-	* include/drivers/gfx_term.h - [Enter description]
-	* Author:   amity
-	* Date:     Fri Jun 26 09:42:04 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * include/drivers/gfx_term.h - [Enter description]
+ * Author:   amity
+ * Date:     Fri Jun 26 09:42:04 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
 
 /* --- Macros ---*/
 #ifndef __GFX_TERM_H__
 #define __GFX_TERM_H__
 
 #define TERM_FG_DEFAULT 0xFFFFFFFFu
-#define TERM_BG_DEFAULT 0xFF282838u  /* dark panel */
+#define TERM_BG_DEFAULT 0xFF282838u /* dark panel */
 /* --- Includes ---*/
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/

@@ -102,9 +102,9 @@ SMKFS_STATUS smkfs_dump_superblock(_SMKFS_MOUNT *mnt) {
     printk("Records:         %llu\n", sb.record_count);
     printk("Next ID:         %llu\n", sb.next_record_id);
     printk("Root record:     %llu\n", sb.root_record_id);
-    printk("MRT:             %llu + %llu (cap %llu, free %llu)\n", sb.mrt_start, sb.mrt_length, sb.mrt_capacity, sb.mrt_free_count);
     printk("Journal:         %llu + %llu (head %llu, tail %llu, seq %llu)\n", sb.journal_start, sb.journal_length, sb.journal_head, sb.journal_tail, sb.journal_sequence);
     printk("Bitmap:          %llu + %llu\n", sb.bitmap_start, sb.bitmap_length);
+    printk("MRT:             %llu + %llu (cap %llu, free %llu)\n", sb.mrt_start, sb.mrt_length, sb.mrt_capacity, sb.mrt_free_count);
     printk("Data start:      %llu\n", sb.data_start);
     printk("Block size:      %u\n", sb.block_size);
     printk("SB flags:        0x%08X\n", sb.flags);

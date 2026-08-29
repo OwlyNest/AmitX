@@ -108,5 +108,6 @@ SMKFS_STATUS journal_commit(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS journal_replay(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS journal_abort(_SMKFS_MOUNT *mnt);
 SMKFS_STATUS journal_log_mrt_update(_SMKFS_MOUNT *mnt, SMKFS_RECORD_ID record_id, const _SMKFS_MRT_ENTRY *entry);
+SMKFS_STATUS journal_checkpoint(_SMKFS_MOUNT *mnt);
 
 #endif

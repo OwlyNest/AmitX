@@ -106,34 +106,37 @@ SMKFS_STATUS smkfs_mount(UCHAR drive, _SMKFS_MOUNT *mnt) {
 }
 
 SMKFS_STATUS smkfs_unmount(_SMKFS_MOUNT *mnt) {
-    UCHAR block[SMKFS_BLOCK_SIZE];
-
-    if (!mnt->mounted) return SMKFS_ERR_INVAL;
-
-    /* 1. Flush all dirty cache blocks first */
-    if (block_cache_flush(mnt) != SMKFS_OK) {
-        printk("[SmKFS] Unmount: cache flush failed\n");
-        mnt->mounted = 0;
-        bitmap_shutdown(mnt);
-        block_cache_shutdown(mnt);
-        return SMKFS_ERR_IO;
+    if (!mnt->mounted) {
+        return SMKFS_ERR_INVAL;
     }
 
-    /* 2. Now mark clean and write superblock */
+    /* Final consistency point before we tear the mount down */
+    if (journal_checkpoint(mnt) != SMKFS_OK) {
+        printk("[SmKFS] Unmount: checkpoint failed\n");
+        /* fall through and still clean up */
+    }
+
+    mnt->sb.mount_count--;
     mnt->sb.flags |= SMKFS_SBF_CLEAN;
     mnt->sb.last_mount_time = 0;
 
-    memset(block, 0, sizeof(block));
-    memcpy(block, &mnt->sb, sizeof(mnt->sb));
-    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
-
-    if (write_block(mnt, 0, block) != SMKFS_OK) {
-        printk("[SmKFS] Failed to write superblock\n");
-        mnt->mounted = 0;
-        bitmap_shutdown(mnt);
-        block_cache_shutdown(mnt);
-        return SMKFS_ERR_IO;
+    /* checkpoint already wrote the superblock, but write the CLEAN flag */
+    {
+        UCHAR block[SMKFS_BLOCK_SIZE];
+        memset(block, 0, sizeof(block));
+        memcpy(block, &mnt->sb, sizeof(mnt->sb));
+        header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
+        if (write_block(mnt, 0, block) != SMKFS_OK) {
+            printk("[SmKFS] Failed to write superblock on unmount\n");
+            mnt->mounted = 0;
+            bitmap_shutdown(mnt);
+            block_cache_shutdown(mnt);
+            return SMKFS_ERR_IO;
+        }
     }
+
+    /* Make sure the CLEAN superblock itself is stable */
+    block_cache_flush(mnt);
 
     bitmap_shutdown(mnt);
     block_cache_shutdown(mnt);
@@ -143,22 +146,13 @@ SMKFS_STATUS smkfs_unmount(_SMKFS_MOUNT *mnt) {
 }
 
 SMKFS_STATUS smkfs_sync(_SMKFS_MOUNT *mnt) {
-    UCHAR block[SMKFS_BLOCK_SIZE];
-
-    if (!mnt->mounted) return SMKFS_ERR_INVAL;
-
-    /* Flush dirty blocks before writing the superblock */
-    if (block_cache_flush(mnt) != SMKFS_OK) {
-        printk("[SmKFS] Sync: cache flush failed\n");
-        return SMKFS_ERR_IO;
+    if (!mnt->mounted) {
+        return SMKFS_ERR_INVAL;
     }
 
-    memset(block, 0, sizeof(block));
-    memcpy(block, &mnt->sb, sizeof(mnt->sb));
-    header_checksum_update(&((_SMKFS_SUPERBLOCK *)block)->header, block, sizeof(_SMKFS_SUPERBLOCK));
-
-    if (write_block(mnt, 0, block) != SMKFS_OK) {
-        printk("[SmKFS] Sync failed\n");
+    /* Checkpoint flushes the cache and persists the superblock */
+    if (journal_checkpoint(mnt) != SMKFS_OK) {
+        printk("[SmKFS] Sync: checkpoint failed\n");
         return SMKFS_ERR_IO;
     }
 

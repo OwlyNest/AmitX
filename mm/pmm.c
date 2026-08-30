@@ -323,7 +323,8 @@ int pmm_init(void) {
       (uint32_t)boot_info.mb_info + *(uint32_t *)boot_info.mb_info;
 
   printk("mb_end = 0x%08x\n", mb_end);
-  uint32_t placement = ((uint32_t)_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
+  uint32_t placement = ((uint32_t)_kernel_phys_end + FRAME_ALIGN - 1) &
+                       ~(FRAME_ALIGN - 1);
 
   if (boot_info.mb_info) {
     uint32_t mb_end = ((uint32_t)boot_info.mb_info +
@@ -336,7 +337,7 @@ int pmm_init(void) {
 
   bitmap = (uint8_t *)placement;
 
-  printk("_end       = 0x%08x\n", (uint32_t)_end);
+  printk("kernel end = 0x%08x\n", (uint32_t)_kernel_phys_end);
   printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
   printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
   printk("mb_info    = 0x%08x\n", (uint32_t)boot_info.mb_info);

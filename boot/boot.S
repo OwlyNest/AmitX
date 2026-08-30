@@ -2,6 +2,9 @@
 .set MB2_ARCH,     0
 .set MB2_LENGTH,   (mb2_header_end - mb2_header_start)
 .set MB2_CHECKSUM, -(MB2_MAGIC + MB2_ARCH + MB2_LENGTH)   
+.set KERNEL_VIRT_BASE, 0xC0000000
+.set PAGE_PRESENT,     0x001
+.set PAGE_WRITABLE,    0x002
 
 .section .multiboot, "a"
 .align 8
@@ -53,43 +56,87 @@ stack_bottom:
     .skip 65536         # 64 KB stack
 stack_top:
 
+.section .boot.bss
+.align 4096
+boot_page_directory:
+    .skip 4096
+boot_page_table0:
+    .skip 4096
+boot_page_table1:
+    .skip 4096
+boot_page_table2:
+    .skip 4096
+boot_page_table3:
+    .skip 4096
+
+.section .boot.text, "ax"
+.code32
+
 .section .data
 .align 4
 .global multiboot_info_ptr
 multiboot_info_ptr:
     .long 0
 
-.section .text
 .global _start
 .type _start, @function
 
 _start:
     cli
 
-    /* Save multiboot info pointer (physical address) */
-    movl %ebx, multiboot_info_ptr
-
     /* Verify Multiboot2 magic */
     cmpl $0x36d76289, %eax
     jne .no_multiboot2
 
-    mov $stack_top, %esp
+        /* Use the physical address of the high-linked bootstrap stack. */
+        movl $stack_top - KERNEL_VIRT_BASE, %esp
 
-    push %ebx       /* mb_info */
-    push %eax       /* magic */
-    call kernel_early_init
-    add $8, %esp
+        /* Build a temporary identity map for the first 16 MiB. */
+        movl $boot_page_directory, %edi
+        xorl %eax, %eax
+        movl $1024, %ecx
+        rep stosl
 
-    call pmm_init
-    test %eax, %eax
-    jnz .pmm_fail
+        movl $boot_page_table0, %edi
+        xorl %ebx, %ebx
+        movl $4, %edx
+    .fill_pt:
+        movl $1024, %ecx
+    .fill_pte:
+        movl %ebx, %eax
+        orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
+        stosl
+        addl $4096, %ebx
+        loop .fill_pte
+        addl $4096, %edi
+        decl %edx
+        jnz .fill_pt
 
-    call kernel_main
-    jmp halt
+        movl $boot_page_table0 | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + 0
+        movl $boot_page_table1 | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + 4
+        movl $boot_page_table2 | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + 8
+        movl $boot_page_table3 | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + 12
 
-.pmm_fail:
-    movl $0xBAD01, %eax
-    jmp halt
+        /* Alias physical 0-4 MiB at 0xC0000000 for the kernel. */
+        movl $boot_page_table0 | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + (768 * 4)
+        movl $boot_page_directory | (PAGE_PRESENT | PAGE_WRITABLE),
+            boot_page_directory + (1023 * 4)
+
+        movl $boot_page_directory, %eax
+        movl %eax, %cr3
+        movl %cr0, %eax
+        orl $0x80000000, %eax
+        movl %eax, %cr0
+
+        /* Enter the high-linked C entry point. */
+        movl $stack_top, %esp
+        movl $kernel_main, %eax
+        jmp *%eax
 
 .no_multiboot2:
     /* Can't printk yet, but we can hang with a known EAX value */

@@ -143,8 +143,8 @@
 /* ==========================================================================
  * Memory layout
  * ======================================================================= */
-extern uint8_t _end[];
-#define HEAP_START_ADDR (((uint32_t)&_end + 0xF) & ~0xF)
+extern uint8_t _kernel_phys_end[];
+#define HEAP_START_ADDR (((uint32_t)&_kernel_phys_end + 0xF) & ~0xF)
 
 /* ==========================================================================
  * Box-drawing / UI characters

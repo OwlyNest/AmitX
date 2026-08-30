@@ -35,6 +35,8 @@
 
 /* -- Functions ---*/
 void kscope_register_all(void) {
+  kscope_register(&pmm_node);
+  kscope_register(&paging_node);
   kscope_register(&x86_gdt_node);
   kscope_register(&x86_pic_node);
   kscope_register(&x86_idt_node);
@@ -44,8 +46,6 @@ void kscope_register_all(void) {
   kscope_register(&pit_timer_node);
   kscope_register(&keyboard_node);
   kscope_register(&screen_node);
-  kscope_register(&pmm_node);
-  kscope_register(&paging_node);
   kscope_register(&vmm_node);
   kscope_register(&heap_node);
   kscope_register(&scheduler_node);

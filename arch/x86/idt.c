@@ -1,9 +1,9 @@
 
 #include <arch/x86/idt.h>
-#include <stdint.h>
-#include <internal/phonon_consts.h>
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <internal/phonon_consts.h>
+#include <stdint.h>
 
 // Ignore intellisense, these exist in the Assembly code
 extern void isr0();
@@ -63,64 +63,63 @@ static struct IDTEntry idt[IDT_ENTRIES];
 static struct IDTPointer idt_ptr;
 
 static void (*const exception_isrs[])(void) = {
-    isr0,  isr1,  isr2,  isr3,
-    isr4,  isr5,  isr6,  isr7,
-    isr8,  isr9,  isr10, isr11,
-    isr12, isr13, isr14, isr15,
-    isr16, isr17, isr18, isr19,
-    isr20, isr21, isr22, isr23,
-    isr24, isr25, isr26, isr27,
-    isr28, isr29, isr30, isr31
-};
+    isr0,  isr1,  isr2,  isr3,  isr4,  isr5,  isr6,  isr7,  isr8,  isr9,  isr10,
+    isr11, isr12, isr13, isr14, isr15, isr16, isr17, isr18, isr19, isr20, isr21,
+    isr22, isr23, isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31};
 
 void idt_set_gate(int num, uint32_t base, uint16_t sel, uint8_t flags) {
-    idt[num].base_lo = base & 0xFFFF;
-    idt[num].base_hi = (base >> 16) & 0xFFFF;
+  idt[num].base_lo = base & 0xFFFF;
+  idt[num].base_hi = (base >> 16) & 0xFFFF;
 
-    idt[num].sel     = sel;
-    idt[num].always0 = 0;
-    idt[num].flags   = flags;
+  idt[num].sel = sel;
+  idt[num].always0 = 0;
+  idt[num].flags = flags;
 }
 static int idt_install() {
-    idt_ptr.limit = sizeof(struct IDTEntry) * IDT_ENTRIES - 1;
-    idt_ptr.base  = (uint32_t)&idt;
+  idt_ptr.limit = sizeof(struct IDTEntry) * IDT_ENTRIES - 1;
+  idt_ptr.base = (uint32_t)&idt;
 
-    for (int i = 0; i < 32; i++) {
-        idt_set_gate(i, (uint32_t)exception_isrs[i], GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    }
+  for (int i = 0; i < 32; i++) {
+    idt_set_gate(i, (uint32_t)exception_isrs[i], GDT_SEL_KERNEL_CODE,
+                 IDT_FLAGS_KERNEL);
+  }
 
-    idt_set_gate(32,  (uint32_t)isr32,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(33,  (uint32_t)isr33,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(34,  (uint32_t)isr34,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(35,  (uint32_t)isr35,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(36,  (uint32_t)isr36,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(37,  (uint32_t)isr37,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(38,  (uint32_t)isr38,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(39,  (uint32_t)isr39,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(40,  (uint32_t)isr40,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(41,  (uint32_t)isr41,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(42,  (uint32_t)isr42,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(43,  (uint32_t)isr43,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(44,  (uint32_t)isr44,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(45,  (uint32_t)isr45,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(46,  (uint32_t)isr46,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(47,  (uint32_t)isr47,  GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
-    idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(32, (uint32_t)isr32, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(33, (uint32_t)isr33, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(34, (uint32_t)isr34, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(35, (uint32_t)isr35, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(36, (uint32_t)isr36, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(37, (uint32_t)isr37, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(38, (uint32_t)isr38, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(39, (uint32_t)isr39, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(40, (uint32_t)isr40, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(41, (uint32_t)isr41, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(42, (uint32_t)isr42, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(43, (uint32_t)isr43, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(44, (uint32_t)isr44, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(45, (uint32_t)isr45, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(46, (uint32_t)isr46, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(47, (uint32_t)isr47, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
+  idt_set_gate(128, (uint32_t)isr128, GDT_SEL_KERNEL_CODE, IDT_FLAGS_KERNEL);
 
-    load_idt((uint32_t)&idt_ptr);
-    return 0;
+  load_idt((uint32_t)&idt_ptr);
+  return 0;
 }
 
+static kscope_node_t *x86_idt_requires[] = {&x86_gdt_node, &x86_pic_node,
+                                            &paging_node};
+
+static const char *x86_idt_provides[] = {"cpu.interrupts", "cpu.irq"};
 
 kscope_node_t x86_idt_node = {
     .name = "x86-idt",
     .id = 0x0003,
     .class = KSCOPE_CLASS_CORE,
     .subclass = KSCOPE_SUBCLASS_CORE_IDT,
-    .requires = (kscope_node_t*[]){ &x86_gdt_node, &x86_pic_node },
-    .require_count = 2,
-    .provides = (const char*[]){"cpu.interrupts", "cpu.irq"},
-	.provide_count = 2,
+    .requires = x86_idt_requires,
+    .require_count = 3,
+    .provides = x86_idt_provides,
+    .provide_count = 2,
     .init = idt_install,
 
 };

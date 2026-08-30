@@ -156,6 +156,16 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
 
       /* Push unvisited dependencies first */
       kscope_node_t *node = registry[idx];
+      if (node->requires != NULL && ((uintptr_t)node->requires < 0xC0000000u ||
+                                     (uintptr_t)node->requires > 0xC1000000u)) {
+        __asm__ __volatile__("mov %0, %%eax\n"
+                             "mov %1, %%ebx\n"
+                             "mov $0xBAD001, %%ecx\n"
+                             "hlt"
+                             :
+                             : "r"(node->requires), "r"(node)
+                             : "eax", "ebx", "ecx");
+      }
       int has_unvisited_deps = 0;
 
       for (size_t d = 0; d < node->require_count; d++) {

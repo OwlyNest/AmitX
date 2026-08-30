@@ -240,10 +240,6 @@ int kernel_early_init(uint32_t magic, void *mb_info) {
         boot_info.fb.blue_pos = ci[4];
         boot_info.fb.blue_size = ci[5];
       }
-
-      printk("[boot] Framebuffer: %ux%u @ 0x%08x%08x, %u bpp, type %u\n",
-             fb->width, fb->height, (uint32_t)(fb->addr >> 32),
-             (uint32_t)fb->addr, fb->bpp, fb->type);
       break;
     }
     case MB2_TAG_ACPI_NEW:
@@ -305,13 +301,11 @@ int is_physical_address_mmio(uintptr_t phys_addr) {
  * ======================================================================= */
 int pmm_init(void) {
   if (!boot_info.valid) {
-    printk("[pmm] Boot info invalid, using 16MB fallback\n");
     total_ram = 16 * 1024 * 1024;
   }
 
   total_frames = (uint32_t)(total_ram >> FRAME_SIZE_SHIFT);
   if (total_frames == 0) {
-    printk("[pmm] Warning: zero frames, using 16MB fallback\n");
     total_ram = 16 * 1024 * 1024;
     total_frames = total_ram >> FRAME_SIZE_SHIFT;
   }
@@ -319,12 +313,8 @@ int pmm_init(void) {
   bitmap_size = (total_frames + 7) >> 3;
 
   /* Place bitmap right after kernel end, page-aligned */
-  uint32_t mb_end =
-      (uint32_t)boot_info.mb_info + *(uint32_t *)boot_info.mb_info;
-
-  printk("mb_end = 0x%08x\n", mb_end);
-  uint32_t placement = ((uint32_t)_kernel_phys_end + FRAME_ALIGN - 1) &
-                       ~(FRAME_ALIGN - 1);
+  uint32_t placement =
+      ((uint32_t)_kernel_phys_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1);
 
   if (boot_info.mb_info) {
     uint32_t mb_end = ((uint32_t)boot_info.mb_info +
@@ -337,11 +327,6 @@ int pmm_init(void) {
 
   bitmap = (uint8_t *)placement;
 
-  printk("kernel end = 0x%08x\n", (uint32_t)_kernel_phys_end);
-  printk("bitmap     = 0x%08x\n", (uint32_t)bitmap);
-  printk("bitmap_size = %u (0x%x)\n", bitmap_size, bitmap_size);
-  printk("mb_info    = 0x%08x\n", (uint32_t)boot_info.mb_info);
-
   /* Mark everything as used, then free available regions */
   memset(bitmap, 0xFF, bitmap_size);
   used_frames = total_frames;
@@ -352,7 +337,6 @@ int pmm_init(void) {
     int found_mmap = 0;
 
     MB2_TAG_FOREACH(boot_info.mb_info, tag) {
-      printk("tag=%p type=%u size=%u\n", tag, tag->type, tag->size);
       if (tag->type == MB2_TAG_MMAP) {
         found_mmap = 1;
         mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
@@ -372,12 +356,10 @@ int pmm_init(void) {
 
     if (!found_mmap) {
       /* Fallback: free 1MB to total_ram */
-      printk("[pmm] No MB2 mmap, freeing 1MB to end of RAM\n");
       pmm_unreserve_region(0x00100000, (size_t)(total_ram - 0x100000));
     }
   } else {
     /* Ultimate fallback */
-    printk("[pmm] freeing 1MB-16MB\n");
     pmm_unreserve_region(0x00100000, 15 * 1024 * 1024);
   }
 
@@ -394,14 +376,10 @@ int pmm_init(void) {
   boot_info.total_frames = total_frames;
   boot_info.kernel_end = kernel_end;
 
-  printk("[pmm] Initialized: %u total frames (%u MB), ...", total_frames,
-         total_ram >> 20);
-  printk("[pmm] Bitmap at 0x%08x, size %u bytes\n", (uint32_t)bitmap,
-         bitmap_size);
-  printk("[pmm] Kernel end: 0x%08x, Total RAM: %u MB\n", kernel_end,
-         (uint32_t)(total_ram >> 20));
   return 0;
 }
+
+static const char *pmm_provides[] = {"mem.physical", "mem.pages"};
 
 kscope_node_t pmm_node = {.name = "pmm",
                           .id = 0x0007,
@@ -409,8 +387,7 @@ kscope_node_t pmm_node = {.name = "pmm",
                           .subclass = KSCOPE_SUBCLASS_MEMORY_PMM,
                           .requires = NULL,
                           .require_count = 0,
-                          .provides =
-                              (const char *[]){"mem.physical", "mem.pages"},
+                          .provides = pmm_provides,
                           .provide_count = 2};
 
 void pmm_set_kernel_end(uintptr_t end) { boot_info.kernel_end = end; }
@@ -421,7 +398,6 @@ void pmm_set_kernel_end(uintptr_t end) { boot_info.kernel_end = end; }
 void *pmm_alloc_frame(void) {
   uint32_t frame = find_first_free();
   if (frame == (uint32_t)-1) {
-    printk("[pmm] Out of memory!\n");
     return NULL;
   }
 
@@ -436,7 +412,6 @@ void *pmm_alloc_frame(void) {
 void *pmm_alloc_frames(uint32_t count) {
   uint32_t frame = find_first_free_n(count);
   if (frame == (uint32_t)-1) {
-    printk("[pmm] Out of memory (contiguous %u frames)!\n", count);
     return NULL;
   }
 
@@ -570,7 +545,6 @@ void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames) {
     }
   }
 
-  printk("[pmm] alloc_aligned(%u, %u) failed\n", count, align_frames);
   return NULL;
 }
 

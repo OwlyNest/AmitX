@@ -23,6 +23,7 @@
 /* --- Includes ---*/
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <internal/virtmem.h>
 #include <lib/string.h>
 #include <mm/paging.h>
 #include <mm/pmm.h>
@@ -38,6 +39,8 @@
 static uintptr_t page_directory_phys = 0;
 static size_t identity_map_size = 0;
 static spinlock_t paging_lock;
+extern uint8_t __kernel_phys_start[];
+extern uint8_t _kernel_phys_end[];
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/
@@ -51,78 +54,96 @@ static spinlock_t paging_lock;
 int paging_init(void) {
   spinlock_init(&paging_lock);
 
-  /* Allocate page directory (must be page-aligned).
-   * pmm_alloc_frame() returns a physical address. Paging is off,
-   * so physical addresses are directly usable as pointers. */
   uint32_t *pd = (uint32_t *)pmm_alloc_frame();
   if (!pd) {
-    printk("[paging] Failed to allocate page directory\n");
     return -1;
   }
-
-  /* Clear all 1024 entries. Zero = not present. */
   memset(pd, 0, PAGE_SIZE);
   page_directory_phys = (uintptr_t)pd;
 
-  /* Identity-map RAM */
+  /* Identity-map as much RAM as we have, but never touch slot 1023 */
   size_t pts_needed = ((size_t)(pmm_get_total_ram() >> 22)) + 1;
+  if (pts_needed > 1023)
+    pts_needed = 1023;
   identity_map_size = pts_needed * 4u * 1024u * 1024u;
 
   for (uint32_t pd_idx = 0; pd_idx < pts_needed; pd_idx++) {
     uint32_t *pt = (uint32_t *)pmm_alloc_frame();
-    if (!pt) {
-      printk("[paging] Failed to allocate page table %d\n", pd_idx);
+    if (!pt)
       return -1;
-    }
-
-    /* Clear the page table */
     memset(pt, 0, PAGE_SIZE);
 
-    /* Fill 1024 entries, mapping 4 MB of physical memory */
-    for (int pt_idx = 0; pt_idx < PT_ENTRIES; pt_idx++) {
-      uint32_t phys_addr = (pd_idx * PT_ENTRIES + pt_idx) * PAGE_SIZE;
-      pt[pt_idx] = phys_addr | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
+    for (int j = 0; j < PT_ENTRIES; j++) {
+      uint32_t phys = (pd_idx * PT_ENTRIES + j) * PAGE_SIZE;
+      pt[j] = phys | PAGE_PRESENT | PAGE_WRITABLE;
     }
-
-    /* Point PD entry at this PT. Address must be physical. */
-    pd[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
+    pd[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITABLE;
   }
 
-  /* Recursive mapping: last PD entry points to PD itself.
-   * After this, we NEVER use 'pd' as a pointer again.
-   * We use PD_VIRT (0xFFFFF000) instead. */
-  pd[1023] = page_directory_phys | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
+  /* Higher-half mapping of the kernel image – done on the physical PD/PTs
+   * before recursive mapping and before CR3 is loaded. */
+  uintptr_t phys_start = (uintptr_t)__kernel_phys_start;
+  uintptr_t phys_end = ((uintptr_t)_kernel_phys_end + 0xFFF) & ~0xFFF;
 
-  /* Load CR3 with physical address of PD */
-  printk("PD phys=%08x\n", (uint32_t)pd);
+  for (uintptr_t p = phys_start; p < phys_end; p += PAGE_SIZE) {
+    uintptr_t v = p + 0xC0000000;
+    uint32_t pd_idx = v >> 22;
+    uint32_t pt_idx = (v >> 12) & 0x3FF;
 
-  printk("PT0 phys=%08x\n", (uint32_t)(pd[0] & ~0xFFF));
-  printk("PT1 phys=%08x\n", (uint32_t)(pd[1] & ~0xFFF));
+    /* Allocate a page table for this PD slot if we don’t have one yet */
+    if (!(pd[pd_idx] & PAGE_PRESENT)) {
+      uint32_t *pt = (uint32_t *)pmm_alloc_frame();
+      if (!pt)
+        return -1;
+      memset(pt, 0, PAGE_SIZE);
+      pd[pd_idx] = (uint32_t)pt | PAGE_PRESENT | PAGE_WRITABLE;
+    }
 
-  printk("CR3=%08x\n", page_directory_phys);
-  __asm__ __volatile__("mov %0, %%cr3" : : "r"(page_directory_phys));
+    uint32_t *pt = (uint32_t *)(pd[pd_idx] & ~0xFFF);
+    pt[pt_idx] = p | PAGE_PRESENT | PAGE_WRITABLE;
+  }
 
-  /* Enable paging */
+  /* NOW install recursive mapping and switch */
+  pd[1023] = page_directory_phys | PAGE_PRESENT | PAGE_WRITABLE;
+  __asm__ __volatile__("mov %0, %%cr3" : : "r"(page_directory_phys) : "memory");
+  /* … enable PG in CR0 … */
+
   uint32_t cr0;
   __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
   cr0 |= 0x80000000;
-  printk("Before PG\n");
-  __asm__ __volatile__("mov %0, %%cr0" : : "r"(cr0));
-  printk("After PG\n");
+  __asm__ __volatile__("mov %0, %%cr0" : : "r"(cr0) : "memory");
 
-  uintptr_t paging_end = page_directory_phys + (pts_needed + 1) * PAGE_SIZE;
+  /* ------------------------------------------------------------------ */
+  /* Immediate verification that does not need printk or the IDT.       */
+  /* If this hangs with EAX = 0xDEADRECU the recursive entry is gone.   */
+  /* ------------------------------------------------------------------ */
+  volatile uint32_t *rec = (volatile uint32_t *)0xFFFFF000;
+  if ((rec[1023] & 1) == 0) {
+    __asm__ __volatile__("mov $0xDEAD5EC0, %%eax; hlt" ::: "eax");
+  }
+
+  /* Tell PMM the highest frame we used */
+  uintptr_t kernel_phys_end =
+      ((uintptr_t)_kernel_phys_end + PAGE_MASK) & ~(uintptr_t)PAGE_MASK;
+  uintptr_t paging_end = page_directory_phys + (pts_needed + 1 + 4) * PAGE_SIZE;
+  if (paging_end < kernel_phys_end)
+    paging_end = kernel_phys_end;
   pmm_set_kernel_end((paging_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1));
-  printk("[paging] Enabled. Identity-mapped 0x00000000-0x007FFFFF\n");
+
   return 0;
 }
+
+static kscope_node_t *paging_requires[] = {&pmm_node};
+
+static const char *paging_provides[] = {"mem.paging"};
 
 kscope_node_t paging_node = {.name = "paging",
                              .id = 0x13,
                              .class = KSCOPE_CLASS_MEMORY,
                              .subclass = KSCOPE_SUBCLASS_MEMORY_PAGING,
-                             .requires = (kscope_node_t *[]){&pmm_node},
+                             .requires = paging_requires,
                              .require_count = 1,
-                             .provides = (const char *[]){"mem.paging"},
+                             .provides = paging_provides,
                              .provide_count = 1,
                              .init = paging_init};
 

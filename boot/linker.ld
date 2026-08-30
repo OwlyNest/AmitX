@@ -2,8 +2,12 @@ ENTRY(_start)
 
 PHDRS
 {
+    boot_text PT_LOAD FLAGS(5);
+    boot_data PT_LOAD FLAGS(6);
     text PT_LOAD FLAGS(5);
+    rodata PT_LOAD FLAGS(4);
     data PT_LOAD FLAGS(6);
+    bss PT_LOAD FLAGS(6);
 }
 
 SECTIONS
@@ -13,48 +17,48 @@ SECTIONS
     .multiboot ALIGN(8) :
     {
         KEEP(*(.multiboot))
-    } :text
+    } :boot_text
 
     .boot.text ALIGN(4K) :
     {
         *(.boot.text*)
-    } :text
+    } :boot_text
 
     .boot.data ALIGN(4K) :
     {
         *(.boot.data*)
-    } :data
+    } :boot_data
 
-    .boot.bss ALIGN(4K) (NOLOAD) :
+    .boot.bss 0x00110000 (NOLOAD) :
     {
         *(.boot.bss*)
-    } :data
+    } :boot_data
 
-    __kernel_phys_start = 0x00100000;
-    . = ALIGN(__kernel_phys_start + SIZEOF(.multiboot) +
-              SIZEOF(.boot.text) + SIZEOF(.boot.data) +
-              SIZEOF(.boot.bss), 4K) + 0xC0000000;
+    __kernel_phys_start = 0x00200000;
 
-    .text ALIGN(4K) : AT(ADDR(.text) - 0xC0000000)
+    . = __kernel_phys_start + 0xC0000000;
+
+    .text ALIGN(4K) : AT(__kernel_phys_start)
     {
         *(.text*)
     } :text
 
-    .rodata ALIGN(4K) : AT(ADDR(.rodata) - 0xC0000000)
+    .rodata ALIGN(4K) : AT(ALIGN(LOADADDR(.text) + SIZEOF(.text), 4K))
     {
         *(.rodata*)
-    } :text
+        *(.eh_frame*)
+    } :rodata
 
-    .data ALIGN(4K) : AT(ADDR(.data) - 0xC0000000)
+    .data ALIGN(4K) : AT(ALIGN(LOADADDR(.rodata) + SIZEOF(.rodata), 4K))
     {
         *(.data*)
     } :data
 
-    .bss ALIGN(4K) (NOLOAD) : AT(ADDR(.bss) - 0xC0000000)
+    .bss ALIGN(4K) (NOLOAD) : AT(ALIGN(LOADADDR(.data) + SIZEOF(.data), 4K))
     {
         *(.bss*)
         *(COMMON)
-    } :data
+    } :bss
 
     _kernel_phys_end = LOADADDR(.bss) + SIZEOF(.bss);
     _end = .;

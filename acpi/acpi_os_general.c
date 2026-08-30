@@ -41,14 +41,19 @@ extern uint32_t multiboot_info_ptr; /* set in boot.S, physical address */
 /* --- Functions ---*/
 
 ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer(void) {
-  uintptr_t rsdp = pmm_get_rsdp();
-  if (rsdp) {
-    printk("[acpi] Using bootloader-provided RSDP at %p\n", (void *)rsdp);
-    return (ACPI_PHYSICAL_ADDRESS)rsdp;
+  uintptr_t rsdp_virt = pmm_get_rsdp();
+  if (rsdp_virt) {
+    uintptr_t rsdp_phys = virt_to_phys(rsdp_virt);
+    if (!rsdp_phys) {
+      /* Fallback if the page is identity-mapped under a different scheme */
+      rsdp_phys =
+          rsdp_virt - 0xC0000000; /* only if you know it was high-half */
+    }
+    printk("[acpi] Using bootloader-provided RSDP at phys 0x%08x (virt %p)\n",
+           (uint32_t)rsdp_phys, (void *)rsdp_virt);
+    return (ACPI_PHYSICAL_ADDRESS)rsdp_phys;
   }
 
-  /* Fallback only meaningful on legacy BIOS — UEFI RSDP isn't
-   * guaranteed to live in the EBDA/BIOS-ROM range this scans. */
   printk("[acpi] No bootloader-provided RSDP, falling back to BIOS scan\n");
   ACPI_PHYSICAL_ADDRESS addr = 0;
   AcpiFindRootPointer(&addr);

@@ -1,61 +1,80 @@
 /*
-	* include/virtmem.h - [Enter description]
-	* Author:   amity
-	* Date:     Mon Jun 15 12:58:16 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * include/virtmem.h - Physical/virtual translation helpers
+ * Author:   amity
+ * Date:     Mon Jun 15 12:58:16 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
 
 #ifndef __INTERNAL_VIRTMEM_H__
 #define __INTERNAL_VIRTMEM_H__
 
 /* --- Includes ---*/
-#include <mm/paging.h>
-#include <stdint.h>
-#include <stddef.h>
+#include "internal/phonon_types.h"
 #include <internal/phonon_consts.h>
+#include <mm/mmap.h>
+#include <mm/paging.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /* --- Macros ---*/
-/* ==========================================================================
- * Higher-half kernel base address
- * ======================================================================= */
-#define KERNEL_VIRT_BASE        0xC0000000
+#ifndef KERNEL_VIRT_BASE
+#error "KERNEL_VIRT_BASE must come from mm/mmap.h"
+#endif
 
-/* ==========================================================================
- * Physical-to-virtual and virtual-to-physical translation
- * These are identity-mapped when paging is off, and offset by KERNEL_VIRT_BASE
- * when paging is on (in higher-half mode).
- * ======================================================================= */
-#define PHYS_TO_VIRT(addr)      ((void *)(((uintptr_t)(addr)) + (uintptr_t)KERNEL_VIRT_BASE))
-#define VIRT_TO_PHYS(addr)      ((uintptr_t)(addr) - (uintptr_t)KERNEL_VIRT_BASE)
+/*
+ * Physical-to-virtual and virtual-to-physical translation.
+ *
+ * 32-bit: kernel image lives at phys + 0xC0000000. Low RAM is
+ *         identity-mapped, so auto_virt() prefers that window.
+ *
+ * 64-bit: PHYS_TO_VIRT is the direct map (DIRECT_MAP_BASE + phys).
+ *         The kernel image itself is at KERNEL_VIRT_BASE + phys
+ *         (Linux-style -2 GiB); use KERNEL_PHYS_TO_VIRT for that.
+ */
 
-/* ==========================================================================
- * Common virtual addresses (physical + KERNEL_VIRT_BASE)
- * ======================================================================= */
-#define VGA_VIRT_ADDR           (KERNEL_VIRT_BASE + VGA_MEM_PHYS)
+#if ARCH_X86_64
+
+#define PHYS_TO_VIRT(addr)                                                     \
+  ((PVOID)(DIRECT_MAP_BASE + (VIRT_ADDR_T)(PHYS_ADDR_T)(addr)))
+#define VIRT_TO_PHYS(addr)                                                     \
+  ((PHYS_ADDR_T)((VIRT_ADDR_T)(addr) - DIRECT_MAP_BASE))
+#define KERNEL_PHYS_TO_VIRT(addr)                                              \
+  ((PVOID)(KERNEL_VIRT_BASE + (VIRT_ADDR_T)(PHYS_ADDR_T)(addr)))
+
+#else
+
+#define PHYS_TO_VIRT(addr)                                                     \
+  ((PVOID)((VIRT_ADDR_T)(PHYS_ADDR_T)(addr) + (VIRT_ADDR_T)KERNEL_VIRT_BASE))
+#define VIRT_TO_PHYS(addr)                                                     \
+  ((PHYS_ADDR_T)((VIRT_ADDR_T)(addr) - (VIRT_ADDR_T)KERNEL_VIRT_BASE))
+#define KERNEL_PHYS_TO_VIRT(addr) PHYS_TO_VIRT(addr)
+
+#endif
+
+#define VGA_VIRT_ADDR (KERNEL_VIRT_BASE + VGA_MEM_PHYS)
 
 /* --- Prototypes ---*/
 
 /* ==========================================================================
  * Check if paging is currently enabled (reads CR0.PG bit)
  * ======================================================================= */
-static inline int paging_enabled(void) {
-    uint32_t cr0;
-    __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
-    return (cr0 & 0x80000000) != 0;
+FORCEINLINE int paging_enabled(void) {
+  ULONG_PTR cr0;
+  __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
+  return (cr0 & 0x80000000u) != 0;
 }
 
 /* ==========================================================================
@@ -68,24 +87,21 @@ static inline int paging_enabled(void) {
  *
  * This is a temporary helper until we do a proper higher-half kernel.
  * ======================================================================= */
-static inline void *auto_virt(uintptr_t phys_addr) {
-    if (!paging_enabled()) {
-        return (void *)phys_addr;
-    }
-    /* Identity-mapped region: 0 to 8 MB */
-    if (phys_addr < paging_get_identity_size()) {
-        return (void *)phys_addr;
-    }
-    /* High physical addresses: assume mapped at KERNEL_VIRT_BASE.
-     * (Only works if you actually map them there with map_page!) */
-    return PHYS_TO_VIRT(phys_addr);
+FORCEINLINE PVOID auto_virt(PHYS_ADDR_T phys_addr) {
+  if (!paging_enabled()) {
+    return (PVOID)(VIRT_ADDR_T)phys_addr;
+  }
+  if (phys_addr < (PHYS_ADDR_T)paging_get_identity_size()) {
+    return (PVOID)(VIRT_ADDR_T)phys_addr;
+  }
+  return PHYS_TO_VIRT(phys_addr);
 }
 
 /* ==========================================================================
  * Get VGA memory address (auto-detects paging state)
  * ======================================================================= */
-static inline uint16_t *vga_memory(void) {
-    return (uint16_t *)auto_virt(VGA_MEM_PHYS);
+FORCEINLINE USHORT *vga_memory(VOID) {
+  return (USHORT *)auto_virt(VGA_MEM_PHYS);
 }
 
 #endif

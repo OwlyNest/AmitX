@@ -1,3 +1,28 @@
+/*
+ * arch/x86/common/interrupts.c - [Enter description]
+ * Author:   amity
+ * Date:     Mon Aug 31 14:34:13 2026
+ * Copyright © 2026 OwlyNest
+ */
+
+/* --- Styling Instructions ---
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
+
+/* --- Macros ---*/
+#define MAX_INTERRUPTS 256
+#define MAX_IRQ_HANDLERS 4
+
+/* --- Includes ---*/
 #include <arch/x86/interrupts.h>
 #include <arch/x86/io.h>
 #include <arch/x86/time.h>
@@ -9,9 +34,6 @@
 #include <screen/printk.h>
 #include <screen/screen.h>
 #include <stdint.h>
-
-#define MAX_INTERRUPTS 256
-#define MAX_IRQ_HANDLERS 4
 
 static irq_handler_t interrupt_handlers[MAX_INTERRUPTS][MAX_IRQ_HANDLERS];
 
@@ -51,6 +73,10 @@ static const char *exception_names[32] = {"Divide Error",
                                           "Reserved",
                                           "Reserved"};
 
+/* --- Arch-specific helpers (declared here, defined in 32/64 subdirs) --- */
+extern void arch_dump_panic_regs(void);
+extern void arch_dump_panic_frame_regs(interrupt_frame_t *frame);
+
 /* ------------------------------------------------------------------ */
 /* Register a handler on a shared vector.                             */
 /* ------------------------------------------------------------------ */
@@ -65,7 +91,7 @@ void register_interrupt_handler(int n, irq_handler_t handler) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Exceptions: we only use slot [0]                                   */
+/* Exceptions                                                         */
 /* ------------------------------------------------------------------ */
 int exception_handler(interrupt_frame_t *frame) {
   panic_frame(frame, exception_names[frame->err_no]);
@@ -76,7 +102,7 @@ void register_exception_handlers(void) {
   for (int i = 0; i < 32; i++) {
     interrupt_handlers[i][0] = exception_handler;
   }
-  interrupt_handlers[8][0] = NULL; /* double fault uses task gate */
+  interrupt_handlers[8][0] = NULL; /* double fault uses task gate / IST */
 }
 
 /* ------------------------------------------------------------------ */
@@ -87,7 +113,6 @@ void pic_set_irq_level_triggered(uint8_t irq) {
   uint8_t mask;
 
   if (irq == 0 || irq == 2 || irq == 8 || irq == 13) {
-    /* These are system-reserved / edge-only */
     return;
   }
 
@@ -132,19 +157,17 @@ void pic_eoi(uint8_t irq) {
 /* Main dispatcher called from isr.S                                  */
 /* ------------------------------------------------------------------ */
 void isr_handler(interrupt_frame_t *frame) {
-  uint32_t int_no = frame->err_no;
-  uint32_t err = frame->err_code;
+  uint32_t int_no = (uint32_t)frame->err_no;
+  uint32_t err = (uint32_t)frame->err_code;
   int handled = 0;
 
   if (int_no < 32) {
-    /* CPU exception */
     if (interrupt_handlers[int_no][0]) {
       interrupt_handlers[int_no][0](frame);
     } else {
       panic_frame(frame, exception_names[int_no]);
     }
   } else if (int_no < 48) {
-    /* Hardware IRQ (0-15) */
     uint32_t irq = int_no - 32;
 
     for (int i = 0; i < MAX_IRQ_HANDLERS; i++) {
@@ -158,12 +181,6 @@ void isr_handler(interrupt_frame_t *frame) {
     if (handled) {
       pic_eoi(irq);
     } else {
-      /*
-       * Nobody claimed it.  Send EOI anyway so we don't
-       * deadlock, but warn.  If a device is still asserting
-       * the line we'll immediately re-enter, but at least
-       * the system doesn't freeze.
-       */
       printk("Unhandled IRQ%u (spurious?)\n", irq);
       pic_eoi(irq);
     }
@@ -174,7 +191,6 @@ void isr_handler(interrupt_frame_t *frame) {
   }
 }
 
-/* ... pic_unmask_irq / pic_mask_irq stay exactly the same ... */
 void pic_unmask_irq(uint8_t irq) {
   uint16_t port;
   uint8_t value;
@@ -204,7 +220,6 @@ void pic_mask_irq(uint8_t irq) {
   outb(port, value);
 }
 
-/* ... PIC remap stays the same ... */
 static int pic_remap(void) {
   outb(PORT_PIC_MASTER_CMD, PIC_ICW1_INIT);
   outb(PORT_PIC_SLAVE_CMD, PIC_ICW1_INIT);
@@ -222,7 +237,7 @@ static int pic_remap(void) {
   outb(PORT_PIC_SLAVE_DATA, 0xFF);
 
   uint8_t elcr_slave = inb(0x4D1);
-  elcr_slave |= (1 << 1); /* IRQ9 = level-triggered */
+  elcr_slave |= (1 << 1);
   outb(0x4D1, elcr_slave);
 
   printk("PIC remapped, all IRQs masked\n");
@@ -244,82 +259,3 @@ kscope_node_t x86_pic_node = {
     .provide_count = 2,
     .init = pic_remap,
 };
-
-__attribute__((noreturn)) void panic(const char *msg, uint32_t int_no,
-                                     uint32_t err) {
-  uint32_t eax, ebx, ecx, edx, esi, edi, ebp, esp;
-
-  __asm__ __volatile__("movl %%eax, %0\n\t"
-                       "movl %%ebx, %1\n\t"
-                       "movl %%ecx, %2\n\t"
-                       "movl %%edx, %3\n\t"
-                       "movl %%esi, %4\n\t"
-                       "movl %%edi, %5\n\t"
-                       "movl %%ebp, %6\n\t"
-                       "movl %%esp, %7\n\t"
-                       : "=m"(eax), "=m"(ebx), "=m"(ecx), "=m"(edx), "=m"(esi),
-                         "=m"(edi), "=m"(ebp), "=m"(esp));
-
-  setcolor(15, 4);
-  clear();
-
-  move_cursor(10, 5);
-  printk("KERNEL PANIC\n\n");
-  move_cursor(10, 7);
-  printk(msg);
-  move_cursor(10, 9);
-  printk("INT: %x  ERR: %x", int_no, err);
-
-  move_cursor(10, 11);
-  printk("EAX: %x EBX: %x ECX: %x EDX: %x", eax, ebx, ecx, edx);
-  move_cursor(10, 12);
-  printk("ESI: %x EDI: %x EBP: %x ESP: %x", esi, edi, ebp, esp);
-
-  move_cursor(10, 14);
-  printk("Halting...");
-
-  for (;;) {
-    __asm__ volatile("hlt");
-  }
-}
-
-__attribute__((noreturn)) void panic_frame(interrupt_frame_t *frame,
-                                           const char *msg) {
-  __asm__ volatile("cli");
-
-  setcolor(15, 4);
-  clear();
-
-  move_cursor(10, 5);
-  printk("KERNEL PANIC:\n");
-  move_cursor(10, 7);
-  printk("%s\n", msg);
-  move_cursor(10, 9);
-  printk("INT: 0x%02x  ERR: 0x%08x\n", frame->err_no, frame->err_code);
-
-  move_cursor(10, 11);
-  printk("EAX: %08x  EBX: %08x  ECX: %08x  EDX: %08x\n", frame->eax, frame->ebx,
-         frame->ecx, frame->edx);
-  move_cursor(10, 12);
-  printk("ESI: %08x  EDI: %08x  EBP: %08x  ESP: %08x\n", frame->esi, frame->edi,
-         frame->ebp, frame->esp);
-  if (frame->err_no == 14) {
-    uint32_t cr2;
-    __asm__ volatile("mov %%cr2,%0" : "=r"(cr2));
-    move_cursor(10, 13);
-    printk("CR2=%08x\n", cr2);
-
-    uint32_t cr3;
-    __asm__("mov %%cr3,%0\n" : "=r"(cr3));
-    move_cursor(10, 14);
-    printk("CR3=%08x\n", cr3);
-    move_cursor(10, 15);
-    printk("CR2=%08x\n", cr2);
-    move_cursor(10, 16);
-    printk("virt_to_phys(CR2 page)=%08x\n", virt_to_phys(cr2 & ~0xFFF));
-  }
-
-  for (;;) {
-    __asm__ volatile("hlt");
-  }
-}

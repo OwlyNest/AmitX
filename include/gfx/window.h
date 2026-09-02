@@ -51,7 +51,7 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Window handle --- */
-typedef uint32_t window_handle_t;
+typedef ULONG_PTR window_handle_t;
 
 /* --- Window state --- */
 typedef enum {

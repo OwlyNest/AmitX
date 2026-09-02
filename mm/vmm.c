@@ -18,9 +18,13 @@
  * (void) instead of () Statements and declarations:   Max one per line
  */
 
-/* --- Macros ---*/
-#include "internal/kscope.h"
+/*
+ * Architecture-agnostic. The window base/size come from mmap.h, so
+ * this file does not hard-code 0xE0000000 (which is user-half on
+ * long mode). Flags are ULONG64 so PAGE_NX (bit 63) survives.
+ */
 
+/* --- Macros ---*/
 /*
  * IMPORTANT: this window must NOT overlap real hardware MMIO. On
  * QEMU/VirtualBox, PCI BARs commonly live in 0xF0000000-0xFFFFFFFF
@@ -44,7 +48,7 @@
 /* --- Typedefs - Structs - Enums ---*/
 
 /* --- Globals ---*/
-static uint8_t window_bitmap[(VMM_WINDOW_PAGES + 7) / 8];
+static UCHAR window_bitmap[(VMM_WINDOW_PAGES + 7) / 8];
 static spinlock_t vmm_lock;
 /* --- Prototypes ---*/
 
@@ -56,23 +60,24 @@ static spinlock_t vmm_lock;
  * within our own window, not physical frames                               *
  *                                                                          *
  * =======================================================================  */
-static inline void bit_set(uint32_t i) {
-  window_bitmap[i >> 3] |= (1 << (i & 7));
+static inline VOID bit_set(ULONG i) {
+  window_bitmap[i >> 3] |= (UCHAR)(1u << (i & 7));
 }
 
-static inline void bit_clear(uint32_t i) {
-  window_bitmap[i >> 3] &= ~(1 << (i & 7));
+static inline VOID bit_clear(ULONG i) {
+  window_bitmap[i >> 3] &= (UCHAR) ~(1u << (i & 7));
 }
 
-static inline int bit_test(uint32_t i) {
-  return window_bitmap[i >> 3] & (1 << (i & 7));
+static inline INT bit_test(ULONG i) {
+  return window_bitmap[i >> 3] & (1u << (i & 7));
 }
 
-static uint32_t find_free_run(uint32_t count) {
-  uint32_t run_start = 0;
-  uint32_t run_len = 0;
+static ULONG find_free_run(ULONG count) {
+  ULONG run_start = 0;
+  ULONG run_len = 0;
+  ULONG i;
 
-  for (uint32_t i = 0; i < VMM_WINDOW_PAGES; i++) {
+  for (i = 0; i < (ULONG)VMM_WINDOW_PAGES; i++) {
     if (!bit_test(i)) {
       if (run_len == 0)
         run_start = i;
@@ -83,19 +88,20 @@ static uint32_t find_free_run(uint32_t count) {
       run_len = 0;
     }
   }
-  return (uint32_t)-1;
+  return (ULONG)-1;
 }
-
 /* ==========================================================================
  *                                                                          *
  * Initialization                                                           *
  *                                                                          *
  * =======================================================================  */
-static int vmm_init(void) {
+static INT vmm_init(VOID) {
   memset(window_bitmap, 0, sizeof(window_bitmap));
   spinlock_init(&vmm_lock);
-  printk("[vmm] Mapping window: 0x%08x - 0x%08x (%u MB)\n", VMM_WINDOW_BASE,
-         VMM_WINDOW_BASE + VMM_WINDOW_SIZE, VMM_WINDOW_SIZE >> 20);
+  printk("[vmm] Mapping window: %p - %p (%u MB)\n",
+         (PVOID)(VIRT_ADDR_T)VMM_WINDOW_BASE,
+         (PVOID)(VIRT_ADDR_T)(VMM_WINDOW_BASE + VMM_WINDOW_SIZE),
+         (unsigned)(VMM_WINDOW_SIZE >> 20));
   return 0;
 }
 
@@ -117,19 +123,27 @@ kscope_node_t vmm_node = {
  * caller's original (possibly unaligned) address                           *
  *                                                                          *
  * =======================================================================  */
-void *vmm_map_physical(uintptr_t phys, size_t length, uint32_t flags) {
+PVOID vmm_map_physical(PHYS_ADDR_T phys, SIZE_T length, ULONG64 flags) {
+  PHYS_ADDR_T phys_start;
+  PHYS_ADDR_T phys_end;
+  ULONG pages;
+  ULONG flags_saved;
+  ULONG start;
+  VIRT_ADDR_T virt_start;
+  ULONG i;
+
   if (length == 0)
     return NULL;
 
-  uintptr_t phys_start = phys & ~(uintptr_t)(PAGE_SIZE - 1);
-  uintptr_t phys_end =
-      (phys + length + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
-  uint32_t pages = (uint32_t)((phys_end - phys_start) / PAGE_SIZE);
+  phys_start = phys & ~(PHYS_ADDR_T)(PAGE_SIZE - 1);
+  phys_end = (phys + (PHYS_ADDR_T)length + PAGE_SIZE - 1) &
+             ~(PHYS_ADDR_T)(PAGE_SIZE - 1);
+  pages = (ULONG)((phys_end - phys_start) / PAGE_SIZE);
 
-  uint32_t flags_saved = spinlock_acquire(&vmm_lock);
+  flags_saved = spinlock_acquire(&vmm_lock);
 
-  uint32_t start = find_free_run(pages);
-  if (start == (uint32_t)-1) {
+  start = find_free_run(pages);
+  if (start == (ULONG)-1) {
     spinlock_release(&vmm_lock, flags_saved);
     printk("[vmm] No free window space for %u pages\n", pages);
     return NULL;
@@ -137,19 +151,20 @@ void *vmm_map_physical(uintptr_t phys, size_t length, uint32_t flags) {
 
   /* Reserve the run immediately so a concurrent caller can't pick
      the same pages before map_page() below finishes */
-  for (uint32_t i = 0; i < pages; i++)
+  for (i = 0; i < pages; i++)
     bit_set(start + i);
 
   spinlock_release(&vmm_lock, flags_saved);
 
-  uintptr_t virt_start = VMM_WINDOW_BASE + (uintptr_t)start * PAGE_SIZE;
+  virt_start = (VIRT_ADDR_T)VMM_WINDOW_BASE + (VIRT_ADDR_T)start * PAGE_SIZE;
 
-  for (uint32_t i = 0; i < pages; i++) {
-    if (map_page(phys_start + (uintptr_t)i * PAGE_SIZE,
-                 virt_start + (uintptr_t)i * PAGE_SIZE, flags) != 0) {
-      uint32_t undo_flags = spinlock_acquire(&vmm_lock);
-      for (uint32_t j = 0; j < i; j++) {
-        unmap_page(virt_start + (uintptr_t)j * PAGE_SIZE);
+  for (i = 0; i < pages; i++) {
+    if (map_page(phys_start + (PHYS_ADDR_T)i * PAGE_SIZE,
+                 virt_start + (VIRT_ADDR_T)i * PAGE_SIZE, flags) != 0) {
+      ULONG undo_flags = spinlock_acquire(&vmm_lock);
+      ULONG j;
+      for (j = 0; j < i; j++) {
+        unmap_page(virt_start + (VIRT_ADDR_T)j * PAGE_SIZE);
         bit_clear(start + j);
       }
       bit_clear(start + i);
@@ -158,7 +173,7 @@ void *vmm_map_physical(uintptr_t phys, size_t length, uint32_t flags) {
     }
   }
 
-  return (void *)(virt_start + (phys - phys_start));
+  return (PVOID)(virt_start + (VIRT_ADDR_T)(phys - phys_start));
 }
 
 /* ==========================================================================
@@ -166,28 +181,35 @@ void *vmm_map_physical(uintptr_t phys, size_t length, uint32_t flags) {
  * Unmap a range previously returned by vmm_map_physical                    *
  *                                                                          *
  * =======================================================================  */
-void vmm_unmap_physical(void *virt, size_t length) {
+VOID vmm_unmap_physical(PVOID virt, SIZE_T length) {
+  VIRT_ADDR_T v;
+  VIRT_ADDR_T v_end;
+  ULONG start;
+  ULONG pages;
+  ULONG i;
+  ULONG flags_saved;
+
   if (!virt || length == 0)
     return;
 
-  uintptr_t v = (uintptr_t)virt & ~(uintptr_t)(PAGE_SIZE - 1);
-  uintptr_t v_end =
-      ((uintptr_t)virt + length + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
+  v = (VIRT_ADDR_T)virt & ~(VIRT_ADDR_T)(PAGE_SIZE - 1);
+  v_end = ((VIRT_ADDR_T)virt + length + PAGE_SIZE - 1) &
+          ~(VIRT_ADDR_T)(PAGE_SIZE - 1);
 
-  if (v < VMM_WINDOW_BASE || v_end > VMM_WINDOW_BASE + VMM_WINDOW_SIZE) {
-    printk("[vmm] unmap: 0x%08x not in mapping window\n", (uint32_t)virt);
+  if (v < (VIRT_ADDR_T)VMM_WINDOW_BASE ||
+      v_end > (VIRT_ADDR_T)VMM_WINDOW_BASE + (VIRT_ADDR_T)VMM_WINDOW_SIZE) {
+    printk("[vmm] unmap: %p not in mapping window\n", virt);
     return;
   }
 
-  uint32_t start = (uint32_t)((v - VMM_WINDOW_BASE) / PAGE_SIZE);
-  uint32_t pages = (uint32_t)((v_end - v) / PAGE_SIZE);
+  start = (ULONG)((v - (VIRT_ADDR_T)VMM_WINDOW_BASE) / PAGE_SIZE);
+  pages = (ULONG)((v_end - v) / PAGE_SIZE);
 
-  for (uint32_t i = 0; i < pages; i++) {
-    unmap_page(v + (uintptr_t)i * PAGE_SIZE);
-  }
+  for (i = 0; i < pages; i++)
+    unmap_page(v + (VIRT_ADDR_T)i * PAGE_SIZE);
 
-  uint32_t flags_saved = spinlock_acquire(&vmm_lock);
-  for (uint32_t i = 0; i < pages; i++)
+  flags_saved = spinlock_acquire(&vmm_lock);
+  for (i = 0; i < pages; i++)
     bit_clear(start + i);
   spinlock_release(&vmm_lock, flags_saved);
 }

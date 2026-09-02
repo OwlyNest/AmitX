@@ -173,11 +173,11 @@ static void e1000_init_rx(struct e1000_device *dev) {
 
   for (int i = 0; i < E1000_RX_RING_SIZE; i++) {
     dev->rx_buffers[i] = (uint8_t *)malloc(2048);
-    dev->rx_ring[i].addr = (uint64_t)(uint32_t)dev->rx_buffers[i];
+    dev->rx_ring[i].addr = (uint64_t)(ULONG_PTR)dev->rx_buffers[i];
     dev->rx_ring[i].status = 0;
   }
 
-  e1000_write(dev, E1000_REG_RDBAL, (uint32_t)dev->rx_ring);
+  e1000_write(dev, E1000_REG_RDBAL, (ULONG_PTR)dev->rx_ring);
   e1000_write(dev, E1000_REG_RDBAH, 0);
   e1000_write(dev, E1000_REG_RDLEN,
               sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE);
@@ -202,11 +202,11 @@ static void e1000_init_tx(struct e1000_device *dev) {
 
   for (int i = 0; i < E1000_TX_RING_SIZE; i++) {
     dev->tx_buffers[i] = (uint8_t *)malloc(2048);
-    dev->tx_ring[i].addr = (uint64_t)(uint32_t)dev->tx_buffers[i];
+    dev->tx_ring[i].addr = (uint64_t)(ULONG_PTR)dev->tx_buffers[i];
     dev->tx_ring[i].status = E1000_TXD_STAT_DD;
   }
 
-  e1000_write(dev, E1000_REG_TDBAL, (uint32_t)dev->tx_ring);
+  e1000_write(dev, E1000_REG_TDBAL, (ULONG_PTR)dev->tx_ring);
   e1000_write(dev, E1000_REG_TDBAH, 0);
   e1000_write(dev, E1000_REG_TDLEN,
               sizeof(struct e1000_tx_desc) * E1000_TX_RING_SIZE);
@@ -522,8 +522,8 @@ void e1000_shutdown(void) {
   uint32_t rx_ring_pages =
       (sizeof(struct e1000_rx_desc) * E1000_RX_RING_SIZE + FRAME_SIZE - 1) /
       FRAME_SIZE;
-  pmm_free_frames(e1000_dev.tx_ring, tx_ring_pages);
-  pmm_free_frames(e1000_dev.rx_ring, rx_ring_pages);
+  pmm_free_frames((PHYS_ADDR_T)e1000_dev.tx_ring, tx_ring_pages);
+  pmm_free_frames((PHYS_ADDR_T)e1000_dev.rx_ring, rx_ring_pages);
 
   e1000_ready = 0;
   e1000_dev.tx_head = 0;

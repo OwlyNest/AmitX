@@ -32,56 +32,63 @@
 #define PMM_MIN_MEMORY (4 * 1024 * 1024)
 
 typedef struct pmm_stats {
-  uint32_t total_frames;
-  uint32_t used_frames;
-  uint32_t free_frames;
-  uint32_t reserved_frames;
+  PFN_T total_frames;
+  PFN_T used_frames;
+  PFN_T free_frames;
+  PFN_T reserved_frames;
 } pmm_stats_t;
 
 typedef struct framebuffer_info {
   uint64_t addr;
-  uint32_t pitch;
-  uint32_t width;
-  uint32_t height;
-  uint8_t bpp;
-  uint8_t type;
-  uint8_t valid;
+  ULONG pitch;
+  ULONG width;
+  ULONG height;
+  UCHAR bpp;
+  UCHAR type;
+  UCHAR valid;
   /* Only meaningful when type == 1 (RGB) */
-  uint8_t red_pos, red_size;
-  uint8_t green_pos, green_size;
-  uint8_t blue_pos, blue_size;
+  UCHAR red_pos, red_size;
+  UCHAR green_pos, green_size;
+  UCHAR blue_pos, blue_size;
 } framebuffer_info_t;
 
 typedef struct boot_info {
-  uint32_t magic;
+  ULONG magic;
   multiboot_info_t *mb_info;
-  uint64_t total_ram;
-  uint32_t total_frames;
-  uintptr_t kernel_start;
-  uintptr_t kernel_end;
-  int valid;
+  ULONGLONG total_ram;
+  PFN_T total_frames;
+  PHYS_ADDR_T kernel_start;
+  PHYS_ADDR_T kernel_end;
+  INT valid;
   framebuffer_info_t fb;
-  uintptr_t rsdp_addr; /* 0 if bootloader gave us none */
+  VIRT_ADDR_T rsdp_addr; /* 0 if bootloader gave us none */
 } boot_info_t;
 
-uintptr_t pmm_get_rsdp(void);
-int pmm_init(void);
-void pmm_set_kernel_end(uintptr_t end);
-void *pmm_alloc_frame(void);
-int is_physical_address_mmio(uintptr_t phys_addr);
-void pmm_free_frame(void *frame);
-void *pmm_alloc_frames(uint32_t count);
-void pmm_free_frames(void *frame, uint32_t count);
-void pmm_reserve_region(uintptr_t start, size_t length);
-void pmm_unreserve_region(uintptr_t start, size_t length);
-int pmm_is_region_free(uintptr_t start, size_t length);
-void pmm_get_stats(pmm_stats_t *stats);
-void pmm_print_map(void);
-uint32_t pmm_get_total_frames(void);
-uint32_t pmm_get_free_frames(void);
-uint64_t pmm_get_total_ram(void);
+VIRT_ADDR_T pmm_get_rsdp(VOID);
+INT pmm_init(VOID);
+VOID pmm_set_kernel_end(PHYS_ADDR_T end);
+
+/*
+ * Frame allocator. Returns PHYS_ADDR_INVALID (0) on failure.
+ * Frame 0 is reserved with the rest of the first 1 MiB, so 0 is
+ * never a successful allocation.
+ */
+PHYS_ADDR_T pmm_alloc_frame(VOID);
+VOID pmm_free_frame(PHYS_ADDR_T frame);
+PHYS_ADDR_T pmm_alloc_frames(ULONG count);
+VOID pmm_free_frames(PHYS_ADDR_T frame, ULONG count);
+PHYS_ADDR_T pmm_alloc_aligned(ULONG count, ULONG align_frames);
+INT pmm_alloc_at(PHYS_ADDR_T addr, ULONG count);
+
+LONG is_physical_address_mmio(PHYS_ADDR_T phys_addr);
+VOID pmm_reserve_region(PHYS_ADDR_T start, SIZE_T length);
+VOID pmm_unreserve_region(PHYS_ADDR_T start, SIZE_T length);
+int pmm_is_region_free(PHYS_ADDR_T start, SIZE_T length);
+VOID pmm_get_stats(pmm_stats_t *stats);
+VOID pmm_print_map(void);
+PFN_T pmm_get_total_frames(void);
+PFN_T pmm_get_free_frames(void);
+ULONGLONG pmm_get_total_ram(void);
 const boot_info_t *pmm_get_boot_info(void);
-void *pmm_alloc_aligned(uint32_t count, uint32_t align_frames);
-int pmm_alloc_at(uintptr_t addr, uint32_t count);
 
 #endif

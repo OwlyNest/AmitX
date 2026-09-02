@@ -1,46 +1,45 @@
 /*
-	* include/arch/x86/task.h - Task abstraction
-	* Author:   amity
-	* Date:     Sat Jul  4 01:33:09 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * include/arch/x86/task.h - Task abstraction
+ * Author:   amity
+ * Date:     Sat Jul  4 01:33:09 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
 
 /* --- Macros ---*/
 #ifndef __ARCH_X86_TASK_H__
 #define __ARCH_X86_TASK_H__
 
-#define TASK_NAME_LEN        32
-#define TASK_STACK_SIZE      4096
-#define TASK_MAX_TASKS       256
+#define TASK_NAME_LEN 32
+#define TASK_STACK_SIZE 4096
+#define TASK_MAX_TASKS 256
 #define TASK_DEFAULT_QUANTUM 2
-#define TASK_NO_TIMEOUT      0
+#define TASK_NO_TIMEOUT 0
 
 /* Priority levels: 0 = idle, 1-15 = dynamic, 16-30 = real-time,
  * 31 = critical (DPCs, reaper).  Matches Win32-ish semantics.
-*/
-#define TASK_PRIO_IDLE       0
-#define TASK_PRIO_LOWEST     1
+ */
+#define TASK_PRIO_IDLE 0
+#define TASK_PRIO_LOWEST 1
 #define TASK_PRIO_BELOW_NORM 4
-#define TASK_PRIO_NORMAL     8
+#define TASK_PRIO_NORMAL 8
 #define TASK_PRIO_ABOVE_NORM 12
-#define TASK_PRIO_HIGHEST    15
-#define TASK_PRIO_REALTIME   16
-#define TASK_PRIO_CRITICAL   31
-#define TASK_NUM_PRIOS       32
+#define TASK_PRIO_HIGHEST 15
+#define TASK_PRIO_REALTIME 16
+#define TASK_PRIO_CRITICAL 31
+#define TASK_NUM_PRIOS 32
 
 /* --- Includes ---*/
 #include <stdint.h>
@@ -51,93 +50,118 @@ typedef uint32_t pid_t;
 typedef uint32_t tid_t;
 
 typedef enum {
-    TASK_READY,
-    TASK_RUNNING,
-    TASK_BLOCKED,
-    TASK_SLEEPING,
-    TASK_TERMINATED,
-    TASK_ZOMBIE
+  TASK_READY,
+  TASK_RUNNING,
+  TASK_BLOCKED,
+  TASK_SLEEPING,
+  TASK_TERMINATED,
+  TASK_ZOMBIE
 } task_state_t;
 
 typedef enum {
-    SCHED_KERNEL,
-    SCHED_LATENCY,
-    SCHED_THROUGHPUT,
-    SCHED_NORMAL
+  SCHED_KERNEL,
+  SCHED_LATENCY,
+  SCHED_THROUGHPUT,
+  SCHED_NORMAL
 } sched_class_t;
 
-typedef enum {
-    WAKE_NONE,
-    WAKE_SIGNALED,
-    WAKE_TIMEOUT
-} wake_reason_t;
+typedef enum { WAKE_NONE, WAKE_SIGNALED, WAKE_TIMEOUT } wake_reason_t;
+
+#if ARCH_X86_64
+
+typedef struct cpu_context {
+  /* Callee-saved registers */
+  QWORD rsp;
+  QWORD rbp;
+  QWORD rbx;
+  QWORD r12;
+  QWORD r13;
+  QWORD r14;
+  QWORD r15;
+  QWORD rdi;
+  QWORD rsi;
+
+  /* RFLAGS */
+  QWORD rflags;
+
+  /* Instruction pointer (for initial setup) */
+  QWORD rip;
+} cpu_context_t;
+
+#else
+
+typedef struct cpu_context {
+  DWORD esp;
+  DWORD ebp;
+  DWORD ebx;
+  DWORD esi;
+  DWORD edi;
+  DWORD eflags;
+} cpu_context_t;
+
+#endif
 
 typedef struct task {
-    /* Identity */
-    tid_t tid;
-    pid_t pid;
-    char name[TASK_NAME_LEN];
+  /* Identity */
+  tid_t tid;
+  pid_t pid;
+  CHAR name[TASK_NAME_LEN];
 
-    /* Scheduling */
-    task_state_t state;
-    sched_class_t sched_class;
+  /* Scheduling */
+  task_state_t state;
+  sched_class_t sched_class;
 
-    /* Base priority: set at creation, never changes for RT,
-     * adjusted for dynamic classes.
-    */
-    uint8_t base_prio;
-    /* Current priority: may be boosted due to I/O completion,
-     * mutex priority inheritance, or foreground focus.
-    */
-    uint8_t cur_prio;
+  /* Base priority: set at creation, never changes for RT,
+   * adjusted for dynamic classes.
+   */
+  UCHAR base_prio;
+  /* Current priority: may be boosted due to I/O completion,
+   * mutex priority inheritance, or foreground focus.
+   */
+  UCHAR cur_prio;
 
-    uint32_t quantum;
-    uint32_t quantum_max; /* Quantum this task started with*/
-    uint32_t sleep_until;
+  ULONG quantum;
+  ULONG quantum_max; /* Quantum this task started with*/
+  ULONG sleep_until;
 
-    /* Saved CPU context (callee-saved + eflags + esp) */
-    uint32_t esp;
-    uint32_t ebp;
-    uint32_t ebx;
-    uint32_t esi;
-    uint32_t edi;
-    uint32_t eflags;
+  /* Saved CPU context (callee-saved + eflags + esp) */
+  cpu_context_t context;
 
-    /* Address space (future) */
-    uint32_t cr3;
+  /* Address space (future) */
+  ULONG_PTR cr3;
 
-    /* Kernel stack */
-    void *kernel_stack;
-    uint32_t kernel_stack_size;
+  /* Kernel stack */
+  PVOID kernel_stack;
+  SIZE_T kernel_stack_size;
 
-    /* Scheduler links -- doubly-linked, one list per priority */
-    struct task *next;
-    struct task *prev;
+  /* Scheduler links -- doubly-linked, one list per priority */
+  struct task *next;
+  struct task *prev;
 
-	void (*entry)(void *argument);
-    void *arg;
+  VOID (*entry)(PVOID argument);
+  PVOID arg;
 
-    /* Wait queue linkage (mutex / semaphore blocking) */
-    struct task *wait_next;
-    struct task *wait_prev;
-    struct task_queue *wait_queue;
-    wake_reason_t wake_reason;
+  /* Wait queue linkage (mutex / semaphore blocking) */
+  struct task *wait_next;
+  struct task *wait_prev;
+  struct task_queue *wait_queue;
+  wake_reason_t wake_reason;
 
-    /* Timer wheel linkage for sleep/timeout */
-    struct task *timer_next;
-    struct task *timer_prev;
-    uint32_t timer_bucket;
+  /* Timer wheel linkage for sleep/timeout */
+  struct task *timer_next;
+  struct task *timer_prev;
+  uint32_t timer_bucket;
 } task_t;
 
 typedef struct task_queue {
-    task_t *head;
-    task_t *tail;
+  task_t *head;
+  task_t *tail;
 } task_queue_t;
 
 typedef struct scheduler_class {
-    void (*enqueue)(task_t *);
-    task_t *(*pick_next)(void);
-    void (*tick)(task_t *);
+  void (*enqueue)(task_t *);
+  task_t *(*pick_next)(void);
+  void (*tick)(task_t *);
 } scheduler_class_t;
 
 /* --- Globals ---*/
@@ -151,10 +175,9 @@ void task_init(void);
 task_t *task_create(void (*entry)(void), const char *name);
 task_t *task_create_prio(void (*entry)(void), const char *name,
                          uint8_t priority);
-task_t *task_create_arg(void (*entry)(void *), void *arg,
-                        const char *name);
-task_t *task_create_arg_prio(void (*entry)(void *), void *arg,
-                             const char *name, uint8_t priority);
+task_t *task_create_arg(void (*entry)(void *), void *arg, const char *name);
+task_t *task_create_arg_prio(void (*entry)(void *), void *arg, const char *name,
+                             uint8_t priority);
 void task_destroy(task_t *task);
 void task_exit(void);
 

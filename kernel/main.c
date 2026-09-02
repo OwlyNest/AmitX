@@ -61,19 +61,6 @@ extern volatile uint32_t tick_count;
 
 /* --- Functions ---*/
 
-void ring3_hello(void) {
-  syscall(SYS_WRITE, (uint32_t)"Hello from ring 3!\n", 0, 0);
-  while (1)
-    ;
-}
-
-void test_ring3(void) {
-  printk("[test] Jumping to ring 3...\n");
-  uint32_t *user_stack = (uint32_t *)malloc(4096);
-  uint32_t user_esp = (uint32_t)(user_stack + 1024);
-  usermode_jump((uint32_t)ring3_hello, user_esp);
-}
-
 void system_shutdown(void) { acpi_shutdown(); }
 
 void system_reboot(void) { acpi_reboot(); }

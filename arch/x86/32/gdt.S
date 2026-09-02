@@ -1,4 +1,23 @@
+# arch/x86/32/gdt.S - Global Descriptor Table (32-bit Protected Mode)
+# Author:   amity
+# Date:     Mon Aug 31 12:19:56 2026
+# Copyright © 2026 OwlyNest
+
+# ==============================
+# Alignment instructions:
+
+# Instructions               begin at col 5
+# First operand              begins at col 10
+# Second operand             begins at col 20 (if possible)
+
+# Header comments            begin at col 5
+# In-line comments           begin at col 40
+# Labels                     begin at col 1, end with ':'
+# Section dividers           use 30 '=' characters
+# (Sub)Section titles        use 3 '=' characters before and after
+
 .intel_syntax noprefix
+
 .global gdt_install
 .global tss_set_esp0
 
@@ -13,7 +32,7 @@
 .set SEL_UDATA, 0x20
 .set SEL_TSS,   0x28
 
-/* --- TSS --- */
+/* --- TSS (104 bytes for x86-32) --- */
 .align 4
 tss_struct:
     .word 0                  /* previous task link */
@@ -94,17 +113,13 @@ gdt_start:
     .byte 0xCF
     .byte 0x00
 
-    /* 5: TSS (0x28) - (fill at runtime) */
+    /* 5: TSS (0x28) - filled at runtime by gdt_init_tss() */
     .quad 0
 gdt_end:
 
 gdt_ptr:
     .word gdt_end - gdt_start - 1
     .long gdt_start
-
-tss_ptr:
-    .word tss_end - tss_struct - 1
-    .long tss_struct
 
 /* --- Functions --- */
 
@@ -125,6 +140,6 @@ flush_cs:
 
 /* void tss_set_esp0(uint32_t esp) */
 tss_set_esp0:
-    mov eax, [esp + 4]       /* get esp argument */
+    mov eax, [esp + 4]       /* get esp argument from stack */
     mov [tss_struct + 4], eax /* tss_struct.esp0 is at offset 4 */
     ret

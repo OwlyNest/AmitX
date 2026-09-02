@@ -1,4 +1,4 @@
-# --------------------------------------------------------------------	
+# --------------------------------------------------------------------
 # Phonon Makefile
 #
 # Windows-native build:
@@ -17,22 +17,33 @@ SHELL := /usr/bin/pwsh
 endif
 
 # --------------------------------------------------------------------
-# Toolchain
+# Architecture / Toolchain
 # --------------------------------------------------------------------
 
-CC       := i686-elf-gcc
+ARCH ?= x86
+ifeq ($(ARCH),x86)
+    TOOLCHAIN := i686-elf-
+    ARCH_FLAGS := -m32
+    ARCH_DEFINE := -DPHONON_ARCH_X86
+else ifeq ($(ARCH),x64)
+    TOOLCHAIN := x86_64-elf-
+    ARCH_FLAGS := -m64 -mno-red-zone
+    ARCH_DEFINE := -DPHONON_ARCH_X64
+else
+    $(error Unsupported ARCH '$(ARCH)'. Use ARCH=x86 or ARCH=x64)
+endif
+
+CC       := $(TOOLCHAIN)gcc
 C3       := c3c
-CXX      := i686-elf-g++
-LD       := i686-elf-ld
+CXX      := $(TOOLCHAIN)g++
+LD       := $(TOOLCHAIN)ld
 AS       := $(CC)
-
-AR       := i686-elf-ar
-NM       := i686-elf-nm
-SIZE     := i686-elf-size
-OBJDUMP  := i686-elf-objdump
-OBJCOPY  := i686-elf-objcopy
-READELF  := i686-elf-readelf
-
+AR       := $(TOOLCHAIN)ar
+NM       := $(TOOLCHAIN)nm
+SIZE     := $(TOOLCHAIN)size
+OBJDUMP  := $(TOOLCHAIN)objdump
+OBJCOPY  := $(TOOLCHAIN)objcopy
+READELF  := $(TOOLCHAIN)readelf
 RUSTC    ?= rustc
 CARGO    ?= cargo
 
@@ -43,21 +54,21 @@ CARGO    ?= cargo
 ifeq ($(OS),Windows_NT)
 
 define RM_DIR
-	if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Recurse -Force }
+    if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Recurse -Force }
 endef
 
 define RM_FILE
-	if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Force }
+    if (Test-Path -LiteralPath '$(1)') { Remove-Item -LiteralPath '$(1)' -Force }
 endef
 
 else
 
 define RM_DIR
-	rm -rf "$(1)"
+    rm -rf "$(1)"
 endef
 
 define RM_FILE
-	rm -f "$(1)"
+    rm -f "$(1)"
 endef
 
 endif
@@ -72,24 +83,25 @@ BUILD_DIR    := build
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
+# NOTE: arch/x86 is NOT in this list. Its build.mk handles 32/64/common.
 SRC_DIRS := \
-	shell \
-	fs \
-	boot \
-	arch/x86 \
-	drivers \
-	lib \
-	mm \
-	kernel \
-	screen \
-	tests \
-	logo \
-	ui \
-	hw \
-	gfx \
-	exec \
-	sync \
-	acpi
+    shell \
+    fs \
+    fs/smkfs \
+    boot \
+    drivers \
+    lib \
+    mm \
+    kernel \
+    screen \
+    tests \
+    logo \
+    ui \
+    hw \
+    gfx \
+    exec \
+    sync \
+    acpi
 
 ACPICA_DIR := third_party/acpica/components
 ACPICA_INC := third_party/acpica/include
@@ -99,18 +111,19 @@ ACPICA_INC := third_party/acpica/include
 # --------------------------------------------------------------------
 
 COMMON_FLAGS := \
-	-m32 \
-	-ffreestanding \
-	-fno-stack-protector \
-	-fno-asynchronous-unwind-tables \
-	-fno-unwind-tables \
-	-fno-pic \
-	-fno-pie \
-	-O2 \
-	-MMD \
-	-MP \
-	-D__OWLYNEST__ \
-	-Iinclude
+    $(ARCH_FLAGS) \
+    $(ARCH_DEFINE) \
+    -ffreestanding \
+    -fno-stack-protector \
+    -fno-asynchronous-unwind-tables \
+    -fno-unwind-tables \
+    -fno-pic \
+    -fno-pie \
+    -O2 \
+    -MMD \
+    -MP \
+    -D__OWLYNEST__ \
+    -Iinclude
 
 CFLAGS := \
     $(COMMON_FLAGS) \
@@ -121,38 +134,38 @@ CFLAGS := \
     -isystem $(ACPICA_INC)
 
 C3FLAGS := \
-	--target elf-x86 \
-	--use-stdlib=no \
-	--emit-stdlib=no \
-	-g0
+    --target elf-x86 \
+    --use-stdlib=no \
+    --emit-stdlib=no \
+    -g0
 
 ACPICA_CFLAGS := \
-	$(COMMON_FLAGS) \
-	-Wall \
-	-Wno-unused-parameter \
-	-Wno-sign-compare \
-	-I$(ACPICA_INC)
+    $(COMMON_FLAGS) \
+    -Wall \
+    -Wno-unused-parameter \
+    -Wno-sign-compare \
+    -I$(ACPICA_INC)
 
 CXXFLAGS := \
-	$(COMMON_FLAGS) \
-	-Wall \
-	-Wextra \
-	-Werror \
-	-fno-exceptions \
-	-fno-rtti \
-	-fno-threadsafe-statics \
-	-fno-use-cxa-atexit \
-	-std=c++20
+    $(COMMON_FLAGS) \
+    -Wall \
+    -Wextra \
+    -Werror \
+    -fno-exceptions \
+    -fno-rtti \
+    -fno-threadsafe-statics \
+    -fno-use-cxa-atexit \
+    -std=c++20
 
 RUSTFLAGS := \
-	-C panic=abort \
-	-C opt-level=2 \
-	-C relocation-model=static \
-	-C force-frame-pointers=no
+    -C panic=abort \
+    -C opt-level=2 \
+    -C relocation-model=static \
+    -C force-frame-pointers=no
 
 LDFLAGS := \
-	-T boot/linker.ld \
-	-nostdlib
+    -T boot/linker.ld \
+    -nostdlib
 
 LIBGCC := $(shell $(CC) -print-libgcc-file-name)
 LIBS := $(LIBGCC)
@@ -165,7 +178,7 @@ LIBS := $(LIBGCC)
 -include fs/build.mk
 -include fs/smkfs/build.mk
 -include boot/build.mk
--include arch/x86/build.mk
+-include arch/x86/build.mk      # Hand-written selector for 32/64/common
 -include drivers/build.mk
 -include lib/build.mk
 -include mm/build.mk
@@ -195,12 +208,12 @@ RUST_OBJS := $(patsubst %.rs,$(BUILD_DIR)/%.o,$(RUST_SRCS))
 $(ACPICA_OBJS): CFLAGS := $(ACPICA_CFLAGS)
 
 OBJS := \
-	$(C_OBJS) \
-	$(C3_OBJS) \
-	$(CPP_OBJS) \
-	$(ASM_OBJS) \
-	$(ACPICA_OBJS) \
-	$(RUST_OBJS)
+    $(C_OBJS) \
+    $(C3_OBJS) \
+    $(CPP_OBJS) \
+    $(ASM_OBJS) \
+    $(ACPICA_OBJS) \
+    $(RUST_OBJS)
 
 DEPS := $(OBJS:.o=.d)
 

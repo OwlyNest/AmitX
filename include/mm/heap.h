@@ -4,15 +4,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern uint8_t* heap_base;
-extern uint8_t* heap_end;
-extern uint8_t* heap_break;
+extern PUCHAR heap_base;
+extern PUCHAR heap_end;
+extern PUCHAR heap_break;
 
-void* malloc(size_t size);
-void* calloc(size_t num, size_t size);
-void* realloc(void* ptr, size_t new_size);
-void free(void* ptr);
+PVOID malloc(SIZE_T size);
+PVOID calloc(SIZE_T num, SIZE_T size);
+PVOID realloc(PVOID ptr, SIZE_T new_size);
+VOID free(PVOID ptr);
 
-void* sbrk(ptrdiff_t increment);
-void print_heap_state();
+PVOID sbrk(SSIZE_T increment);
+VOID print_heap_state(VOID);
+
+#define kmalloc malloc
+#define kfree free
+#define kcalloc calloc
+#define krealloc realloc
 #endif

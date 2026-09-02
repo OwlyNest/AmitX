@@ -1,8 +1,9 @@
 /*
- * mm/paging.c - x86 32-bit paging with recursive mapping
+ * mm/paging.c - x86 paging (i386 2-level / x86_64 4-level)
  * Author:   amity
  * Date:     Mon Jun 22 10:45:00 2026
  * Copyright © 2026 OwlyNest
+ *
  */
 
 /* --- Styling Instructions ---
@@ -18,124 +19,519 @@
  * (void) instead of () Statements and declarations:   Max one per line
  */
 
-/* --- Macros ---*/
+/*
+ * The public API in paging.h is architecture-agnostic. The walk,
+ * recursive mapping, and CR3 load are not — they live behind
+ * ARCH_X86_64 / ARCH_X86_32 in this file. Prefer splitting into
+ * arch/x86/{32,64}/paging.c once the 64-bit tree is wired; the
+ * ifdefs are a drop-in so `make ARCH=x64` can start compiling.
+ *
+ * Long-mode note: CR0.PG is already set by the time this runs
+ * (you cannot be in 64-bit code without paging). paging_init()
+ * therefore builds a new PML4 and switches CR3; it does not
+ * touch CR0. The bootstrap identity map must still cover frames
+ * returned by pmm_alloc_frame() so we can memset new tables
+ * before the recursive mapping exists.
+ */
 
-/* --- Includes ---*/
 #include <internal/kscope.h>
 #include <internal/kscope_nodes.h>
+#include <internal/phonon_types.h>
 #include <internal/virtmem.h>
 #include <lib/string.h>
+#include <mm/mmap.h>
 #include <mm/paging.h>
 #include <mm/pmm.h>
 #include <screen/printk.h>
 #include <stdint.h>
 #include <sync/spinlock.h>
 
-/* --- Typedefs - Structs - Enums ---*/
-
-/* --- Globals ---*/
-/* Physical address of page directory, set during init.
- * After paging is on, use 0xFFFFF000 (recursive mapping) instead. */
-static uintptr_t page_directory_phys = 0;
-static size_t identity_map_size = 0;
+static PHYS_ADDR_T root_phys = 0;
+static SIZE_T identity_map_size = 0;
 static spinlock_t paging_lock;
+
 extern uint8_t __kernel_phys_start[];
 extern uint8_t _kernel_phys_end[];
-/* --- Prototypes ---*/
 
-/* --- Functions ---*/
+FORCEINLINE void paging_invlpg(VIRT_ADDR_T virt) {
+  __asm__ __volatile__("invlpg (%0)" : : "r"(virt) : "memory");
+}
+
+FORCEINLINE void paging_load_cr3(PHYS_ADDR_T phys) {
+  __asm__ __volatile__("mov %0, %%cr3" : : "r"(phys) : "memory");
+}
+
 /* ==========================================================================
- * Initialize paging
- *
- * Creates a page directory and two page tables to identity-map the
- * physical memory. This covers VGA (0xB8000), the
- * kernel (0x100000), the PMM bitmap, and the heap.
+ * Shared kscope node
  * ======================================================================= */
+
+static kscope_node_t *paging_requires[] = {&pmm_node};
+static const char *paging_provides[] = {"mem.paging"};
+
+SIZE_T paging_get_identity_size(void) { return identity_map_size; }
+
+#if ARCH_X86_64
+
+/* ==========================================================================
+ * x86_64 — 4-level, recursive PML4[RECURSIVE_PML4_INDEX]
+ * ======================================================================= */
+
+#define IDX_PML4(v) ((ULONG)(((VIRT_ADDR_T)(v) >> 39) & 0x1FFu))
+#define IDX_PDPT(v) ((ULONG)(((VIRT_ADDR_T)(v) >> 30) & 0x1FFu))
+#define IDX_PD(v) ((ULONG)(((VIRT_ADDR_T)(v) >> 21) & 0x1FFu))
+#define IDX_PT(v) ((ULONG)(((VIRT_ADDR_T)(v) >> 12) & 0x1FFu))
+
+#define HUGE_2M (2u * 1024u * 1024u)
+
+static PTE_T *phys_as_ptr(PHYS_ADDR_T p) { return (PTE_T *)(VIRT_ADDR_T)p; }
+
+static int boot_ensure(PTE_T *slot) {
+  PHYS_ADDR_T frame;
+
+  if (*slot & PAGE_PRESENT)
+    return 0;
+
+  frame = pmm_alloc_frame();
+  if (!frame)
+    return -1;
+  memset(phys_as_ptr(frame), 0, PAGE_SIZE);
+  *slot = (PTE_T)frame | PAGE_PRESENT | PAGE_WRITABLE;
+  return 0;
+}
+
+static int boot_map_2m(PTE_T *pml4, PHYS_ADDR_T phys, VIRT_ADDR_T virt,
+                       ULONG64 flags) {
+  ULONG i4 = IDX_PML4(virt);
+  ULONG i3 = IDX_PDPT(virt);
+  ULONG i2 = IDX_PD(virt);
+  PTE_T *pdpt;
+  PTE_T *pd;
+
+  if (boot_ensure(&pml4[i4]) != 0)
+    return -1;
+  pdpt = phys_as_ptr(PTE_ADDR(pml4[i4]));
+
+  if (boot_ensure(&pdpt[i3]) != 0)
+    return -1;
+  pd = phys_as_ptr(PTE_ADDR(pdpt[i3]));
+
+  pd[i2] = (PTE_T)(phys & ~((PHYS_ADDR_T)HUGE_2M - 1)) | PAGE_PRESENT |
+           PAGE_HUGE | (PTE_T)(flags & PAGE_FLAG_MASK);
+  return 0;
+}
+
+static int boot_map_4k(PTE_T *pml4, PHYS_ADDR_T phys, VIRT_ADDR_T virt,
+                       ULONG64 flags) {
+  ULONG i4 = IDX_PML4(virt);
+  ULONG i3 = IDX_PDPT(virt);
+  ULONG i2 = IDX_PD(virt);
+  ULONG i1 = IDX_PT(virt);
+  PTE_T *pdpt;
+  PTE_T *pd;
+  PTE_T *pt;
+
+  if (boot_ensure(&pml4[i4]) != 0)
+    return -1;
+  pdpt = phys_as_ptr(PTE_ADDR(pml4[i4]));
+
+  if (boot_ensure(&pdpt[i3]) != 0)
+    return -1;
+  pd = phys_as_ptr(PTE_ADDR(pdpt[i3]));
+
+  if (pd[i2] & PAGE_HUGE)
+    return -1;
+  if (boot_ensure(&pd[i2]) != 0)
+    return -1;
+  pt = phys_as_ptr(PTE_ADDR(pd[i2]));
+
+  pt[i1] =
+      (PTE_T)PTE_ADDR(phys) | PAGE_PRESENT | (PTE_T)(flags & PAGE_FLAG_MASK);
+  return 0;
+}
+
+static int boot_map_range_2m(PTE_T *pml4, PHYS_ADDR_T phys, VIRT_ADDR_T virt,
+                             SIZE_T length, ULONG64 flags) {
+  PHYS_ADDR_T p = phys & ~((PHYS_ADDR_T)HUGE_2M - 1);
+  VIRT_ADDR_T v = virt & ~((VIRT_ADDR_T)HUGE_2M - 1);
+  VIRT_ADDR_T end = (virt + length + HUGE_2M - 1) & ~((VIRT_ADDR_T)HUGE_2M - 1);
+
+  while (v < end) {
+    if (boot_map_2m(pml4, p, v, flags) != 0)
+      return -1;
+    p += HUGE_2M;
+    v += HUGE_2M;
+  }
+  return 0;
+}
+
 int paging_init(void) {
+  PTE_T *pml4;
+  ULONGLONG ram;
+  SIZE_T ident;
+  PHYS_ADDR_T phys_start;
+  PHYS_ADDR_T phys_end;
+  PHYS_ADDR_T p;
+  PHYS_ADDR_T paging_end;
+  PHYS_ADDR_T kernel_phys_end;
+
   spinlock_init(&paging_lock);
 
-  uint32_t *pd = (uint32_t *)pmm_alloc_frame();
-  if (!pd) {
+  root_phys = pmm_alloc_frame();
+  if (!root_phys)
+    return -1;
+  pml4 = phys_as_ptr(root_phys);
+  memset(pml4, 0, PAGE_SIZE);
+
+  ram = pmm_get_total_ram();
+
+  /* Bootstrap identity window: first 4 GiB or all RAM, whichever
+   * is smaller. Keeps auto_virt() and early physical pointers
+   * working. 2 MiB pages. */
+  ident = (SIZE_T)ram;
+  if (ident > 0x100000000ULL)
+    ident = (SIZE_T)0x100000000ULL;
+  ident &= ~((SIZE_T)HUGE_2M - 1);
+  if (ident < HUGE_2M)
+    ident = HUGE_2M;
+
+  if (boot_map_range_2m(pml4, 0, 0, ident, PAGE_WRITABLE) != 0)
+    return -1;
+  identity_map_size = ident;
+
+  /* Direct map of all physical RAM (capped by DIRECT_MAP_SIZE). */
+  {
+    SIZE_T dlen = (SIZE_T)ram;
+    if (dlen > (SIZE_T)DIRECT_MAP_SIZE)
+      dlen = (SIZE_T)DIRECT_MAP_SIZE;
+    dlen = (dlen + HUGE_2M - 1) & ~((SIZE_T)HUGE_2M - 1);
+    if (boot_map_range_2m(pml4, 0, DIRECT_MAP_BASE, dlen,
+                          PAGE_WRITABLE | PAGE_NX) != 0)
+      return -1;
+  }
+
+  /* Higher-half kernel image at KERNEL_VIRT_BASE + phys. */
+  phys_start = (PHYS_ADDR_T)(ULONG_PTR)__kernel_phys_start;
+  phys_end = ((PHYS_ADDR_T)(ULONG_PTR)_kernel_phys_end + PAGE_MASK) &
+             ~(PHYS_ADDR_T)PAGE_MASK;
+
+  for (p = phys_start; p < phys_end; p += PAGE_SIZE) {
+    VIRT_ADDR_T v = KERNEL_VIRT_BASE + (VIRT_ADDR_T)p;
+    if (boot_map_4k(pml4, p, v, PAGE_WRITABLE) != 0)
+      return -1;
+  }
+
+  /* Recursive mapping. Must not be PML4[511] — that slot is the
+   * kernel image. */
+  pml4[RECURSIVE_PML4_INDEX] = (PTE_T)root_phys | PAGE_PRESENT | PAGE_WRITABLE;
+
+  paging_load_cr3(root_phys);
+
+  /* Immediate verification that does not need printk or the IDT. */
+  {
+    volatile PTE_T *rec = (volatile PTE_T *)RECURSIVE_PML4_BASE;
+    if ((rec[RECURSIVE_PML4_INDEX] & PAGE_PRESENT) == 0) {
+      __asm__ __volatile__("mov $0xDEAD5EC0, %%rax; hlt" ::: "rax");
+    }
+  }
+
+  kernel_phys_end = ((PHYS_ADDR_T)(ULONG_PTR)_kernel_phys_end + PAGE_MASK) &
+                    ~(PHYS_ADDR_T)PAGE_MASK;
+  paging_end = root_phys + PAGE_SIZE;
+  if (paging_end < kernel_phys_end)
+    paging_end = kernel_phys_end;
+  pmm_set_kernel_end((paging_end + FRAME_ALIGN - 1) &
+                     ~(PHYS_ADDR_T)FRAME_ALIGN);
+
+  printk("[paging] long mode, PML4=%p, identity %llu MB, "
+         "direct map %p\n",
+         (PVOID)(VIRT_ADDR_T)root_phys,
+         (unsigned long long)(identity_map_size >> 20),
+         (PVOID)(VIRT_ADDR_T)DIRECT_MAP_BASE);
+  return 0;
+}
+
+static int ensure_table(PTE_T *slot, VIRT_ADDR_T table_virt) {
+  PHYS_ADDR_T frame;
+
+  if (*slot & PAGE_PRESENT) {
+    if (*slot & PAGE_HUGE)
+      return -1;
+    return 0;
+  }
+
+  frame = pmm_alloc_frame();
+  if (!frame)
+    return -1;
+
+  *slot = (PTE_T)frame | PAGE_PRESENT | PAGE_WRITABLE;
+  paging_invlpg(table_virt);
+  memset((PVOID)table_virt, 0, PAGE_SIZE);
+  return 0;
+}
+
+int map_page(PHYS_ADDR_T phys, VIRT_ADDR_T virt, ULONG64 flags) {
+  ULONG i4, i3, i2, i1;
+  ULONG saved;
+  PTE_T *pt;
+
+  if (phys & PAGE_MASK) {
+    printk("[paging] map_page: phys %p not aligned\n",
+           (PVOID)(VIRT_ADDR_T)phys);
     return -1;
   }
+  if (virt & PAGE_MASK) {
+    printk("[paging] map_page: virt %p not aligned\n", (PVOID)virt);
+    return -1;
+  }
+
+  i4 = IDX_PML4(virt);
+  i3 = IDX_PDPT(virt);
+  i2 = IDX_PD(virt);
+  i1 = IDX_PT(virt);
+
+  saved = spinlock_acquire(&paging_lock);
+
+  if (ensure_table(&PML4_VIRT[i4], (VIRT_ADDR_T)PDPT_VIRT(i4)) != 0) {
+    spinlock_release(&paging_lock, saved);
+    return -1;
+  }
+  if (ensure_table(&PDPT_VIRT(i4)[i3], (VIRT_ADDR_T)PD_VIRT_AT(i4, i3)) != 0) {
+    spinlock_release(&paging_lock, saved);
+    return -1;
+  }
+  if (ensure_table(&PD_VIRT_AT(i4, i3)[i2],
+                   (VIRT_ADDR_T)PT_VIRT_AT(i4, i3, i2)) != 0) {
+    spinlock_release(&paging_lock, saved);
+    return -1;
+  }
+
+  pt = PT_VIRT_AT(i4, i3, i2);
+  pt[i1] =
+      (PTE_T)PTE_ADDR(phys) | PAGE_PRESENT | (PTE_T)(flags & PAGE_FLAG_MASK);
+
+  paging_invlpg(virt);
+  spinlock_release(&paging_lock, saved);
+  return 0;
+}
+
+void unmap_page(VIRT_ADDR_T virt) {
+  ULONG i4 = IDX_PML4(virt);
+  ULONG i3 = IDX_PDPT(virt);
+  ULONG i2 = IDX_PD(virt);
+  ULONG i1 = IDX_PT(virt);
+  ULONG saved = spinlock_acquire(&paging_lock);
+
+  if (!(PML4_VIRT[i4] & PAGE_PRESENT) || !(PDPT_VIRT(i4)[i3] & PAGE_PRESENT) ||
+      !(PD_VIRT_AT(i4, i3)[i2] & PAGE_PRESENT) ||
+      (PD_VIRT_AT(i4, i3)[i2] & PAGE_HUGE)) {
+    spinlock_release(&paging_lock, saved);
+    return;
+  }
+
+  PT_VIRT_AT(i4, i3, i2)[i1] = 0;
+  paging_invlpg(virt);
+  spinlock_release(&paging_lock, saved);
+}
+
+PHYS_ADDR_T virt_to_phys(VIRT_ADDR_T virt) {
+  ULONG i4 = IDX_PML4(virt);
+  ULONG i3 = IDX_PDPT(virt);
+  ULONG i2 = IDX_PD(virt);
+  ULONG i1 = IDX_PT(virt);
+  PTE_T e;
+
+  if (!(PML4_VIRT[i4] & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+  if (!(PDPT_VIRT(i4)[i3] & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+
+  e = PD_VIRT_AT(i4, i3)[i2];
+  if (!(e & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+
+  if (e & PAGE_HUGE) {
+    return PTE_ADDR(e) | (PHYS_ADDR_T)(virt & (HUGE_2M - 1));
+  }
+
+  e = PT_VIRT_AT(i4, i3, i2)[i1];
+  if (!(e & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+
+  return PTE_ADDR(e) | (PHYS_ADDR_T)(virt & PAGE_MASK);
+}
+
+#else /* ARCH_X86_32 */
+
+/* ==========================================================================
+ * i386 — 2-level, recursive PD[1023]
+ * ======================================================================= */
+
+int paging_init(void) {
+  PTE_T *pd;
+  SIZE_T pts_needed;
+  ULONG pd_idx;
+  PHYS_ADDR_T phys_start;
+  PHYS_ADDR_T phys_end;
+  PHYS_ADDR_T p;
+  PHYS_ADDR_T kernel_phys_end;
+  PHYS_ADDR_T paging_end;
+  ULONG cr0;
+
+  spinlock_init(&paging_lock);
+
+  root_phys = pmm_alloc_frame();
+  if (!root_phys)
+    return -1;
+  pd = (PTE_T *)(VIRT_ADDR_T)root_phys;
   memset(pd, 0, PAGE_SIZE);
-  page_directory_phys = (uintptr_t)pd;
 
   /* Identity-map as much RAM as we have, but never touch slot 1023 */
-  size_t pts_needed = ((size_t)(pmm_get_total_ram() >> 22)) + 1;
+  pts_needed = ((SIZE_T)(pmm_get_total_ram() >> 22)) + 1;
   if (pts_needed > 1023)
     pts_needed = 1023;
   identity_map_size = pts_needed * 4u * 1024u * 1024u;
 
-  for (uint32_t pd_idx = 0; pd_idx < pts_needed; pd_idx++) {
-    uint32_t *pt = (uint32_t *)pmm_alloc_frame();
-    if (!pt)
+  for (pd_idx = 0; pd_idx < (ULONG)pts_needed; pd_idx++) {
+    PHYS_ADDR_T pt_phys = pmm_alloc_frame();
+    PTE_T *pt;
+    int j;
+
+    if (!pt_phys)
       return -1;
+    pt = (PTE_T *)(VIRT_ADDR_T)pt_phys;
     memset(pt, 0, PAGE_SIZE);
 
-    for (int j = 0; j < PT_ENTRIES; j++) {
-      uint32_t phys = (pd_idx * PT_ENTRIES + j) * PAGE_SIZE;
-      pt[j] = phys | PAGE_PRESENT | PAGE_WRITABLE;
+    for (j = 0; j < PT_ENTRIES; j++) {
+      PHYS_ADDR_T phys =
+          ((PHYS_ADDR_T)pd_idx * PT_ENTRIES + (PHYS_ADDR_T)j) * PAGE_SIZE;
+      pt[j] = (PTE_T)phys | PAGE_PRESENT | PAGE_WRITABLE;
     }
-    pd[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITABLE;
+    pd[pd_idx] = (PTE_T)pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
   }
 
-  /* Higher-half mapping of the kernel image – done on the physical PD/PTs
-   * before recursive mapping and before CR3 is loaded. */
-  uintptr_t phys_start = (uintptr_t)__kernel_phys_start;
-  uintptr_t phys_end = ((uintptr_t)_kernel_phys_end + 0xFFF) & ~0xFFF;
+  /* Higher-half mapping of the kernel image – done on the physical
+   * PD/PTs before recursive mapping and before CR3 is loaded. */
+  phys_start = (PHYS_ADDR_T)(ULONG_PTR)__kernel_phys_start;
+  phys_end = ((PHYS_ADDR_T)(ULONG_PTR)_kernel_phys_end + PAGE_MASK) &
+             ~(PHYS_ADDR_T)PAGE_MASK;
 
-  for (uintptr_t p = phys_start; p < phys_end; p += PAGE_SIZE) {
-    uintptr_t v = p + 0xC0000000;
-    uint32_t pd_idx = v >> 22;
-    uint32_t pt_idx = (v >> 12) & 0x3FF;
+  for (p = phys_start; p < phys_end; p += PAGE_SIZE) {
+    VIRT_ADDR_T v = (VIRT_ADDR_T)p + KERNEL_VIRT_BASE;
+    ULONG pd_i = (ULONG)(v >> 22);
+    ULONG pt_i = (ULONG)((v >> 12) & 0x3FFu);
+    PTE_T *pt;
 
-    /* Allocate a page table for this PD slot if we don’t have one yet */
-    if (!(pd[pd_idx] & PAGE_PRESENT)) {
-      uint32_t *pt = (uint32_t *)pmm_alloc_frame();
-      if (!pt)
+    if (!(pd[pd_i] & PAGE_PRESENT)) {
+      PHYS_ADDR_T pt_phys = pmm_alloc_frame();
+      if (!pt_phys)
         return -1;
-      memset(pt, 0, PAGE_SIZE);
-      pd[pd_idx] = (uint32_t)pt | PAGE_PRESENT | PAGE_WRITABLE;
+      memset((PVOID)(VIRT_ADDR_T)pt_phys, 0, PAGE_SIZE);
+      pd[pd_i] = (PTE_T)pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
     }
 
-    uint32_t *pt = (uint32_t *)(pd[pd_idx] & ~0xFFF);
-    pt[pt_idx] = p | PAGE_PRESENT | PAGE_WRITABLE;
+    pt = (PTE_T *)(VIRT_ADDR_T)PTE_ADDR(pd[pd_i]);
+    pt[pt_i] = (PTE_T)p | PAGE_PRESENT | PAGE_WRITABLE;
   }
 
-  /* NOW install recursive mapping and switch */
-  pd[1023] = page_directory_phys | PAGE_PRESENT | PAGE_WRITABLE;
-  __asm__ __volatile__("mov %0, %%cr3" : : "r"(page_directory_phys) : "memory");
-  /* … enable PG in CR0 … */
+  pd[1023] = (PTE_T)root_phys | PAGE_PRESENT | PAGE_WRITABLE;
+  paging_load_cr3(root_phys);
 
-  uint32_t cr0;
   __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
-  cr0 |= 0x80000000;
+  cr0 |= 0x80000000u;
   __asm__ __volatile__("mov %0, %%cr0" : : "r"(cr0) : "memory");
 
-  /* ------------------------------------------------------------------ */
-  /* Immediate verification that does not need printk or the IDT.       */
-  /* If this hangs with EAX = 0xDEADRECU the recursive entry is gone.   */
-  /* ------------------------------------------------------------------ */
-  volatile uint32_t *rec = (volatile uint32_t *)0xFFFFF000;
-  if ((rec[1023] & 1) == 0) {
-    __asm__ __volatile__("mov $0xDEAD5EC0, %%eax; hlt" ::: "eax");
+  {
+    volatile PTE_T *rec = (volatile PTE_T *)RECURSIVE_PD_BASE;
+    if ((rec[1023] & PAGE_PRESENT) == 0) {
+      __asm__ __volatile__("mov $0xDEAD5EC0, %%eax; hlt" ::: "eax");
+    }
   }
 
-  /* Tell PMM the highest frame we used */
-  uintptr_t kernel_phys_end =
-      ((uintptr_t)_kernel_phys_end + PAGE_MASK) & ~(uintptr_t)PAGE_MASK;
-  uintptr_t paging_end = page_directory_phys + (pts_needed + 1 + 4) * PAGE_SIZE;
+  kernel_phys_end = ((PHYS_ADDR_T)(ULONG_PTR)_kernel_phys_end + PAGE_MASK) &
+                    ~(PHYS_ADDR_T)PAGE_MASK;
+  paging_end = root_phys + (PHYS_ADDR_T)(pts_needed + 1 + 4) * PAGE_SIZE;
   if (paging_end < kernel_phys_end)
     paging_end = kernel_phys_end;
-  pmm_set_kernel_end((paging_end + FRAME_ALIGN - 1) & ~(FRAME_ALIGN - 1));
+  pmm_set_kernel_end((paging_end + FRAME_ALIGN - 1) &
+                     ~(PHYS_ADDR_T)FRAME_ALIGN);
 
   return 0;
 }
 
-static kscope_node_t *paging_requires[] = {&pmm_node};
+int map_page(PHYS_ADDR_T phys, VIRT_ADDR_T virt, ULONG64 flags) {
+  ULONG pd_idx;
+  ULONG pt_idx;
+  ULONG saved;
 
-static const char *paging_provides[] = {"mem.paging"};
+  if (phys & PAGE_MASK) {
+    printk("[paging] map_page: phys 0x%08x not aligned\n", (ULONG)phys);
+    return -1;
+  }
+  if (virt & PAGE_MASK) {
+    printk("[paging] map_page: virt 0x%08x not aligned\n", (ULONG)virt);
+    return -1;
+  }
+
+  pd_idx = (ULONG)(virt >> 22);
+  pt_idx = (ULONG)((virt >> 12) & 0x3FFu);
+
+  saved = spinlock_acquire(&paging_lock);
+
+  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
+    PHYS_ADDR_T new_pt_phys = pmm_alloc_frame();
+    VIRT_ADDR_T pt_virt_addr;
+
+    if (!new_pt_phys) {
+      spinlock_release(&paging_lock, saved);
+      return -1;
+    }
+
+    PD_VIRT[pd_idx] = (PTE_T)new_pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
+
+    pt_virt_addr = RECURSIVE_PT_BASE + ((VIRT_ADDR_T)pd_idx * PAGE_SIZE);
+    paging_invlpg(pt_virt_addr);
+
+    memset(PT_VIRT(pd_idx), 0, PAGE_SIZE);
+  }
+
+  PT_VIRT(pd_idx)
+  [pt_idx] =
+      (PTE_T)PTE_ADDR(phys) | PAGE_PRESENT | (PTE_T)(flags & PAGE_FLAG_MASK);
+
+  paging_invlpg(virt);
+  spinlock_release(&paging_lock, saved);
+  return 0;
+}
+
+void unmap_page(VIRT_ADDR_T virt) {
+  ULONG pd_idx = (ULONG)(virt >> 22);
+  ULONG pt_idx = (ULONG)((virt >> 12) & 0x3FFu);
+  ULONG saved = spinlock_acquire(&paging_lock);
+
+  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
+    spinlock_release(&paging_lock, saved);
+    return;
+  }
+
+  PT_VIRT(pd_idx)[pt_idx] = 0;
+  paging_invlpg(virt);
+  spinlock_release(&paging_lock, saved);
+}
+
+PHYS_ADDR_T virt_to_phys(VIRT_ADDR_T virt) {
+  ULONG pd_idx = (ULONG)(virt >> 22);
+  ULONG pt_idx = (ULONG)((virt >> 12) & 0x3FFu);
+
+  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+
+  if (!(PT_VIRT(pd_idx)[pt_idx] & PAGE_PRESENT))
+    return PHYS_ADDR_INVALID;
+
+  return PTE_ADDR(PT_VIRT(pd_idx)[pt_idx]) | (PHYS_ADDR_T)(virt & PAGE_MASK);
+}
+
+#endif /* ARCH_X86_32 */
 
 kscope_node_t paging_node = {.name = "paging",
                              .id = 0x13,
@@ -146,107 +542,3 @@ kscope_node_t paging_node = {.name = "paging",
                              .provides = paging_provides,
                              .provide_count = 1,
                              .init = paging_init};
-
-/* ==========================================================================
- * Map one physical page to a virtual page
- *
- * 'phys' and 'virt' must be page-aligned (bottom 12 bits zero).
- * 'flags' is PAGE_WRITABLE and/or PAGE_USER. PAGE_PRESENT is added
- * automatically. Returns 0 on success, -1 on error.
- * ======================================================================= */
-int map_page(uintptr_t phys, uintptr_t virt, uint32_t flags) {
-  if (phys & PAGE_MASK) {
-    printk("[paging] map_page: phys 0x%08x not aligned\n", (uint32_t)phys);
-    return -1;
-  }
-  if (virt & PAGE_MASK) {
-    printk("[paging] map_page: virt 0x%08x not aligned\n", (uint32_t)virt);
-    return -1;
-  }
-
-  /* bits 31-22: page directory index
-   * bits 21-12: page table index
-   * bits 11-0 : offset within page */
-  uint32_t pd_idx = (uint32_t)(virt >> 22);
-  uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
-
-  uint32_t saved_flags = spinlock_acquire(&paging_lock);
-
-  /* If no page table exists for this PD slot, allocate one.
-   * Locked so two callers racing on the same never-before-used
-   * 4MB region can't both allocate a page table and clobber each
-   * other's PD entry. */
-  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
-    uintptr_t new_pt_phys = (uintptr_t)pmm_alloc_frame();
-    if (!new_pt_phys) {
-      spinlock_release(&paging_lock, saved_flags);
-      return -1;
-    }
-
-    /* Point PD entry at the new page table (physical) */
-    PD_VIRT[pd_idx] = (uint32_t)new_pt_phys | PAGE_PRESENT | PAGE_WRITABLE;
-
-    /* Flush TLB for the page table's virtual address so we
-     * can access it through the recursive mapping */
-    uintptr_t pt_virt_addr = 0xFFC00000u + ((uintptr_t)pd_idx * PAGE_SIZE);
-    __asm__ __volatile__("invlpg (%0)" : : "r"(pt_virt_addr) : "memory");
-
-    /* Now clear the new page table via its virtual address */
-    memset(PT_VIRT(pd_idx), 0, PAGE_SIZE);
-  }
-
-  /* Write the PTE */
-  PT_VIRT(pd_idx)
-  [pt_idx] = ((uint32_t)(phys & ~(uintptr_t)PAGE_MASK)) | (flags & 0xFFFu) |
-             PAGE_PRESENT;
-
-  /* Flush TLB for the mapped page */
-  __asm__ __volatile__("invlpg (%0)" : : "r"(virt) : "memory");
-
-  spinlock_release(&paging_lock, saved_flags);
-
-  return 0;
-}
-
-/* ==========================================================================
- * Unmap a virtual page
- * ======================================================================= */
-void unmap_page(uintptr_t virt) {
-  uint32_t pd_idx = (uint32_t)(virt >> 22);
-  uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
-
-  uint32_t saved_flags = spinlock_acquire(&paging_lock);
-
-  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
-    spinlock_release(&paging_lock, saved_flags);
-    return;
-  }
-
-  PT_VIRT(pd_idx)[pt_idx] = 0;
-
-  __asm__ __volatile__("invlpg (%0)" : : "r"(virt) : "memory");
-
-  spinlock_release(&paging_lock, saved_flags);
-}
-
-/* ==========================================================================
- * Translate virtual address to physical
- * Returns 0 if not mapped.
- * ======================================================================= */
-uintptr_t virt_to_phys(uintptr_t virt) {
-  uint32_t pd_idx = (uint32_t)(virt >> 22);
-  uint32_t pt_idx = (uint32_t)((virt >> 12) & 0x3FFu);
-
-  if (!(PD_VIRT[pd_idx] & PAGE_PRESENT)) {
-    return 0;
-  }
-
-  if (!(PT_VIRT(pd_idx)[pt_idx] & PAGE_PRESENT)) {
-    return 0;
-  }
-
-  return (uintptr_t)(PTE_ADDR(PT_VIRT(pd_idx)[pt_idx]) |
-                     (uint32_t)(virt & PAGE_MASK));
-}
-
-size_t paging_get_identity_size(void) { return identity_map_size; }

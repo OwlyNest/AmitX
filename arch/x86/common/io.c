@@ -1,7 +1,7 @@
 /*
- * include/arch/x86/io.h - [Enter description]
+ * arch/x86/common/io.c - Basic Input/Ouput System ;)
  * Author:   amity
- * Date:     Mon Aug 31 12:06:31 2026
+ * Date:     Mon Aug 31 15:16:13 2026
  * Copyright © 2026 OwlyNest
  */
 
@@ -19,10 +19,9 @@
  */
 
 /* --- Macros ---*/
-#ifndef __ARCH_X86_IO_H__
-#define __ARCH_X86_IO_H__
 
 /* --- Includes ---*/
+#include <arch/x86/io.h>
 #include <stdint.h>
 /* --- Typedefs - Structs - Enums ---*/
 
@@ -30,13 +29,33 @@
 
 /* --- Prototypes ---*/
 
-BYTE inb(WORD port);
-VOID outb(WORD port, BYTE value);
+/* --- Functions ---*/
+BYTE inb(WORD port) {
+  BYTE ret;
+  __asm__ volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
 
-WORD inw(WORD port);
-VOID outw(WORD port, WORD value);
+VOID outb(WORD port, BYTE value) {
+  __asm__ volatile("outb %0, %1" : : "a"(value), "Nd"(port));
+}
 
-DWORD inl(WORD port);
-VOID outl(WORD port, DWORD value);
+WORD inw(WORD port) {
+  WORD ret;
+  __asm__ volatile("inw %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
 
-#endif
+VOID outw(WORD port, WORD value) {
+  __asm__ volatile("outw %0, %1" : : "a"(value), "Nd"(port));
+}
+
+DWORD inl(WORD port) {
+  DWORD ret;
+  __asm__ volatile("inl %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+VOID outl(WORD port, DWORD val) {
+  __asm__ volatile("outl %0, %1" : : "a"(val), "Nd"(port));
+}

@@ -1,44 +1,58 @@
 /*
-	* include/sync/spinlock.h - [Enter description]
-	* Author:   amity
-	* Date:     Sun Jul  5 14:44:52 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * include/sync/spinlock.h - Spinlock interface
+ * Author:   amity
+ * Date:     Sun Jul  5 14:44:52 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers: Use 3 '-' characters before and after
+ * Pointer notation:              Next to variable name, not type
+ * Binary operations:             Space around operator
+ * Empty parameter list:          Use (void) instead of ()
+ * Statements and declarations:   Max one per line
+ */
 
-/* --- Macros ---*/
 #ifndef __SYNC_SPINLOCK_H__
 #define __SYNC_SPINLOCK_H__
-/* --- Includes ---*/
-#include <stdint.h>
-/* --- Typedefs - Structs - Enums ---*/
-/*
- * Single-CPU only. There's no other core to spin against, so the
- * only hazard is the local timer IRQ preempting mid-update. If
- * OwlyNest grows SMP, this needs a real test-and-set loop too.
- */
-typedef struct spinlock {
-    LONG unused;
-} spinlock_t;
 
+/* --- Macros ---*/
+
+#include "internal/phonon_types.h"
+#define SPINLOCK_INITIALIZER {0}
+
+/* --- Includes ---*/
+
+#include <stdint.h>
+
+/* --- Typedefs - Structs - Enums ---*/
+
+#if ARCH_X86_64
+
+typedef ULONGLONG _SPINLOCK_FLAGS;
+
+#else
+
+typedef ULONG _SPINLOCK_FLAGS;
+
+#endif
+
+typedef struct spinlock {
+  volatile LONG value;
+} _SPINLOCK;
 
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void spinlock_init(spinlock_t *lock);
-ULONG spinlock_acquire(spinlock_t *lock);
-void spinlock_release(spinlock_t *lock, ULONG flags);
+
+VOID spinlock_init(_SPINLOCK *lock);
+_SPINLOCK_FLAGS spinlock_acquire(_SPINLOCK *lock);
+VOID spinlock_release(_SPINLOCK *lock, _SPINLOCK_FLAGS flags);
+
 #endif

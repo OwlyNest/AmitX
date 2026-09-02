@@ -79,6 +79,7 @@ endif
 
 TARGET       := kernel.elf
 BUILD_DIR    := build
+LINKER_SCRIPT := boot/linker-$(ARCH).ld
 
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
@@ -88,7 +89,6 @@ SRC_DIRS := \
     shell \
     fs \
     fs/smkfs \
-    boot \
     drivers \
     lib \
     mm \
@@ -125,6 +125,10 @@ COMMON_FLAGS := \
     -D__OWLYNEST__ \
     -Iinclude
 
+ifeq ($(ARCH),x64)
+COMMON_FLAGS += -mcmodel=kernel
+endif
+
 CFLAGS := \
     $(COMMON_FLAGS) \
     -Wall \
@@ -134,7 +138,7 @@ CFLAGS := \
     -isystem $(ACPICA_INC)
 
 C3FLAGS := \
-    --target elf-x86 \
+    --target elf-$(ARCH) \
     --use-stdlib=no \
     --emit-stdlib=no \
     -g0
@@ -164,8 +168,7 @@ RUSTFLAGS := \
     -C force-frame-pointers=no
 
 LDFLAGS := \
-    -T boot/linker.ld \
-    -nostdlib
+    -nostdlib -z noexecstack
 
 LIBGCC := $(shell $(CC) -print-libgcc-file-name)
 LIBS := $(LIBGCC)
@@ -177,7 +180,6 @@ LIBS := $(LIBGCC)
 -include shell/build.mk
 -include fs/build.mk
 -include fs/smkfs/build.mk
--include boot/build.mk
 -include arch/x86/build.mk      # Hand-written selector for 32/64/common
 -include drivers/build.mk
 -include lib/build.mk
@@ -229,10 +231,15 @@ all: $(TARGET)
 # Link
 # --------------------------------------------------------------------
 
-$(TARGET): $(OBJS)
-	@Write-Host "LD  $@"
-	@& "$(LD)" $(LDFLAGS) -o "$@" $^ $(LIBS)
+# Preprocess linker script
+boot/linker-$(ARCH).ld: boot/linker.ld.in
+	@Write-Host "GEN $@"
+	@& "$(CC)" $(ARCH_DEFINE) -E -P -x c "$<" -o "$@"
 
+# Depend on the generated script
+$(TARGET): $(OBJS) boot/linker-$(ARCH).ld
+	@Write-Host "LD  $@"
+	@& "$(LD)" $(LDFLAGS) -T boot/linker-$(ARCH).ld -o "$@" $(filter-out %.ld,$^) $(LIBS)
 # --------------------------------------------------------------------
 # C
 # --------------------------------------------------------------------
@@ -289,10 +296,10 @@ $(BUILD_DIR)/%.o: %.rs
 # --------------------------------------------------------------------
 
 clean:
-	@Write-Host "Cleaning build directory..."
+	@Write-Host "Cleaning $(ARCH) build..."
 	$(call RM_DIR,$(BUILD_DIR))
-	@Write-Host "Cleaning kernel..."
 	$(call RM_FILE,$(TARGET))
+	$(call RM_FILE,boot/linker-$(ARCH).ld)
 
 # --------------------------------------------------------------------
 # Inspection

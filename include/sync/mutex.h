@@ -1,23 +1,22 @@
 /*
-	* include/sync/mutex.h - [Enter description]
-	* Author:   amity
-	* Date:     Sun Jul  5 14:48:40 2026
-	* Copyright © 2026 OwlyNest
-*/
+ * include/sync/mutex.h - [Enter description]
+ * Author:   amity
+ * Date:     Sun Jul  5 14:48:40 2026
+ * Copyright © 2026 OwlyNest
+ */
 
 /* --- Styling Instructions ---
-	* Encoding:                      UTF-8, Unix line endings
-	* Text font:                     Monospace
-	* Line width:                    Max 80 characters
-	* Indentation:                   Use 4 spaces
-	* Brace style:                   Same line as control statement
-	* Inline comments:               Column 40, wherever possible, else, whole multiple of 20
-	* Section headers:               Use 3 '-' characters before and after
-	* Pointer notation:              Next to variable name, not type
-	* Binary operations:             Space around operator
-	* Empty parameter list:          Use (void) instead of ()
-	* Statements and declarations:   Max one per line
-*/
+ * Encoding:                      UTF-8, Unix line endings
+ * Text font:                     Monospace
+ * Line width:                    Max 80 characters
+ * Indentation:                   Use 4 spaces
+ * Brace style:                   Same line as control statement
+ * Inline comments:               Column 40, wherever possible, else, whole
+ * multiple of 20 Section headers:               Use 3 '-' characters before and
+ * after Pointer notation:              Next to variable name, not type Binary
+ * operations:             Space around operator Empty parameter list: Use
+ * (void) instead of () Statements and declarations:   Max one per line
+ */
 
 /* --- Macros ---*/
 #ifndef __SYNC_MUTEX_H__
@@ -31,17 +30,17 @@
 #include <sync/spinlock.h>
 /* --- Typedefs - Structs - Enums ---*/
 typedef struct mutex {
-    int locked;
-    task_t *owner;
-	BYTE owner_orig_prio; /* Saved priority before boost */
-    spinlock_t lock;
-    task_queue_t waiters;
-} mutex_t;
+  int locked;
+  task_t *owner;
+  BYTE owner_orig_prio; /* Saved priority before boost */
+  _SPINLOCK lock;
+  task_queue_t waiters;
+} _MUTEX;
 /* --- Globals ---*/
 
 /* --- Prototypes ---*/
-void mutex_init(mutex_t *m);
-int mutex_trylock(mutex_t *m);
-int mutex_lock(mutex_t *m, ULONG timeout_ms);
-void mutex_unlock(mutex_t *m);
+VOID mutex_init(_MUTEX *m);
+INT mutex_trylock(_MUTEX *m);
+INT mutex_lock(_MUTEX *m, ULONG timeout_ms);
+VOID mutex_unlock(_MUTEX *m);
 #endif

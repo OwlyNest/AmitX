@@ -48,7 +48,7 @@ static PFN_T used_frames = 0;
 static SIZE_T bitmap_size = 0;
 static ULONGLONG total_ram = 0;
 static mb2_tag_mmap_t *g_mmap_tag = NULL;
-static spinlock_t pmm_lock;
+static _SPINLOCK pmm_lock;
 
 extern UCHAR _kernel_phys_end[];
 

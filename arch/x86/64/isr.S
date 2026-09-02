@@ -181,6 +181,35 @@ isr\num:
     iretq
 .endm
 
+/* IRQ stub */
+.macro IRQ_STUB num
+isr\num:
+    cli
+    cld
+
+    test qword ptr [rsp + 16], 3
+    jz 1f
+    swapgs
+1:
+    SAVE_ALL
+
+    push 0
+    push \num
+
+    mov rdi, rsp
+    call isr_handler
+
+    add rsp, 16
+
+    RESTORE_ALL
+
+    test qword ptr [rsp + 16], 3
+    jz 2f
+    swapgs
+2:
+    iretq
+.endm
+
 /* ==========================================================================
  * Exception ISRs 0-31
  * ======================================================================= */

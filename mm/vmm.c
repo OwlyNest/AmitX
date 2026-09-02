@@ -49,7 +49,7 @@
 
 /* --- Globals ---*/
 static UCHAR window_bitmap[(VMM_WINDOW_PAGES + 7) / 8];
-static spinlock_t vmm_lock;
+static _SPINLOCK vmm_lock;
 /* --- Prototypes ---*/
 
 /* --- Functions ---*/

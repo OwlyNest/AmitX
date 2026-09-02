@@ -48,7 +48,7 @@
 
 static PHYS_ADDR_T root_phys = 0;
 static SIZE_T identity_map_size = 0;
-static spinlock_t paging_lock;
+static _SPINLOCK paging_lock;
 
 extern uint8_t __kernel_phys_start[];
 extern uint8_t _kernel_phys_end[];

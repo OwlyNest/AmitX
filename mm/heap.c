@@ -65,7 +65,7 @@ PUCHAR heap_base;
 PUCHAR heap_end;
 PUCHAR heap_break;
 static Block *head = NULL;
-static spinlock_t heap_lock;
+static _SPINLOCK heap_lock;
 
 /* --- Prototypes ---*/
 static PVOID sbrk_locked(SSIZE_T increment);

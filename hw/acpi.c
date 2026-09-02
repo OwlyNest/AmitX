@@ -178,7 +178,7 @@ void acpi_print_info(void) {
   }
 
   printk("\n=== ACPI Information (via ACPICA) ===\n");
-  printk("FADT at:     0x%08x (length %u, rev %u)\n", (uint32_t)fadt,
+  printk("FADT at:     0x%08x (length %u, rev %u)\n", (ULONG_PTR)fadt,
          fadt->header.length, fadt->header.revision);
   printk("  Signature: %4.4s\n", fadt->header.signature);
   printk("  DSDT:      0x%08x\n", fadt->dsdt);
@@ -198,7 +198,7 @@ void acpi_print_info(void) {
   }
 
   if (madt) {
-    printk("MADT at:     0x%08x\n", (uint32_t)madt);
+    printk("MADT at:     0x%08x\n", (ULONG_PTR)madt);
     printk("  Cores      0x%08x\n", (uint32_t)madt_parsed.num_cpus);
     printk("  LAPIC:     0x%08x\n", madt->local_apic_addr);
   } else {

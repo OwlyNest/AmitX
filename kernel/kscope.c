@@ -158,6 +158,16 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
       kscope_node_t *node = registry[idx];
       if (node->requires != NULL && ((uintptr_t)node->requires < 0xC0000000u ||
                                      (uintptr_t)node->requires > 0xC1000000u)) {
+#if ARCH_X86_64
+        __asm__ __volatile__("mov %0, %%rax\n"
+                             "mov %1, %%rbx\n"
+                             "mov $0xBAD001, %%rcx\n"
+                             "hlt"
+                             :
+                             : "r"(node->requires), "r"(node)
+                             : "rax", "rbx", "rcx");
+      }
+#else
         __asm__ __volatile__("mov %0, %%eax\n"
                              "mov %1, %%ebx\n"
                              "mov $0xBAD001, %%ecx\n"
@@ -166,6 +176,7 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
                              : "r"(node->requires), "r"(node)
                              : "eax", "ebx", "ecx");
       }
+#endif
       int has_unvisited_deps = 0;
 
       for (size_t d = 0; d < node->require_count; d++) {

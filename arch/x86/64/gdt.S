@@ -53,7 +53,7 @@ tss_struct:
     .quad 0                  /* rsp1 */
     .quad 0                  /* rsp2 */
     .quad 0                  /* reserved */
-    .quad 0                  /* ist1 */
+    .quad stack_top          /* ist1 */
     .quad 0                  /* ist2 */
     .quad 0                  /* ist3 */
     .quad 0                  /* ist4 */
@@ -111,14 +111,6 @@ gdt_start:
     .quad 0x0000000000000000   /* 0x28: TSS low */
 gdt_start_64:
     .quad 0x0000000000000000   /* 0x30: high 32 bits of TSS base */
-    /*
-     * 5/6: 64-bit TSS descriptor.
-     *
-     * Filled in by gdt_install because the TSS address
-     * is relocatable and cannot be split with >>/& here.
-     */
-tss_descriptor:
-    .zero 16
 
 gdt_end:
 
@@ -153,31 +145,31 @@ gdt_install:
     lea rax, tss_struct
 
     /* limit = 104 - 1 = 0x67 */
-    mov word ptr [tss_descriptor + 0], 0x67
+    mov word ptr [gdt_start + SEL_TSS + 0], 0x67
 
     /* base[15:0] */
-    mov word ptr [tss_descriptor + 2], ax
+    mov word ptr [gdt_start + SEL_TSS + 2], ax
 
     /* base[23:16] */
     shr rax, 16
-    mov byte ptr [tss_descriptor + 4], al
+    mov byte ptr [gdt_start + SEL_TSS + 4], al
 
     /* type = available 64-bit TSS */
-    mov byte ptr [tss_descriptor + 5], 0x89
+    mov byte ptr [gdt_start + SEL_TSS + 5], 0x89
 
     /* limit[19:16] = 0, flags = 0 */
-    mov byte ptr [tss_descriptor + 6], 0
+    mov byte ptr [gdt_start + SEL_TSS + 6], 0
 
     /* base[31:24] */
     shr rax, 8
-    mov byte ptr [tss_descriptor + 7], al
+    mov byte ptr [gdt_start + SEL_TSS + 7], al
 
     /* base[63:32] */
     shr rax, 8
-    mov dword ptr [tss_descriptor + 8], eax
+    mov dword ptr [gdt_start + SEL_TSS + 8], eax
 
     /* reserved */
-    mov dword ptr [tss_descriptor + 12], 0
+    mov dword ptr [gdt_start + SEL_TSS + 12], 0
 
     /*
      * Load GDT.
@@ -218,7 +210,9 @@ gdt_install:
     lea rax, flush_cs
     push SEL_KCODE
     push rax
-    .byte 0xCB
+
+    cli
+    lretq
 
 flush_cs:
     ret

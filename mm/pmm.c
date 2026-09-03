@@ -226,21 +226,22 @@ INT kernel_early_init(ULONG magic, PVOID mb_info) {
     switch (tag->type) {
     case MB2_TAG_MMAP: {
       mb2_tag_mmap_t *mmap = (mb2_tag_mmap_t *)tag;
-      ULONG num;
-      ULONG i;
-      mb2_mmap_entry_t *entry;
 
-      g_mmap_tag = mmap;
+      if (mmap->entry_size < sizeof(mb2_mmap_entry_t))
+        break;
 
-      num = (mmap->tag.size - 16) / mmap->entry_size;
-      entry = (mb2_mmap_entry_t *)(mmap + 1);
+      ULONG remaining = mmap->tag.size - 16;
 
-      for (i = 0; i < num; i++) {
-        mb2_mmap_entry_t *e =
-            (mb2_mmap_entry_t *)((PUCHAR)entry + i * mmap->entry_size);
+      for (ULONG offset = 0; offset + mmap->entry_size <= remaining;
+           offset += mmap->entry_size) {
+
+        mb2_mmap_entry_t *e = (mb2_mmap_entry_t *)((PUCHAR)mmap + 16 + offset);
+
         if (e->type == MB2_MMAP_AVAILABLE)
           available_ram += e->length;
       }
+
+      g_mmap_tag = mmap;
       has_mmap = 1;
       break;
     }

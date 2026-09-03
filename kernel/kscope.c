@@ -156,9 +156,10 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
 
       /* Push unvisited dependencies first */
       kscope_node_t *node = registry[idx];
-      if (node->requires != NULL && ((uintptr_t)node->requires < 0xC0000000u ||
-                                     (uintptr_t)node->requires > 0xC1000000u)) {
 #if ARCH_X86_64
+      if (node->requires != NULL &&
+          ((uintptr_t)node->requires < 0xFFFFFFFF80000000u ||
+           (uintptr_t)node->requires > 0xFFFFFFFF81000000u)) {
         __asm__ __volatile__("mov %0, %%rax\n"
                              "mov %1, %%rbx\n"
                              "mov $0xBAD001, %%rcx\n"
@@ -168,6 +169,8 @@ static int kscope_topo_sort(kscope_node_t **out_order, size_t *out_count) {
                              : "rax", "rbx", "rcx");
       }
 #else
+      if (node->requires != NULL && ((uintptr_t)node->requires < 0xC0000000u ||
+                                     (uintptr_t)node->requires > 0xC1000000u)) {
         __asm__ __volatile__("mov %0, %%eax\n"
                              "mov %1, %%ebx\n"
                              "mov $0xBAD001, %%ecx\n"

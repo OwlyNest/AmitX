@@ -101,50 +101,82 @@
  */
 
 .macro SAVE_ALL
-    /* Push all GPRs */
-    push r15
-    push r14
-    push r13
-    push r12
-    push r11
-    push r10
-    push r9
-    push r8
-    push rdi
-    push rsi
-    push rbp
-    push rbx
-    push rdx
+    push fs
+    push gs
+    push rax
     push rcx
-    push rax
-
-    /* Push segment selectors */
-    mov ax, gs
-    push rax
-    mov ax, fs
-    push rax
+    push rdx
+    push rbx
+    push rbp
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
 .endm
 
 .macro RESTORE_ALL
-    /* Pop segment selectors (discard, segments restored by iretq) */
-    add rsp, 16
-
-    /* Pop all GPRs */
-    pop rax
-    pop rcx
-    pop rdx
-    pop rbx
-    pop rbp
-    pop rsi
-    pop rdi
-    pop r8
-    pop r9
-    pop r10
-    pop r11
-    pop r12
-    pop r13
-    pop r14
     pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rbx
+    pop rdx
+    pop rcx
+    pop rax
+    add rsp, 16
+.endm
+
+/* Build interrupt_frame_t above the CPU's original return frame. */
+.macro BUILD_FRAME_NOERR num
+    push 0
+    push 0
+    push qword ptr [rsp + 32]
+    push qword ptr [rsp + 32]
+    push qword ptr [rsp + 32]
+    SAVE_ALL
+    push 0
+    push \num
+.endm
+
+/* Build interrupt_frame_t when the CPU supplied an error code. */
+.macro BUILD_FRAME_ERR num
+    push 0
+    push 0
+    push qword ptr [rsp + 40]
+    push qword ptr [rsp + 40]
+    push qword ptr [rsp + 40]
+    SAVE_ALL
+    push qword ptr [rsp + 176]
+    push \num
+.endm
+
+.macro DISCARD_FRAME
+    add rsp, 16
+    RESTORE_ALL
+    add rsp, 40
+.endm
+
+.macro CALL_HANDLER
+    mov r11, rsp
+    and rsp, -16
+    sub rsp, 16
+    mov qword ptr [rsp], r11
+    mov rdi, r11
+    call isr_handler
+    mov rsp, qword ptr [rsp]
 .endm
 
 /* ISR with no error code */
@@ -152,13 +184,17 @@
 isr\num:
     cli
     cld
-    SAVE_ALL
-    push 0
-    push \num
-    mov rdi, rsp
-    call isr_handler
-    add rsp, 16
-    RESTORE_ALL
+    test qword ptr [rsp + 8], 3
+    jz 1f
+    swapgs
+1:
+    BUILD_FRAME_NOERR \num
+    CALL_HANDLER
+    DISCARD_FRAME
+    test qword ptr [rsp + 8], 3
+    jz 2f
+    swapgs
+2:
     iretq
 .endm
 
@@ -167,17 +203,17 @@ isr\num:
 isr\num:
     cli
     cld
-    SAVE_ALL
-    /* CPU already pushed error code, it's now under our saves */
-    /* Fetch it: after SAVE_ALL (15*8 + 2*8 = 136 bytes), then err_code */
-    mov rax, [rsp + 136]
-    push rax
-    push \num
-    mov rdi, rsp
-    call isr_handler
-    add rsp, 16
-    RESTORE_ALL
-    add rsp, 8          /* Remove CPU's error code */
+    test qword ptr [rsp + 16], 3
+    jz 1f
+    swapgs
+1:
+    BUILD_FRAME_ERR \num
+    CALL_HANDLER
+    DISCARD_FRAME
+    test qword ptr [rsp + 16], 3
+    jz 2f
+    swapgs
+2:
     iretq
 .endm
 
@@ -187,23 +223,16 @@ isr\num:
     cli
     cld
 
-    test qword ptr [rsp + 16], 3
+    test qword ptr [rsp + 8], 3
     jz 1f
     swapgs
 1:
-    SAVE_ALL
+    BUILD_FRAME_NOERR \num
+    CALL_HANDLER
 
-    push 0
-    push \num
+    DISCARD_FRAME
 
-    mov rdi, rsp
-    call isr_handler
-
-    add rsp, 16
-
-    RESTORE_ALL
-
-    test qword ptr [rsp + 16], 3
+    test qword ptr [rsp + 8], 3
     jz 2f
     swapgs
 2:
@@ -245,34 +274,8 @@ ISR_NO_ERRCODE 29
 ISR_NO_ERRCODE 30
 ISR_NO_ERRCODE 31
 
-/* ==========================================================================
- * Double fault (vector 8) - uses IST1, no manual stack switch needed
- * ======================================================================= */
-isr8:
-    /* IST1 already switched us to a safe stack */
-    cli
-    cld
-
-    /* swapgs not needed - double fault only from kernel, or if from user,
-     * the CPU already handled it via IST. But check anyway.
-     */
-    test qword ptr [rsp + 24], 3
-    jz 1f
-    swapgs
-1:
-    SAVE_ALL
-
-    /* CPU pushed error code for #DF */
-    mov rax, [rsp + 15*8 + 2*8]
-    push rax
-    push 8
-
-    mov rdi, rsp
-    call isr_handler
-
-    /* Don't return from double fault */
-    hlt
-    jmp .
+/* Double fault uses IST1 and the normal error-code frame builder. */
+ISR_ERRCODE 8
 
 /* ==========================================================================
  * IRQ ISRs 32-47
@@ -305,17 +308,10 @@ isr128:
     /* For int 0x80, we're always from user mode, so swapgs */
     swapgs
 
-    SAVE_ALL
+    BUILD_FRAME_NOERR 128
+    CALL_HANDLER
 
-    push 0
-    push 128
-
-    mov rdi, rsp
-    call isr_handler
-
-    add rsp, 16
-
-    RESTORE_ALL
+    DISCARD_FRAME
 
     swapgs
     iretq

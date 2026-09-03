@@ -96,12 +96,13 @@ static void (*const exception_isrs[])(void) = {
  * ======================================================================= */
 void idt_set_gate(int num, ULONG_PTR base, WORD sel, BYTE flags) {
   idt[num].base_lo = base & 0xFFFF;
-  idt[num].base_mid = (base >> 16) & 0xFF;
+  idt[num].base_mid = (base >> 16) & 0xFFFF;
   idt[num].base_hi = (base >> 32) & 0xFFFFFFFF;
 
   idt[num].sel = sel;
   idt[num].ist = 0; /* IST index 0 = use rsp0 from TSS */
   idt[num].flags = flags;
+  idt[num].reserved = 0;
 }
 
 /* ==========================================================================

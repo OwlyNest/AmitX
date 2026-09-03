@@ -84,6 +84,8 @@ mb2_header_end:
 .section .boot.bss, "aw", @nobits
 .align 4096
 
+.global stack_top
+
 pml4:
     .skip 4096
 
@@ -163,49 +165,54 @@ _start:
 
     movl $pml4, %edi
     xorl %eax, %eax
-    movl $3072, %ecx             /* 3 * 4096 / 4 */
+    movl $3072, %ecx
     rep stosl
 
+
     /* -------------------------------------------------------------- */
+    /* Identity mapping                                                */
+    /*                                                                */
     /* PML4[0] -> PDPT                                                 */
-    /* Identity map: 0x00000000...                                   */
+    /* PDPT[0] -> PDT                                                  */
+    /* PDT[0..7] -> 16 MiB                                            */
     /* -------------------------------------------------------------- */
 
     movl $pdpt, %eax
     orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
     movl %eax, pml4
 
-    /* -------------------------------------------------------------- */
-    /* PML4[256] -> PDPT                                               */
-    /* High-half map: 0xFFFFFFFF80000000...                          */
-    /* -------------------------------------------------------------- */
-
-    movl $pdpt, %eax
-    orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
-    movl %eax, pml4 + (256 * 8)
-
-    /* -------------------------------------------------------------- */
-    /* PDPT[0] -> PDT                                                  */
-    /* -------------------------------------------------------------- */
-
     movl $pdt, %eax
     orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
     movl %eax, pdpt
 
+
     /* -------------------------------------------------------------- */
-    /* PDT[0..7] -> 2 MiB pages                                       */
-    /*                                                              */
-    /* Maps physical 0..16 MiB using 2 MiB pages.                    */
+    /* High-half mapping                                               */
+    /*                                                                */
+    /* 0xFFFFFFFF80000000 -> physical 0                                */
+    /* -------------------------------------------------------------- */
+
+    movl $pdpt, %eax
+    orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
+    movl %eax, pml4 + (511 * 8)
+
+    movl $pdt, %eax
+    orl $(PAGE_PRESENT | PAGE_WRITABLE), %eax
+    movl %eax, pdpt + (510 * 8)
+
+
+    /* -------------------------------------------------------------- */
+    /* 16 MiB of 2 MiB identity/high-half mapped memory               */
     /* -------------------------------------------------------------- */
 
     movl $pdt, %edi
     xorl %eax, %eax
-
     movl $8, %ecx
 
 .fill_pdt:
-    movl %eax, (%edi)
-    orl $(PAGE_PRESENT | PAGE_WRITABLE | PAGE_HUGE), (%edi)
+    movl %eax, %edx
+    orl $(PAGE_PRESENT | PAGE_WRITABLE | PAGE_HUGE), %edx
+    movl %edx, (%edi)
 
     addl $0x200000, %eax
     addl $8, %edi
@@ -223,8 +230,12 @@ _start:
     /* CR4.PAE = bit 5                                                 */
     /* -------------------------------------------------------------- */
 
+    .set CR4_PAE,          0x20
+    .set CR4_OSFXSR,       0x200
+    .set CR4_OSXMMEXCPT,   0x400
+
     movl %cr4, %eax
-    orl $0x20, %eax
+    orl $(CR4_PAE | CR4_OSFXSR | CR4_OSXMMEXCPT), %eax
     movl %eax, %cr4
 
     /* -------------------------------------------------------------- */
@@ -234,7 +245,7 @@ _start:
 
     movl $0xC0000080, %ecx        /* IA32_EFER */
     rdmsr
-    orl $0x100, %eax              /* EFER.LME */
+    orl $(0x100 | 0x800), %eax    /* EFER.LME | EFER.NXE */
     wrmsr
 
     /* -------------------------------------------------------------- */
@@ -320,7 +331,7 @@ _start64:
 
     movl $MB2_BOOT_MAGIC, %edi
 
-    movq multiboot_info_ptr, %rsi
+    movl multiboot_info_ptr, %esi
 
     call kernel_early_init
 
@@ -338,9 +349,12 @@ _start64:
     /* Enter high-half kernel                                          */
     /* -------------------------------------------------------------- */
 
-    movabs $kernel_main, %rax
-    jmp *%rax
+    call kernel_main
 
+.hang:
+    cli
+    hlt
+    jmp .hang
 
 .pmm_fail:
     movl $0xBAD01, %eax

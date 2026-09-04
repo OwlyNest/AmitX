@@ -1,7 +1,5 @@
 # SmKFS Ground Zero
-
 ## Shadow-mode Kernel File System
-
 ### Architecture Specification v0.1
 
 ## 1. Design Philosophy
@@ -327,16 +325,16 @@ No architectural limits should depend on assumptions common in legacy filesystem
 10. Reliability takes precedence over clever optimization.
 11. Everything on disk should be self-describing.
 
-12. Self-Describing Structures
+18. Self-Describing Structures
 
 In accordance with Design Rule 11, every major on-disk structure shall begin with a common header that identifies the structure and provides sufficient information for validation and parsing. Every structure in the file system starts with exactly the same cannonical header:
 struct SmKFS_Header{
-char Magic[4];
-uint16_t Version;
-uint16_t Type;
-uint32_t Length;
-uint32_t Flags;
-uint32_t Checksum;
+    char     Magic[4];
+    uint16_t Version;
+    uint16_t Type;
+    uint32_t Length;
+    uint32_t Flags;
+    uint32_t Checksum;
 }
 
 This leaves no special cases, no guessing, after reading the first ~20 bytes the parser know all information about the the object that it needs.
@@ -344,7 +342,6 @@ This leaves no special cases, no guessing, after reading the first ~20 bytes the
 Additional fields may be included where required by the structure.
 
 This requirement applies to all primary filesystem structures, including but not limited to:
-
 - Records
 - B+ Tree nodes
 - Journal entries
@@ -356,7 +353,6 @@ This requirement applies to all primary filesystem structures, including but not
 The purpose of this design is to allow the filesystem driver, recovery utilities, and diagnostic tools to identify and validate any structure directly from its on-disk representation without relying on external context.
 
 Self-describing structures improve:
-
 - corruption detection
 - filesystem recovery
 - offline consistency checking
@@ -365,10 +361,8 @@ Self-describing structures improve:
 - debugging and forensic analysis
 
 # Checksum
-
 The checksum covers the entire structure; header + payload. The checksum field itself is treated as zero during computation.
 Process for writing:
-
 1. Fill in all fields of the structure
 2. Set checksum = 0
 3. Compute checksum over length bytes starting from the header
@@ -376,7 +370,6 @@ Process for writing:
 5. Write to disk
 
 Process for reading/verifying:
-
 1. Read structure from disk
 2. Save checksum value
 3. Set checksum field to zero in memory
@@ -387,7 +380,6 @@ Process for reading/verifying:
 **Algorithm**: A simple CRC-like approach: accumulate with a polynomial, rotate left by one, XOR with byte. It's robust enough for corruption detection and trivial to implement.
 
 # Records
-
 **Record storage semantics**: Records live in the data area. record_alloc finds free blocks via the bitmap, writes a record there, and returns the record_id (which is also the block number where the record lives). Simple, self-describing, no separate inode table. record_count and next_record_id in the superblock track metadata but not physical location.
 
 **Record layout on disk**: A record is one or more blocks. The first block contains smkfs_record_t header followed by packed attributes. If attributes exceed one block, the record has an SMKFS_ATTRT_EXTENTS attribute describing where the overflow blocks are. But for now, records are single-block (4KB). The header's length field tells us the total size.
@@ -397,46 +389,39 @@ Process for reading/verifying:
 **record_id**: Since records are stored in data blocks, record_id == block_number. This is elegant; no indirection. The superblock's root_record is the block number of the root directory record.
 
 # API
-
 The SmKFS API is divided into four levels
 
 ## Level 4: Static Internal Interface
-
 These are the primitives everything else builds on. They don't know about paths, directories, or user concepts. They know about blocks, records, attributes, extents, trees, and the journal.
 
 ### Block I/O
-
 `static int read_block(uint64_t block, void *buf);`  
 **Purpose**: Read a single 4096-byte block from disk into a buffer. This is the fundamental read primitive, every other "read" in SmKFS eventually calls this.  
 **Design note**: The IDE driver works in 512-byte sectors. One SmKFS block is 8 sectors. We translate the block number to LBA, then read 8 consecutive sectors. We use the drive number stored in the global drive_num.  
 **Parameters**:
-
 - block: logical block number within the filesystem (0 = superblock)
-- buf: destination buffer, must be at least SMKFS_BLOCK_SIZE bytes
+- buf: destination buffer, must be at least SMKFS_BLOCK_SIZE bytes  
 
-**Returns**: 0 on success, -1 on error (IDE failure)
+**Returns**: 0 on success, -1 on error (IDE failure)  
 
 ---
 
 `static int write_block(uint64_t block, const void *buf);`  
 **Purpose**: Write a single 4096-byte block from a buffer to disk. The fundamental write primitive. Same sector-by-sector translation as read_block.  
 **Parameters**:
-
 - block: logical block number within the filesystem
 - buf: source buffer, must contain at least SMKFS_BLOCK_SIZE bytes
 
-**Returns**: 0 on success, -1 on error
+**Returns**: 0 on success, -1 on error  
 
 ---
 
 ### Header
-
 `static void header_init(smkfs_header_t *h, uint16_t type, uint32_t length, uint32_t flags);`  
 **Purpose**: opulate a canonical header with magic, version, type, length, and flags. Does NOT compute checksum; caller fills payload then calls header_checksum_update.  
 **Parameters**:
-
 - h: pointer to header to initialize
-- type: structure type (SMKFS*ST*\*)
+- type: structure type (SMKFS_ST_*)
 - length: total size of structure in bytes
 - flags: structure-specific flags
 
@@ -445,22 +430,19 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int header_validate(const smkfs_header_t *h, uint16_t expected_type);`  
 **Purpose**: Check magic, version, and type match expectations. Does NOT verify checksum, caller does that separately if needed.  
 **Parameters**:
-
 - h: pointer to header read from disk
-- expected_type: what structure type we expect here
+- expected_type: what structure type we expect here  
 
 **Returns**: 0 if valid, -1 if magic/version/type mismatch
 
 ---
 
 ### Checksum
-
 `static uint32_t checksum_compute(const void *data, size_t len);`  
 **Purpose**: Compute checksum over arbitrary data. The checksum field is assumed zero if it's part of the data.
 **Parameters**:
-
 - data: pointer to data
-- len: number of bytes
+- len: number of bytes  
 
 **Returns**: 32-bit checksum value
 
@@ -469,7 +451,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static void header_checksum_update(smkfs_header_t *h, const void *data, size_t len);`  
 **Purpose**: Compute checksum over entire structure and store it in header. Caller must have already called header_init and filled payload.  
 **Parameters**:
-
 - h: pointer to header (at start of structure)
 - data: same pointer as h, for clarity; the structure to checksum
 - len: same as h->length, total structure size
@@ -479,7 +460,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int header_checksum_verify(const smkfs_header_t *h, const void *data, size_t len);`  
 **Purpose**: Verify checksum of a structure read from disk.
 **Parameters**:
-
 - h: pointer to header
 - data: pointer to entire structure
 - len: total structure size
@@ -488,12 +468,11 @@ These are the primitives everything else builds on. They don't know about paths,
 
 ---
 
-### Bitmap
 
+### Bitmap
 `static void bitmap_set(uint64_t block);`  
 **Purpose**: Mark a single block as allocated in the bitmap.  
 **Parameters**:
-
 - block: absolute block number to mark allocated
 
 ---
@@ -501,7 +480,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static void bitmap_clear(uint64_t block);`  
 **Purpose**: Mark a single block as free in the bitmap.  
 **Parameters**:
-
 - block: absolute block number to mark free
 
 ---
@@ -509,7 +487,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int bitmap_test(uint64_t block);`  
 **Purpose**: Check if a block is allocated.  
 **Parameters**:
-
 - block: absolute block number to test
 
 **Returns**: 1 if allocated, 0 if free, -1 if invalid block number
@@ -519,7 +496,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static uint64_t bitmap_alloc_range(uint32_t count);`  
 **Purpose**: Find and allocate a contiguous range of count free blocks. This is the core of extent-based allocation; we want contiguous runs.  
 **Parameters**:
-
 - count: number of contiguous blocks needed
 
 **Returns**: first absolute block number of allocated range, or -1 on fail  
@@ -536,18 +512,16 @@ These are the primitives everything else builds on. They don't know about paths,
 `static void bitmap_free_range(uint64_t start, uint32_t count);`  
 **Purpose**: Mark a contiguous range of blocks as free.  
 **Parameters**:
-
 - start: absolute block number of first block to free
 - count: number of blocks to free
 
 ---
 
-### Record
 
+### Record
 `static int record_read(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size);`  
 **Purpose**: Read a record header and its attributes from disk.  
 **Parameters**:
-
 - record_id: block number where record lives
 - rec: output buffer for record header
 - attr_buf: output buffer for attributes
@@ -560,7 +534,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int record_write(uint64_t record_id, const smkfs_record_t *rec, const void *attr_buf);`  
 **Purpose**: Write a record header and attributes to disk.  
 **Parameters**:
-
 - record_id: block number where record lives
 - rec: record header (must have valid header.length)
 - attr_buf: attribute data
@@ -572,7 +545,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static uint64_t record_alloc(uint16_t object_type);`  
 **Purpose**: Allocate a new block, initialize it as a record, write to disk.  
 **Parameters**:
-
 - object_type: SMKFS_ROT_FILE, DIR, etc.
 
 **Returns**: record_id (block number), or -1 on fail
@@ -582,7 +554,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static void record_free(uint64_t record_id);`  
 **Purpose**: Free all resources owned by a record (extents, then the record block itself).  
 **Parameters**:
-
 - record_id: block number of record to free
 
 ---
@@ -590,7 +561,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int record_find_attr(const void *attr_buf, uint16_t attr_type, void **out_attr, size_t out_len);`  
 **Purpose**: Scan attribute list for first matching type.  
 **Parameters**:
-
 - attr_buf: pointer to attribute data
 - attr_type: attribute type to find
 - out_attr: output pointer to attribute data (after header)
@@ -603,7 +573,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int record_add_attr(void *attr_buf, size_t buf_size, uint16_t attr_type, const void *data, size_t data_len);`  
 **Purpose**: Append a new attribute to the attribute list. Replaces existing attribute of same type if present.  
 **Parameters**:
-
 - attr_buf: attribute buffer to modify
 - buf_size: total size of attr_buf
 - attr_type: type to add
@@ -617,7 +586,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int record_remove_attr(void *attr_buf, uint16_t attr_type);`  
 **Purpose**: Remove an attribute from the list by compacting subsequent attributes.  
 **Parameters**:
-
 - attr_buf: attribute buffer to modify
 - attr_type: type to remove
 
@@ -625,12 +593,11 @@ These are the primitives everything else builds on. They don't know about paths,
 
 ---
 
-### Extent
 
+### Extent
 `static int extent_resolve(uint64_t record_id, uint64_t logical_block, smkfs_extent_t *out);`  
 **Purpose**: Find which extent covers a given logical block.  
 **Parameters**:
-
 - record_id: record to query
 - logical_block: block offset within the file
 - out: output extent
@@ -642,7 +609,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int extent_add(uint64_t record_id, uint64_t logical_block, uint64_t physical_block, uint32_t out);`  
 **Purpose**: Add a new extent to a record's extent list  
 **Parameters**:
-
 - record_id: record to modify
 - logical_block: starting logical offset
 - physical_block: starting physical block
@@ -655,17 +621,15 @@ These are the primitives everything else builds on. They don't know about paths,
 `static void extent_remove_all(uint64_t record_id);`  
 **Purpose**: Free all blocks described by all extents in a record, then remove the extents attribute.  
 **Parameters**:
-
 - record_id: record to clean
 
 ---
 
-### B+ tree
 
+### B+ tree
 `static int btree_search(uint64_t root_block, const char *key, uint64_t *out_value);`  
 **Purpose**: Search a B+ tree for a key and return the associated value  
 **Paramters**:
-
 - root_block: starting block of the tree
 - key: lookup key
 - out_value: destination for the matched record id.
@@ -678,7 +642,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int btree_insert(uint64_t root_block, const char *key, uint64_t value, uint64_t *new_root);`  
 **Purpose**: Insert a key/value pair into a B+ tree.  
 **Parameters**:
-
 - root_block: root block of the tree
 - key: key to insert
 - value: record id to store
@@ -687,12 +650,12 @@ These are the primitives everything else builds on. They don't know about paths,
 **Returns**: 0 on success, -1 on fail.  
 **Algorithm**: Creates a new root leaf when the tree is empty; otherwise delegates to the recursive insertion routine.
 
+
 ---
 
 `static int btree_delete(uint64_t root_block, const char *key, uint64_t *new_root);`  
 **purpose**: Remove a key/value pair from a B+ tree.  
 **parameters**:
-
 - root_block: root block of the tree
 - key: key to remove
 - new_root: output root block after the operation.
@@ -705,7 +668,6 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int btree_iterate(uint64_t root_block, int (*cb)(uint64_t key, uint64_t value, void *ctx), void *ctx);`  
 **Purpose**: Visit every key/value pair in a B+ tree in key order.  
 **Parameters**:
-
 - root_block: root block of the tree
 - cb: callback invoked for each entry
 - ctx: caller context passed to the callback
@@ -715,8 +677,8 @@ These are the primitives everything else builds on. They don't know about paths,
 
 ---
 
-## Journal
 
+## Journal
 `static int journal_start_transaction(void);`  
 **Purpose**: Begin a new transaction. Sets the in-transaction flag. Returns a transaction ID (sequence number of first entry)  
 **Returns**: -1 if already in a transaction, otherwise the next sequence number
@@ -724,9 +686,8 @@ These are the primitives everything else builds on. They don't know about paths,
 ---
 
 `static int journal_log_write(uint64_t block, const void *old_data, const void *new_data, size_t len);`  
-**Purpose**: Log a block write for undo-redo. Stores both old and new data so the journal can restore the old state (undo) or reapply the new state (redo)
+**Purpose**: Log a block write for undo-redo. Stores both old and new data so the journal can restore the old state (undo) or reapply the new state (redo) 
 **Parameters**:
-
 - block: absolute block number being modified
 - old_data: original block contents
 - new_data: new block contents
@@ -739,18 +700,17 @@ These are the primitives everything else builds on. They don't know about paths,
 `static int journal_log_alloc(uint64_t block, uint32_t count);`  
 **Purpose**: Log a block allocation. For redo: mark blocks allocated. For undo: mark blocks free  
 **Parameters**:
-
 - block: first absolute block number being allocated
 - count: number of contiguous blocks allocated
 
 **Returns**: 0 on success, -1 on fail
+
 
 ---
 
 `static int journal_log_free(uint64_t block, uint32_t count);`  
 **Purpose**: Log a block free. For redo: mark blocks free. For undo: mark blocks allocated  
 **Parameters**:
-
 - block: first absolute block number beeing freed
 - count: number of contiguous blocks freed
 
@@ -774,21 +734,19 @@ These are the primitives everything else builds on. They don't know about paths,
 `static size_t attr_buf_total_len(const void *attr_buf);`  
 **Purpose**: Find total length of attribute  
 **Paramters**:
-
 - attr_buf: attribute buffer to find size of
 
 **Returns**: Size of attribute.
 
 ---
 
-## Level 3: Kernel Interface
 
+## Level 3: Kernel Interface
 These are what the VFS layer calls. They operate on record IDs and raw structures, not paths. The kernel translates paths to record IDs before calling these.
 
 `int smkfs_mount(uint8_t drive);`  
 **Purpose**: Initialize the filesystem, read and validate the superblock, replay the journal if needed, and mark the filesystem as mounted. This is the entry point for making a SmKFS volume accessible  
 **Parameters**:
-
 - drive: IDE drive number to mount
 
 **Returns**: 0 on success, -1 on fail
@@ -810,7 +768,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_lookup_by_name(uint64_t dir_record, const char *name, uint64_t *out_record);`  
 **Purpose**: Search a directory's B+ tree for a filename and return the associated record ID. This is the core name-to-record resolution used by path traversal  
 **Parameters**:
-
 - dir_record: block number of the directory record
 - name: filename to look up
 - out_record: output pointer for the found record ID
@@ -819,10 +776,9 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 
 ---
 
-`int smkfs_create_record(uint16_t object_type, uint64_t parent_dir, const char *name, uint64_t *out_record);`
+`int smkfs_create_record(uint16_t object_type, uint64_t parent_dir, const char *name, uint64_t *out_record);` 
 **Purpose**: Create a new filesystem object, store its name in its own record, add to parent directory's B+ tree  
 **Parameters**:
-
 - object_type: SMKFS_ROT_FILE, SMKFS_ROT_DIR, etc.
 - parent_dir: block number of parent directory record
 - name: name for the new object
@@ -831,11 +787,10 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 **Returns**: 0 on success, -1 on fail
 
 ---
-
+ 
 `int smkfs_delete_record(uint64_t record_id);`  
 **Purpose**: Remove a record from its parent directory and free all resources  
 **Parameters**:
-
 - record_id: block number of record to delete
 
 **Returns**: 0 on success, -1 on fail
@@ -845,7 +800,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_rename(uint64_t record_id, uint64_t new_parent, const char *new_name);`  
 **Purpose**: Move a record to a new parent directory and/or rename it. Updates the record's stored name, removes from old parent's B+ tree, inserts into new parent's B+ tree  
 **Parameters**:
-
 - record_id: block number of record to rename
 - new_parent: block number of new parent directory
 - new_name: new name for the object
@@ -857,7 +811,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_read(uint64_t record_id, uint64_t offset, size_t len, void *buf);`  
 **Purpose**: Read data from a file record at a given offset  
 **Parameters**:
-
 - record_id: block number of file record
 - offset: byte offset within file
 - len: number of bytes to read
@@ -870,7 +823,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_write(uint64_t record_id, uint64_t offset, size_t len, const void *buf);`  
 **Purpose**: Write data to a file record at a given offset. Allocates blocks as needed  
 **Parameters**:
-
 - record_id: block number of file record
 - offset: byte offset within file
 - len: number of bytes to write
@@ -883,7 +835,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_truncate(uint64_t record_id, uint64_t new_size);`  
 **Purpose**: Resize a file. If shrinking, free extents beyond new size. If growing, update size (blocks allocated on demand by write)  
 **Parameters**:
-
 - record_id: block number of file record
 - new_size: new file size in bytes
 
@@ -894,7 +845,6 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 `int smkfs_getattr(uint64_t record_id, smkfs_record_t *rec, void *attr_buf, size_t buf_size);`  
 **Purpose**: Read a record's header and all attributes.  
 **Parameters**:
-
 - record_id: block number of record
 - rec: output buffer for record header
 - attr_buf: output buffer for attributes
@@ -904,10 +854,9 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 
 ---
 
-`int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size_t len);`
+`int smkfs_setattr(uint64_t record_id, uint16_t attr_type, const void *data, size_t len);` 
 **Purpose**: Add or replace an attribute on a record  
 **Parameters**:
-
 - record_id: block number of record
 - attr_type: attribute type to set
 - data: attribute data
@@ -916,15 +865,14 @@ These are what the VFS layer calls. They operate on record IDs and raw structure
 **Returns**: 0 on success, -1 on error
 
 ---
+ 
 
 ## Level 2: User Interface
-
 These are the POSIX-like calls a userspace program makes. Phonon's transparency principle means these should explain themselves; good error messages, clear behavior, no hidden magic.
 
 `int path_lookup(const char *path, uint64_t *out_record)`  
 **Purpose**: resolves a path string to a record_id  
 **Parameters**:
-
 - path: path to resolve
 - out_record: record_id corrensponding to path
 
@@ -933,9 +881,8 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 ---
 
 `int smkfs_open(const char *path, int flags);`  
-**Purpose**: Open a file by path, returning a file descriptor handle. The fd tracks current record_id and file offset for subsequent read/write/seek operations  
+**Purpose**: Open a file by path, returning a file descriptor handle. The fd tracks current record_id and file offset for subsequent read/write/seek operations   
 **Parameters**:
-
 - path: absolute path to file
 - flags: open flags (O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, etc.)
 
@@ -946,7 +893,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_close(int fd);`  
 **Purpose**: Release a file descriptor  
 **Parameters**:
-
 - fd: file descriptor to close
 
 **Returns**: 0 on success, -1 on fail
@@ -956,7 +902,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_read_file(int fd, void *buf, size_t len);`  
 **Purpose**: Read from an open file at current offset  
 **Parameters**:
-
 - fd: file descriptor
 - buf: destination buffer
 - len: bytes to read
@@ -968,7 +913,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_write_file(int fd, const void *buf, size_t len);`  
 **Purpose**: Write to an open file at current offset  
 **Parameters**:
-
 - fd: file descriptor
 - buf: source buffer
 - len: bytes to write
@@ -980,7 +924,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_seek(int fd, int64_t offset, int whence);`  
 **Purpose**: Adjust file offset in fd table  
 **Parameters**:
-
 - fd: file descriptor
 - offset: offset value
 - whence: SEEK_SET (0), SEEK_CUR (1), SEEK_END (2)
@@ -992,7 +935,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_create_file(const char *path, uint16_t permissions);`  
 **Purpose**: Create a new file at the given path  
 **Parameters**:
-
 - path: drive-prefixed path
 - permissions: file permissions (stored as attribute)
 
@@ -1003,7 +945,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_delete_file(const char *path);`  
 **Purpose**: Delete a file by path  
 **Parameters**:
-
 - path: path of file to delete
 
 **Returns**: 0 on success, -1 on fail
@@ -1013,7 +954,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_mkdir(const char *path);`  
 **Purpse**: Create a directory
 **Parameters**:
-
 - path: path of directory to create
 
 **Returns**: 0 on success, -1 on fail
@@ -1023,7 +963,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_rmdir(const char *path);`  
 **Purpse**: Delete a directory
 **Parameters**:
-
 - path: path of directory to delete
 
 **Returns**: 0 on success, -1 on fail
@@ -1033,7 +972,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int readdir_cb(const char *key, uint64_t value, void *ctx);`  
 **Purpose**: btree_iterate callback used by smkfs_readdir. Copies one B+ tree key/value pair (filename, record_id) into the caller's dirent array via the readdir_ctx_t passed as ctx  
 **Parameters**:
-
 - key: filename string from the B+ tree entry
 - value: record_id associated with that filename
 - ctx: pointer to a readdir_ctx_t; holds the destination entries array, its capacity (max), and the running count
@@ -1045,7 +983,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_readdir(const char *path, smkfs_dirent_t *entries, size_t max_entries, size_t *out_count);`  
 **Purpose**: Read directory entries. Resolves path to its record, confirms it's a directory, finds its B+ tree root via the SMKFS_ATTRT_DATA attribute, then iterates the tree collecting name/record_id pairs via readdir_cb  
 **Parameters**:
-
 - path: drive-prefixed path of the directory to read
 - entries: caller-provided array to receive directory entries
 - max_entries: capacity of the entries array; iteration stops once this many entries have been collected
@@ -1058,7 +995,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_stat(const char *path, smkfs_record_t *rec, void *attr_buf, size_t buf_size);`  
 **Purpose**: Get file/directory statistics by reading the record and its attributes  
 **Parameters**:
-
 - path: drive-prefixed path
 - rec: output buffer for record header
 - attr_buf: output buffer for attributes
@@ -1071,7 +1007,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_chmod(const char *path, uint16_t permissions);`  
 **Purpose**: Change file permissions  
 **Parameters**:
-
 - path: path of file to modify
 - permissions: new file permissions
 
@@ -1082,7 +1017,6 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 `int smkfs_chown(const char *path, uint32_t uid, uint32_t gid);`  
 **Purpose**: Change the owner and group of a file or directory. Packs uid and gid into a single 64-bit SMKFS_ATTRT_OWNER attribute (uid in the high 32 bits, gid in the low 32 bits) and writes it via smkfs_setattr  
 **Parameters**:
-
 - path: drive-prefixed path of the file or directory to modify
 - uid: new User IDentifier, stored in the upper 32 bits of the owner attribute
 - gid: new Group IDentifier, stored in the lower 32 bits of the owner attribute
@@ -1091,21 +1025,19 @@ These are the POSIX-like calls a userspace program makes. Phonon's transparency 
 
 ---
 
-## Level 1: Administrative Interface
 
+## Level 1: Administrative Interface
 These are the "does this even work" functions. The ones that create a filesystem from nothing, verify it's healthy, and repair it if not.
 
 `int smkfs_mkfs(uint8_t drive, uint64_t total_blocks);`  
 **Purpose**: Create a new SmKFS filesystem on the specified drive. Writes the superblock, bitmap, root directory record, empty journal, and initializes all metadata structures  
 **Parameters**:
-
 - drive: drive number to format
 - total_blocks: total number of 4KB blocks available on the drive
 
 **Returns**: 0 on success, -1 on fail  
 **Algorithm**
 Algorithm:
-
 1. Validate total_blocks is sufficient (minimum ~16 blocks for superblock + bitmap + journal + root dir + data)
 2. Calculate layout: superblock at 0, bitmap after, journal after bitmap, data area after journal
 3. Write zeroed superblock with magic, version, layout parameters
@@ -1119,9 +1051,8 @@ Algorithm:
 `int smkfs_fsck(uint8_t drive);`  
 **Purpose**: Verify filesystem consistency. Check superblock, bitmap, and basic record integrity. Report errors, optionally repair  
 **Parameters**:
-
 - drive: drive number to check
-  **Returns**: 0 if clean, 1 if errors found and fixed, -1 if unrecoverable
+**Returns**: 0 if clean, 1 if errors found and fixed, -1 if unrecoverable
 
 ---
 
@@ -1134,9 +1065,8 @@ Algorithm:
 `int smkfs_dump_record(uint64_t record_id);`  
 **Purpose**: Print a record's header and all attributes for debugging and transparency  
 **Parameters**:
-
 - record_id: block number of record to dump
-  **Returns**: 0 on success, -1 on fail
+**Returns**: 0 on success, -1 on fail
 
 ---
 
@@ -1149,7 +1079,6 @@ Algorithm:
 `int smkfs_dump_btree(uint64_t root_block);`
 **Purpose**: Recursively print B+ tree structure for debugging  
 **Parameters**:
-
 - root_block: root block of tree to dump
 
 **Returns**: 0 on success, -1 on fail
@@ -1157,9 +1086,7 @@ Algorithm:
 ---
 
 # SmKFS Ground One
-
 ## Shadow-mode Kernel File System
-
 ### Architecture Specification v1.0 — Production Upgrade Plan
 
 ---
@@ -1183,7 +1110,6 @@ Everything else — journal correctness, B+ tree completeness, byte-level I/O, a
 ## 2. Design Philosophy: What Changes and What Doesn't
 
 ### What Stays
-
 - Self-describing canonical headers on every structure.
 - Extents as the sole non-resident data mechanism.
 - B+ trees for directory indexing.
@@ -1191,16 +1117,15 @@ Everything else — journal correctness, B+ tree completeness, byte-level I/O, a
 - Attribute-driven extensibility.
 
 ### What Changes
-
-| G0 Constraint               | G1 Replacement                               | Rationale                                           |
-| --------------------------- | -------------------------------------------- | --------------------------------------------------- |
-| `record_id == block_number` | Logical record IDs via MRT                   | Records can move, grow, shrink, and be defragmented |
-| Single-valued attributes    | Multi-valued attributes with `attr_id`       | Multiple extents, ACLs, xattrs, streams             |
-| Name stored in record       | Name stored only in directory B+ tree        | Hard links, atomic rename, POSIX compliance         |
-| Linear bitmap scan          | Regioned allocator with free-count summaries | Scalable to multi-terabyte storage                  |
-| Custom checksum             | CRC32C with hardware acceleration            | Standardized, fast, well-tested                     |
-| Redo+undo physical logging  | Redo-only metadata journaling                | Halves journal write amplification                  |
-| Global single-mount state   | Per-mount context                            | Multiple volumes, hot-swap, namespace composition   |
+| G0 Constraint | G1 Replacement | Rationale |
+|---------------|----------------|-----------|
+| `record_id == block_number` | Logical record IDs via MRT | Records can move, grow, shrink, and be defragmented |
+| Single-valued attributes | Multi-valued attributes with `attr_id` | Multiple extents, ACLs, xattrs, streams |
+| Name stored in record | Name stored only in directory B+ tree | Hard links, atomic rename, POSIX compliance |
+| Linear bitmap scan | Regioned allocator with free-count summaries | Scalable to multi-terabyte storage |
+| Custom checksum | CRC32C with hardware acceleration | Standardized, fast, well-tested |
+| Redo+undo physical logging | Redo-only metadata journaling | Halves journal write amplification |
+| Global single-mount state | Per-mount context | Multiple volumes, hot-swap, namespace composition |
 
 ---
 
@@ -1226,7 +1151,6 @@ typedef struct {
 ```
 
 **MRT Flags:**
-
 - `SMKFS_MRTF_ALLOCATED` — Slot is in use.
 - `SMKFS_MRTF_OVERFLOW` — Record spans multiple blocks (see §3.4).
 - `SMKFS_MRTF_DELETED` — Slot marked for reclamation.
@@ -1246,7 +1170,6 @@ Read block 49152 → smkfs_record_t + attributes
 ```
 
 This indirection enables:
-
 - **Record relocation** without changing identity.
 - **Defragmentation** of metadata.
 - **Future resizing** of the MRT without reformatting.
@@ -1255,7 +1178,6 @@ This indirection enables:
 ### 3.4 MRT Bootstrap and Sizing
 
 During `smkfs_mkfs`:
-
 1. Reserve MRT blocks immediately after the superblock.
 2. MRT size = `max_records * sizeof(smkfs_mrt_entry_t) / BLOCK_SIZE`, rounded up.
 3. MRT block 0 is always reserved for the **root directory record**.
@@ -1283,7 +1205,6 @@ All MRT mutations occur inside journal transactions.
 G0's attribute model was ambiguous: the `id` field existed but `record_add_attr()` replaced by type. G1 makes the `id` field first-class, enabling true multi-valued attributes.
 
 This is essential for:
-
 - Multiple extent ranges per file.
 - Multiple ACL entries.
 - Multiple xattrs.
@@ -1293,7 +1214,7 @@ This is essential for:
 
 ```c
 typedef struct {
-    uint16_t type;      // SMKFS_ATTRT_*
+    uint16_t type;      // SMKFS_ATTRT_* 
     uint16_t flags;     // SMKFS_ATTRF_*
     uint32_t id;        // Instance ID within this type (0 = default)
     uint32_t length;    // Payload length in bytes
@@ -1301,7 +1222,6 @@ typedef struct {
 ```
 
 **Attribute Flags:**
-
 - `SMKFS_ATTRF_RESIDENT` — Data lives in the record block.
 - `SMKFS_ATTRF_NON_RESIDENT` — Data is extent-backed (payload = extent list).
 - `SMKFS_ATTRF_ENCRYPTED` — Payload is encrypted.
@@ -1311,11 +1231,11 @@ typedef struct {
 
 ```c
 // Find first attribute of given type and id
-static int record_find_attr(const void *attr_buf, uint16_t attr_type,
+static int record_find_attr(const void *attr_buf, uint16_t attr_type, 
                             uint32_t attr_id, void **out_attr, size_t *out_len);
 
 // Add or replace specific (type, id) pair
-static int record_add_attr(void *attr_buf, size_t buf_size,
+static int record_add_attr(void *attr_buf, size_t buf_size, 
                            uint16_t attr_type, uint32_t attr_id,
                            const void *data, size_t data_len);
 
@@ -1359,13 +1279,12 @@ The B+ tree key is the filename. The value is a directory entry structure:
 typedef struct {
     uint64_t record_id;     // Target record (logical ID via MRT)
     uint32_t name_hash;     // Fast comparison filter
-    uint16_t flags;         // SMKFS_DENTF_*
+    uint16_t flags;         // SMKFS_DENTF_* 
     uint16_t name_len;      // Actual name length (key may be truncated in index nodes)
 } smkfs_dirent_t;
 ```
 
 **Directory Entry Flags:**
-
 - `SMKFS_DENTF_NORMAL` — Regular entry.
 - `SMKFS_DENTF_DOT` — "." entry (optional, can be synthesized).
 - `SMKFS_DENTF_DOTDOT` — ".." entry (optional, can be synthesized).
@@ -1386,7 +1305,6 @@ typedef struct {
 ```
 
 Rules:
-
 - `create_record` sets `link_count = 1`.
 - `link()` increments `link_count` and adds a new directory entry.
 - `unlink()` decrements `link_count`; if it reaches 0, the record and its extents are freed.
@@ -1395,7 +1313,6 @@ Rules:
 ### 5.4 Path Resolution
 
 Path lookup traverses directories using the B+ tree. Special cases:
-
 - `"."` → current directory (synthesized, no lookup).
 - `".."` → parent directory (stored as `SMKFS_ATTRT_PARENT` on directory records, or synthesized from path history).
 
@@ -1419,7 +1336,6 @@ G0's journal replay was broken: it only undid uncommitted transactions, ignoring
 ### 6.2 Journal Format
 
 The journal is a **circular buffer** of fixed-size entries. The superblock tracks:
-
 - `journal_head` — Next free slot for writing.
 - `journal_tail` — Oldest uncheckpointed entry.
 - `journal_sequence` — Monotonic transaction counter.
@@ -1437,7 +1353,6 @@ typedef struct {
 ```
 
 **Operations:**
-
 - `SMKFS_JOP_WRITE` — Log new block contents (redo).
 - `SMKFS_JOP_ALLOC` — Log block allocation.
 - `SMKFS_JOP_FREE` — Log block free.
@@ -1450,7 +1365,6 @@ typedef struct {
 G1 stores **only new data** in WRITE entries. This halves journal space usage.
 
 **Commit Protocol:**
-
 1. `journal_start_transaction()` → acquire sequence number.
 2. Log all metadata changes (WRITE, ALLOC, FREE, MRT_UPDATE).
 3. `journal_commit()` → write COMMIT record, flush to disk.
@@ -1458,7 +1372,6 @@ G1 stores **only new data** in WRITE entries. This halves journal space usage.
 5. `journal_checkpoint()` → advance tail, free journal space.
 
 **Replay Algorithm (Mount):**
-
 ```
 1. Scan journal from tail to head.
 2. Find all transactions with a COMMIT record (committed).
@@ -1475,13 +1388,13 @@ G1 stores **only new data** in WRITE entries. This halves journal space usage.
 
 Every multi-step Level-3 operation MUST open a transaction:
 
-| Operation               | Steps Inside Transaction                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| `create_record`         | Alloc MRT entry → alloc physical block → init record → insert into dir B+ tree → update parent link count |
-| `unlink`                | Remove from dir B+ tree → decrement link_count → if 0, free extents → free MRT entry                      |
-| `rename`                | Delete from old dir B+ tree → insert into new dir B+ tree → update parent attrs                           |
-| `truncate`              | Update size attr → free partial extents → update MRT if record moves                                      |
-| `write` (metadata path) | Alloc blocks → update extents → update MRT → update size                                                  |
+| Operation | Steps Inside Transaction |
+|-----------|-------------------------|
+| `create_record` | Alloc MRT entry → alloc physical block → init record → insert into dir B+ tree → update parent link count |
+| `unlink` | Remove from dir B+ tree → decrement link_count → if 0, free extents → free MRT entry |
+| `rename` | Delete from old dir B+ tree → insert into new dir B+ tree → update parent attrs |
+| `truncate` | Update size attr → free partial extents → update MRT if record moves |
+| `write` (metadata path) | Alloc blocks → update extents → update MRT → update size |
 
 If any step fails, the transaction is **not committed**. On next mount, replay sees no COMMIT and ignores the partial entries.
 
@@ -1492,13 +1405,11 @@ If any step fails, the transaction is **not committed**. On next mount, replay s
 ### 7.1 Node Types
 
 **Leaf Node:**
-
 - Keys: filenames (or generic byte strings).
 - Values: `smkfs_dirent_t` structures.
 - Sibling pointer: `right_sibling` for ordered iteration.
 
 **Internal Node:**
-
 - Keys: separator strings (prefixes).
 - Values: child block pointers.
 - No sibling pointer (tree is navigated from root).
@@ -1529,14 +1440,12 @@ btree_insert(key, value):
 ```
 
 **Leaf Split:**
-
 1. Allocate new leaf block.
 2. Move upper half of entries to new leaf.
 3. Update sibling pointers: `old_leaf.right_sibling = new_leaf`.
 4. Promote first key of new leaf to parent internal node.
 
 **Internal Split:**
-
 1. Allocate new internal block.
 2. Move upper half of keys/children to new node.
 3. Promote median key to parent (or create new root).
@@ -1563,7 +1472,6 @@ btree_delete(key):
 ```
 
 **Merge:**
-
 1. Move all entries from underflow node into sibling.
 2. Free underflow node's block.
 3. Remove separator key from parent.
@@ -1603,7 +1511,6 @@ typedef struct {
 ```
 
 **API:**
-
 ```c
 static int block_cache_read(uint64_t block, smkfs_block_buf_t **out_buf);
 static int block_cache_write(smkfs_block_buf_t *buf);
@@ -1635,14 +1542,12 @@ int smkfs_write(uint64_t record_id, uint64_t offset, size_t len, const void *buf
 Replace the custom checksum with CRC32C (Castagnoli polynomial, `0x1EDC6F41`).
 
 **Rationale:**
-
 - Hardware acceleration on x86 (SSE 4.2 `CRC32` instruction).
 - Standardized in iSCSI, SCTP, Btrfs, ext4.
 - Excellent error detection for burst errors and bit flips.
 - Existing tooling and verification libraries.
 
 **Implementation:**
-
 ```c
 static uint32_t checksum_compute(const void *data, size_t len) {
     // Use hardware CRC32C if available, software fallback otherwise
@@ -1715,7 +1620,7 @@ All Level-4 functions take `smkfs_mount_t *mnt` as the first parameter:
 ```c
 static int read_block(smkfs_mount_t *mnt, uint64_t block, void *buf);
 static uint64_t bitmap_alloc(smkfs_mount_t *mnt);
-static int btree_search(smkfs_mount_t *mnt, uint64_t root_block,
+static int btree_search(smkfs_mount_t *mnt, uint64_t root_block, 
                         const char *key, uint64_t *out_value);
 ```
 
@@ -1884,7 +1789,6 @@ A key architectural addition is the **Central Attribute Organ**, implemented in 
 Adding a new attribute to SmKFS now requires only a single row in this table. No other files need modification for the attribute to be validated, displayed, and recognized by the filesystem. This directly supports Golden Rule 8: new functionality is added through attributes, not structural rewrites.
 
 ## 16. Sparse File Semantics
-
 | Scenario                      | Behavior                                                                   |
 | ----------------------------- | -------------------------------------------------------------------------- |
 | **Punch inside one extent**   | Splits it into two surviving extents; middle blocks freed                  |
@@ -1897,7 +1801,6 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 ## 17. Implementation Phases
 
 ### Phase 1: Foundation (Weeks 1–2)
-
 - [x] Define all canonical structs (superblock v2, MRT, record v2, attr v2, dirent, journal v2).
 - [x] Implement CRC32C checksum.
 - [x] Implement per-mount context and remove global state.
@@ -1905,7 +1808,6 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 - [x] Update block I/O to use mount context.
 
 ### Phase 2: Core Metadata (Weeks 3–4)
-
 - [x] Remove 512-Byte sector assumption, store size in SB
 - [x] Implement multi-valued attribute API.
 - [x] Implement record v2 with link_count and generation.
@@ -1914,7 +1816,6 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 - [x] Update path resolution for new directory format.
 
 ### Phase 3: Storage & I/O (Weeks 5–6)
-
 - [x] Implement regioned bitmap allocator.
 - [x] Implement extent v2 (multi-valued, coalescing).
 - [x] Implement block buffer cache.
@@ -1923,16 +1824,14 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 - [x] Implement partial truncate with extent range removal.
 
 ### Phase 4: Tree & Journal (Weeks 7–8)
-
 - [x] Implement complete B+ tree (internal nodes, split, merge, redistribution).
-- [ ] Implement redo-only journal with circular buffer.
-- [ ] Implement two-pass replay (redo committed, discard uncommitted).
-- [ ] Implement checkpointing.
-- [ ] Wrap all multi-step operations in transactions.
+- [x] Implement redo-only journal with circular buffer.
+- [x] Implement two-pass replay (redo committed, discard uncommitted).
+- [x] Implement checkpointing.
+- [x] Wrap all multi-step operations in transactions.
 
 ### Phase 5: Hardening (Weeks 9–10)
-
-- [ ] Heap-allocate all 4KB block buffers, switch back to 16 KB kernel stack.
+- [ ] Heap-allocate all large (4KB) block buffers, switch back to 16 KB kernel stack.
 - [ ] Chain merge extents.
 - [ ] Write MAT to disk and use that for attribute implementation.
 - [ ] Implement comprehensive fsck v2.
@@ -1940,13 +1839,6 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 - [ ] Add UUID, volume name, mount count to superblock.
 - [ ] Stress testing: crash injection, bitmap reconstruction, large directory tests.
 - [ ] Write G1 specification document (this document, finalized).
-
-### Phase 6: Integration (Week 11+)
-
-- [ ] Integrate with Shadow kernel VFS.
-- [ ] Port Phonon user-space utilities to G1 API.
-- [ ] Performance benchmarking vs G0.
-- [ ] Write migration tool (`smkfs_convert`).
 
 ---
 
@@ -1967,7 +1859,7 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 
 ---
 
-_Document Version: 1.0-draft_
-_Target: SmKFS G1 Implementation_
-_Author: amity_
-_Date: 2026-07-29_
+*Document Version: 1.0-draft*
+*Target: SmKFS G1 Implementation*
+*Author: amity*
+*Date: 2026-07-29*

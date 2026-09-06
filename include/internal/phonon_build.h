@@ -1,6 +1,6 @@
 #ifndef __INTERNAL_PHONON_BUILD_H__
 #define __INTERNAL_PHONON_BUILD_H__
 
-#define PHONON_BUILD_DATE "2026-09-04"
+#define PHONON_BUILD_DATE "2026-09-06"
 
 #endif

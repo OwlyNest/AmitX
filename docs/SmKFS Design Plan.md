@@ -1836,9 +1836,10 @@ Adding a new attribute to SmKFS now requires only a single row in this table. No
 - [ ] Write MAT to disk and use that for attribute implementation.
 - [ ] Implement comprehensive fsck v2.
 - [ ] Implement standardized error codes and audit all failure paths.
-- [ ] Add UUID, volume name, mount count to superblock.
+- [ ] Add UUID, volume name, mount count to superblock (replace drive letter from drive number to drive letter by volume name).
 - [ ] Stress testing: crash injection, bitmap reconstruction, large directory tests.
 - [ ] Write G1 specification document (this document, finalized).
+Bug fixes (they're small and independent) → 2. Point 1 stack purge (unblocks the 16 KB stack) → 3. Error-code standardization (makes everything after it easier to audit) → 4. Extent chain merge + cap fix → 5. MAT on disk → 6. fsck v2 (consumes MAT + clean error codes) → 7. UUID/volume-name + crash-injection harness in parallel → 8. Spec doc last, when the code has stopped moving.
 
 ---
 
